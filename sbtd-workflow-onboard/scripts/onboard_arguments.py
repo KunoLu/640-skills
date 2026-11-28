@@ -225,6 +225,9 @@ class SingleValueAction(argparse.Action):
 
 
 def add_retirement_options(sub: argparse.ArgumentParser, mode: str) -> None:
+    if mode == "plan":
+        sub.add_argument("--action", choices=("init", "reset"), action=SingleValueAction,
+                         help="Preview targets for this action without writing (default: init).")
     if mode not in {"check", "plan", "reset"}:
         return
     sub.add_argument("--retirement-evidence", action=SingleValueAction,

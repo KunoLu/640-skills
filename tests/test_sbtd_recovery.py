@@ -21,7 +21,7 @@ for import_path in (str(SCRIPTS), str(TESTS)):
         sys.path.insert(0, import_path)
 
 from onboard_contracts import ContractError, seal_document
-from sbtd_migration_files import save_document
+from sbtd_migration_files import save_document, snapshot
 from sbtd_recovery import apply_recovery, plan_recovery, run_recovery
 from test_sbtd_migration_cleanup import VerifiedMigration
 from test_sbtd_migration_verify import _tree_bytes
@@ -646,32 +646,19 @@ class RecoveryApplyTests(unittest.TestCase):
         )
 
     def test_sealed_graft_deploy_is_rejected_before_recovery_write(self):
-        from sbtd_deployment import reject_legacy_execution
+        from tests.test_sbtd_migration_rc3_graft import build_completed_historical
 
         with tempfile.TemporaryDirectory() as directory:
-            target = Path(directory) / "AGENTS.md"
-            target.write_bytes(b"before\n")
-            before = target.read_bytes()
-            mode = target.stat().st_mode
+            base = Path(directory).resolve()
+            old = build_completed_historical(base)
+            before = snapshot(base)
             with self.assertRaises(ContractError) as raised:
-                reject_legacy_execution(
-                    {
-                        "projects": [
-                            {
-                                "private_operations": [
-                                    {
-                                        "change": {"kind": "configure-graft"},
-                                        "target": str(target),
-                                    }
-                                ]
-                            }
-                        ],
-                        "shared_operations": [],
-                    }
+                plan_recovery(
+                    old["manifest_path"], apply_receipt_path=old["apply_path"],
+                    deployment_evidence_path=old["deployment_path"],
                 )
             self.assertEqual(raised.exception.code, "unsupported-in-rc.3")
-            self.assertEqual(target.read_bytes(), before)
-            self.assertEqual(target.stat().st_mode, mode)
+            self.assertEqual(snapshot(base), before)
 
     def _install_lineage_fixture(self, base, predecessor, successor):
         import base64

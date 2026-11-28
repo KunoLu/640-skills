@@ -34,6 +34,7 @@ WINDOWS_CASES = (
     "test_sbtd_migration_files.WindowsRetirementPermissionTests.test_null_and_empty_dacls_never_authorize_a_live_write",
     "test_sbtd_migration_files.WindowsRetirementPermissionTests.test_unassignable_owner_cannot_publish_a_candidate",
     "test_sbtd_migration_files.WindowsRetirementPermissionTests.test_publication_preserves_a_recreated_target_and_held_original",
+    "test_sbtd_migration_files.WindowsRetirementPermissionTests.test_retirement_refuses_named_stream_without_modifying_either_stream",
     "test_sbtd_upgrade_retirement.RealRetirementUpgradeTests.test_windows_native_retirement_edit_and_remove_restore_permissions",
     "test_sbtd_retirement.RetirementProofTests.test_windows_remove_and_restore_preserves_native_descriptor",
     "test_sbtd_cleanup_legacy.RetirementArtifactTests.test_windows_reset_retry_refuses_acl_only_drift",

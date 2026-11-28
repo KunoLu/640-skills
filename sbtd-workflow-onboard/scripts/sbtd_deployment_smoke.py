@@ -22,24 +22,22 @@ from typing import Any
 import onboard_contracts as contracts
 from onboard_contracts import ContractError, canonical_json_bytes
 from sbtd_migration_verify import (
+    ONBOARD_CLI_SMOKE_BOUND_SCHEMA,
     ONBOARD_CLI_BOOTSTRAP,
     ONBOARD_CLI_SMOKE_SCHEMA,
     onboard_cli_smoke_command,
+    onboard_cli_smoke_producer,
 )
 
 _DEADLINE_SECONDS = 120
 _ABSENT = {"type": "absent", "checksum": None}
 _KEEP_ENV = frozenset(
     {
-        "PATH",
         "LANG",
         "LC_ALL",
         "LC_CTYPE",
         "SYSTEMROOT",
         "WINDIR",
-        "TMPDIR",
-        "TMP",
-        "TEMP",
     }
 )
 _DOCUMENT_KEYS = frozenset(
@@ -88,11 +86,17 @@ def _source_identity(root: Path) -> tuple[str, str | None]:
     return branch, head
 
 
-def _child_environment(home: Path) -> dict[str, str]:
+def _child_environment(home: Path, git: Path) -> dict[str, str]:
     environment = {
         key: value for key, value in os.environ.items() if key in _KEEP_ENV
     }
     environment.update(
+        PATH=str(git.parent),
+        TMPDIR=str(home),
+        TMP=str(home),
+        TEMP=str(home),
+        GIT_CONFIG_GLOBAL=os.devnull,
+        GIT_CONFIG_NOSYSTEM="1",
         HOME=str(home),
         USERPROFILE=str(home),
         XDG_CONFIG_HOME=str(home / "config"),
@@ -339,6 +343,7 @@ def run_project_smoke(
     context_paths: tuple[Path, Path] | None = None,
 ) -> list[dict[str, Any]]:
     """Run trusted check-projects and seal the closed projection. Raise on failure."""
+    from onboard import native_git_argv
     from sbtd_migration_files import require_private_directory, save_document, snapshot, write_file
 
     selected = _safe_directory(Path(root), "project root")
@@ -360,16 +365,20 @@ def run_project_smoke(
     command = onboard_cli_smoke_command(selected, context_paths=context_paths)
     if len(command) < 5 or command[4] != ONBOARD_CLI_BOOTSTRAP:
         _fail("runtime-unavailable", "the installed check-projects command is not the sealed bootstrap")
+    producer = (
+        None if bound is None
+        else onboard_cli_smoke_producer(command, identity, bound[1], bound[2])
+    )
     timed_out = False
     completed = None
     try:
-        with tempfile.TemporaryDirectory(prefix="sbtd-smoke-home-") as raw_home:
-            child_home = Path(raw_home)
-            os.chmod(child_home, 0o700)
+        git = Path(native_git_argv(selected)[0])
+        with tempfile.TemporaryDirectory(prefix="sbtd-smoke-home-", dir=vault) as raw_home:
+            child_home = require_private_directory(Path(raw_home))
             completed = subprocess.run(
                 command,
-                cwd=Path(command[5]).parent,
-                env=_child_environment(child_home),
+                cwd=child_home,
+                env=_child_environment(child_home, git),
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
@@ -412,7 +421,7 @@ def run_project_smoke(
     if finished < started:
         _fail("state-conflict", "the smoke clock moved backwards")
     document = {
-        "schema": ONBOARD_CLI_SMOKE_SCHEMA,
+        "schema": ONBOARD_CLI_SMOKE_SCHEMA if bound is None else ONBOARD_CLI_SMOKE_BOUND_SCHEMA,
         "projectRoot": str(selected),
         "sourceRef": source_ref,
         "sourceCommit": source_commit,
@@ -430,7 +439,8 @@ def run_project_smoke(
     if bound is not None:
         document["manifestId"] = bound[1]
         document["applyId"] = bound[2]
-        expected_keys = _DOCUMENT_KEYS | {"manifestId", "applyId"}
+        document["producer"] = producer
+        expected_keys = _DOCUMENT_KEYS | {"manifestId", "applyId", "producer"}
     if set(document) != expected_keys or command != onboard_cli_smoke_command(selected, context_paths=context_paths):
         _fail("invalid-document", "the smoke record is not the closed check-projects identity")
     stem = (
@@ -450,6 +460,10 @@ def run_project_smoke(
         "- 不保存原始 stdout、stderr、stdin、凭证、项目脚本或项目树快照。\n"
         "- 此记录不是宿主事件验收，也不是业务 API 通过证明。\n"
     )
+    if bound is not None and onboard_cli_smoke_producer(command, identity, bound[1], bound[2]) != producer:
+        _fail("state-conflict", "the check-projects producer changed during execution", 5)
+    if _source_identity(selected) != (source_ref, source_commit):
+        _fail("revision-conflict", "the selected project revision changed during check-projects", 5)
     report_ref = save_document(report_path, document, private_root=vault)
     write_file(summary_path, summary.encode("utf-8"), _ABSENT, scope=vault)
     return [report_ref, {"path": str(summary_path), "state": snapshot(summary_path)}]

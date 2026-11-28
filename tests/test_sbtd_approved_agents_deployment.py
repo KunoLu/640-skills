@@ -26,13 +26,15 @@ import onboard_contracts as contracts
 from onboard import GLOBAL_AGENTS_TEMPLATE
 from onboard_contracts import ContractError, canonical_json_bytes
 from sbtd_deployment import execute_migration_deployment, load_deployment_context
-from sbtd_migration import apply_migration, runtime_versions
+from sbtd_migration import apply_migration, cleanup_migration, runtime_versions
 from sbtd_migration_files import read_file, save_document, snapshot
 from sbtd_migration_plan import plan_migration
 from sbtd_migration_verify import verify_migration
+from sbtd_reconciliation import reconcile_deployment
 from sbtd_recovery import apply_recovery, plan_recovery
 
 from tests.test_sbtd_migration_apply import legacy_project
+from tests.test_sbtd_migration_cleanup import _fake_vendor_adapter
 
 _PAUSE_ASSET = SCRIPTS.parents[0] / "assets" / "migration-paused-agents.txt"
 _PROJECT_TEMPLATE = SCRIPTS.parents[0] / "templates" / "agents" / "AGENTS.project.md"
@@ -112,6 +114,11 @@ class _SignedBatch:
             "USERPROFILE": str(self.home),
             "CODEX_HOME": str(self.home / ".codex"),
             "AGENT_SKILLS_DIR": str(self.home / ".agent/skills"),
+            "PI_CODING_AGENT_DIR": "",
+            "PI_CONFIG_DIR": ".omp",
+            "OMP_PROFILE": "default",
+            "PI_PROFILE": "default",
+            "CLAUDE_CONFIG_DIR": str(self.home / ".claude"),
         }
         self.agents = self.root / "AGENTS.md"
         self.role = role
@@ -148,10 +155,10 @@ class _SignedBatch:
         _sign_existing_approval(self.approval)
         self.projection = body
 
-    def plan(self, **kwargs):
+    def plan(self, *, roots=None, **kwargs):
         with mock.patch.dict(os.environ, self.environment):
             return plan_migration(
-                [self.root],
+                roots if roots is not None else [self.root],
                 self.vault,
                 "fixture",
                 None,
@@ -166,7 +173,7 @@ class _SignedBatch:
         if code != 0:
             raise AssertionError(f"fixture apply failed: {applied}")
         receipt = applied["migration"]["apply_receipt"]
-        return receipt, self.evidence / ("apply-" + receipt["apply_id"] + ".json")
+        return receipt, manifest_path.parent / ("apply-" + receipt["apply_id"] + ".json")
 
     def execute(
         self,
@@ -297,6 +304,130 @@ class ApprovedAgentsDeploymentTests(unittest.TestCase):
 
             with mock.patch.dict(os.environ, batch.environment):
                 _assert_verified(self, manifest_path, apply_path, deployment_path)
+
+    def test_mixed_project_batch_requires_two_real_smokes_for_deploy_and_reconcile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            batch = _SignedBatch(Path(directory).resolve())
+            nested_evidence = batch.base / "nested-evidence"
+            nested_evidence.mkdir(mode=0o700)
+            unsigned = legacy_project(nested_evidence, "deployment-smoke")
+            (unsigned / ".trellis/.developer").unlink()
+            original_ignore = (unsigned / ".gitignore").read_bytes()
+            roots = [batch.root, unsigned]
+            manifest = batch.plan(roots=roots, deployment_mode="init-projects")
+            manifest_path = batch.write_manifest(manifest, "manifest.json")
+            receipt, apply_path = batch.apply(manifest_path, routing_approvals=batch.approval)
+            declared = next(row for row in manifest["payload"]["projects"] if row["root"] == str(unsigned))
+            self.assertFalse(any(
+                op["phase"] == "deploy" or op["owner_kind"] == "gitignore"
+                for op in declared["private_operations"]
+            ))
+            missing = batch.evidence / "original-deployment.json"
+            output = batch.evidence / "current-state.json"
+
+            with mock.patch.dict(os.environ, batch.environment):
+                context = load_deployment_context(
+                    manifest_path, apply_path, missing, previous_path=None,
+                    mode="init-projects", roots=roots, hooks_authorized=False,
+                )
+                result, code = execute_migration_deployment(context)
+                self.assertEqual(code, 0, result)
+                missing.unlink()
+                reconciled = reconcile_deployment(
+                    manifest_path, apply_path, missing, output, confirmed=True,
+                )
+            expected_roots = set(map(str, roots))
+            executed_projects = result["projects"]
+            observed_projects = reconciled["evidence"]["payload"]["projects"]
+            for projects in (executed_projects, observed_projects):
+                self.assertEqual({row["root"] for row in projects}, expected_roots)
+                for project in projects:
+                    self.assertEqual(project["status"], "succeeded")
+                    report_ref, _summary = project["report_refs"]
+                    record = json.loads(Path(report_ref["path"]).read_bytes())
+                    self.assertEqual(record["projectRoot"], project["root"])
+                    self.assertEqual(record["manifestId"], manifest["manifest_id"])
+                    self.assertEqual(record["applyId"], receipt["apply_id"])
+                    self.assertEqual(record["mockStrategy"], "none")
+                    self.assertEqual(record["projection"]["projects"], [
+                        {"projectRoot": project["root"], "sbtd": {"status": "success"}},
+                    ])
+            self.assertNotEqual(executed_projects[0]["report_refs"], observed_projects[0]["report_refs"])
+            self.assertEqual((unsigned / ".gitignore").read_bytes(), original_ignore)
+
+            copied_manifest = nested_evidence / manifest_path.name
+            copied_apply = nested_evidence / apply_path.name
+            copied_manifest.write_bytes(manifest_path.read_bytes())
+            copied_apply.write_bytes(apply_path.read_bytes())
+            nested_output = nested_evidence / output.name
+            before = snapshot(batch.base)
+            with mock.patch.dict(os.environ, batch.environment):
+                with self.assertRaises(ContractError) as deployed:
+                    load_deployment_context(
+                        copied_manifest, copied_apply, nested_output, previous_path=None,
+                        mode="init-projects", roots=roots, hooks_authorized=False,
+                    )
+                with self.assertRaises(ContractError) as observed:
+                    reconcile_deployment(
+                        copied_manifest, copied_apply, nested_evidence / missing.name,
+                        nested_output, confirmed=True,
+                    )
+            self.assertEqual(deployed.exception.code, "private-scope")
+            self.assertEqual(observed.exception.code, "private-scope")
+            self.assertEqual(snapshot(batch.base), before)
+
+    def test_followup_preserves_project_edits_and_reserves_missing_ancestor_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            batch = _SignedBatch(Path(directory).resolve())
+            future_evidence = batch.evidence / "followup"
+            future_evidence.mkdir(mode=0o700)
+            missing = future_evidence / "deployment-smoke"
+            manifest = batch.plan(deployment_mode="init")
+            manifest_path = batch.write_manifest(manifest, "manifest.json")
+            _receipt, apply_path = batch.apply(manifest_path, routing_approvals=batch.approval)
+            result, code = batch.execute(manifest_path, apply_path, missing)
+            self.assertEqual(code, 0, result)
+            missing.unlink()
+            observed = batch.evidence / "current-state.json"
+            verification_path = batch.evidence / "verification.json"
+
+            with mock.patch.dict(os.environ, batch.environment):
+                reconcile_deployment(manifest_path, apply_path, missing, observed, confirmed=True)
+                verified, code = verify_migration(manifest_path, apply_path, observed)
+                self.assertEqual(code, 0, verified)
+                verification = verified["migration"]["verification"]
+                save_document(verification_path, verification, private_root=batch.evidence)
+                with _fake_vendor_adapter():
+                    cleaned, code = cleanup_migration(
+                        manifest_path, apply_path, observed, verification_path,
+                        confirm_cleanup=verification["verification_id"],
+                    )
+                self.assertEqual(code, 0, cleaned)
+                cleanup_id = cleaned["migration"]["cleanup_receipt"]["cleanup_id"]
+                cleanup_path = batch.evidence / f"cleanup-{cleanup_id}.json"
+                edited = batch.body + b"\nOperator notes added after cleanup.\n"
+                batch.agents.write_bytes(edited)
+                followup = plan_migration(
+                    [batch.root], batch.vault, "fixture", None, tool_versions=runtime_versions(),
+                    deployment_mode="init", deployment_platform="omp",
+                    followup_manifest=manifest_path, followup_apply_receipt=apply_path,
+                    followup_deployment_evidence=observed, followup_verification=verification_path,
+                    followup_cleanup_receipt=cleanup_path,
+                )
+                self.assertEqual(followup["payload"]["projects"][0]["private_operations"], [])
+                followup_path = future_evidence / "manifest.json"
+                save_document(followup_path, followup, private_root=future_evidence)
+                _receipt, followup_apply = batch.apply(followup_path, no_routing_approvals=True)
+                unchanged = snapshot(batch.base)
+                with self.assertRaises(ContractError) as failure:
+                    load_deployment_context(
+                        followup_path, followup_apply, future_evidence / "receipt.json",
+                        previous_path=None, mode="init", roots=[batch.root], hooks_authorized=False,
+                    )
+                self.assertEqual(failure.exception.code, "private-scope")
+                self.assertEqual(snapshot(batch.base), unchanged)
+            self.assertEqual(batch.agents.read_bytes(), edited)
+            self.assertFalse(missing.exists())
 
     def test_signed_original_deploy_retry_preserves_body_and_recovers_raw(self):
         with tempfile.TemporaryDirectory() as directory:

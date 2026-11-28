@@ -976,7 +976,9 @@ class CurrentStateReconciliationRefusalTests(unittest.TestCase):
         self.assertEqual(_tree_bytes(batch.evidence), evidence_before)
         self.assertEqual(snapshot(target), drifted)
 
-    def test_apply_only_target_drift_after_receipt_fails_closed(self):
+    def test_apply_only_target_drift_after_context_validation_fails_closed(self):
+        import sbtd_migration
+
         batch, manifest, manifest_path, apply_path, missing_path = (
             _interrupted_deployment(self)
         )
@@ -984,12 +986,20 @@ class CurrentStateReconciliationRefusalTests(unittest.TestCase):
         operation = _apply_only_operation(manifest)
         target = Path(operation["target"])
         after = _stage_results(apply_path)[operation["resource_id"]]["after"]
-        _drift_target(target, after)
+        validate_context = sbtd_migration._validate_context
 
-        with self.assertRaises(contracts.ContractError) as failure:
-            _reconcile(
-                batch, manifest, manifest_path, apply_path, missing_path, output_path
-            )
+        def change_after_real_validation(*args, **kwargs):
+            result = validate_context(*args, **kwargs)
+            self.assertTrue(kwargs["deployment"]["payload"]["projects"][0]["report_refs"])
+            self.assertEqual(snapshot(target), after)
+            _drift_target(target, after)
+            return result
+
+        with (
+            mock.patch("sbtd_migration._validate_context", side_effect=change_after_real_validation),
+            self.assertRaises(contracts.ContractError) as failure,
+        ):
+            _reconcile(batch, manifest, manifest_path, apply_path, missing_path, output_path)
         self.assertEqual(failure.exception.code, "state-conflict")
         self.assertFalse(output_path.exists())
         self.assertFalse(missing_path.exists())
@@ -1141,12 +1151,10 @@ class CurrentStateReconciliationRefusalTests(unittest.TestCase):
                     changed=changed_report, **kwargs
                 ):
                     result = validate(*args, **kwargs)
-                    operation = next(
-                        item
-                        for item in manifest["payload"]["shared_operations"]
-                        if item["phase"] == "deploy" and item["change"]["kind"] == "copy-file"
-                    )
-                    report = Path(operation["target"])
+                    reference = kwargs["deployment"]["payload"]["projects"][0]["report_refs"][0]
+                    report = Path(reference["path"])
+                    self.assertEqual(report.suffix, ".json")
+                    self.assertEqual(snapshot(report), reference["state"])
                     if change == "modify":
                         report.write_bytes(damaged_bytes)
                     else:

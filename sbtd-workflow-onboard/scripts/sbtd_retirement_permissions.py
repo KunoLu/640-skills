@@ -46,6 +46,7 @@ _SACL_CONTROL = 0x2A30
 _FILE_INFORMATION_BASIC = 0
 _FILE_INFORMATION_RENAME = 3
 _FILE_INFORMATION_DISPOSITION = 4
+_FILE_STREAM_INFO = 7
 _FILE_INFORMATION_DISPOSITION_EX = 21
 _INVALID_HANDLE = ctypes.c_void_p(-1).value
 _EFFECTIVE_TOKEN = ctypes.c_void_p(-6)  # GetCurrentThreadEffectiveToken(), a query-only pseudo-handle
@@ -166,6 +167,8 @@ def _win32() -> Any:
                         pointer, w.DWORD, w.DWORD, w.HANDLE),
         CloseHandle=bind(kernel, "CloseHandle", w.BOOL, w.HANDLE),
         FinalName=bind(kernel, "GetFinalPathNameByHandleW", w.DWORD, w.HANDLE, w.LPWSTR, w.DWORD, w.DWORD),
+        GetFileInformation=bind(kernel, "GetFileInformationByHandleEx", w.BOOL, w.HANDLE,
+                                ctypes.c_int, pointer, w.DWORD),
         LocalFree=bind(kernel, "LocalFree", pointer, pointer),
         GetTokenInformation=bind(security, "GetTokenInformation", w.BOOL, w.HANDLE,
                                  ctypes.c_int, pointer, w.DWORD, ctypes.POINTER(w.DWORD)),
@@ -277,9 +280,23 @@ def _read_handle(handle: int) -> bytes:
     return _pack(*_read_handle_parts(handle))
 
 
+def _require_primary_stream_only(handle: int) -> None:
+    """The backup copies only the unnamed data stream. Never discard another."""
+    # FILE_STREAM_INFO: next offset, name byte length, two LARGE_INTEGERs,
+    # then a UTF-16 name. A short buffer or missing enumeration is not proof.
+    buffer = ctypes.create_string_buffer(512)
+    if not _win32().GetFileInformation(handle, _FILE_STREAM_INFO, buffer, ctypes.sizeof(buffer)):
+        _unproved("Windows file streams could not be verified for retirement")
+    following, name_bytes = struct.unpack_from("<II", buffer)
+    default_name = "::$DATA".encode("utf-16-le")
+    if following or name_bytes != len(default_name) or buffer.raw[24:24 + name_bytes] != default_name:
+        _unproved("retirement cannot preserve additional Windows file streams")
+
+
 def capture(path: Path) -> bytes:
     """Capture a replay candidate from an opened, no-follow Windows file."""
     with _file(path) as (handle, _):
+        _require_primary_stream_only(handle)
         return _read_handle(handle)
 
 

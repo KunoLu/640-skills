@@ -1199,10 +1199,8 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
                 self.assertEqual(completed.returncode, 2, completed.stderr or completed.stdout)
                 report = json.loads(completed.stdout)["graftRetirement"]
                 self.assertTrue(report["blocked"], report)
-                self.assertEqual(
-                    [(row["path"], row["code"]) for row in report["errors"]],
-                    [(str(linked_project / "AGENTS.md"), "unsafe-path")],
-                )
+                self.assertEqual(report["reason"], "invalid-path")
+                self.assertEqual(report["items"], [])
                 self.assertTrue(linked_project.is_symlink())
                 self.assertEqual(list(self.project_one.iterdir()), [])
                 self.assertFalse(skills.exists())

@@ -318,12 +318,15 @@ if not callable(build_parser):
     raise SystemExit("onboard.py does not expose build_parser().")
 parser = build_parser()
 for action in ("init", "reset"):
-    args = parser.parse_args(["plan", "--action", action])
+    args = parser.parse_args(["plan", "--action", action, "--retirement-evidence", "probe"])
     if args.mode != "plan" or getattr(args, "action", None) != action:
         raise SystemExit("plan does not support both --action init and --action reset.")
+reset = parser.parse_args(["reset", "--retirement-backup-root", "probe", "--confirm-retirement", "probe"])
+if reset.mode != "reset" or getattr(reset, "confirm_retirement", None) != "probe":
+    raise SystemExit("reset does not support retirement confirmation.")
 '
   if ! printf '%s\n' "$probe" | "$PYTHON_BIN" -IB - "$SOURCE_ROOT/scripts/onboard.py"; then
-    die "The selected SBTD Onboard source must support plan --action init and plan --action reset. Use a current sbtd-workflow-onboard directory or pass --source-root to a compatible source. No onboarding actions were run."
+    die "The selected Onboard source must support retirement-aware plan and reset. Pass --source-root for a compatible package. No onboarding actions were run."
   fi
 }
 
@@ -1254,9 +1257,7 @@ main() {
   initialize_user_input
   validate_source_root "$SOURCE_ROOT"
   find_python
-  if [[ "$PROJECTS_ONLY" -eq 0 ]]; then
-    assert_plan_action_support
-  fi
+  assert_plan_action_support
   print_logo
   resolve_interactive_inputs
   refresh_projects_json

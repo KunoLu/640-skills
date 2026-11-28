@@ -19,7 +19,7 @@ class AgentCliCommandTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory(prefix="sbtd-agent-cli-test-")
         self.addCleanup(self.temp_dir.cleanup)
-        self.root = Path(self.temp_dir.name)
+        self.root = Path(self.temp_dir.name).resolve()
         self.bin_dir = self.root / "bin"
         self.bin_dir.mkdir()
         self.home = self.root / "home"

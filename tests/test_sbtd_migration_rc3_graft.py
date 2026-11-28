@@ -24,6 +24,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+import onboard_contracts as contracts
 from onboard_contracts import (
     ARCHIVED_GRAFT_PIN,
     ContractError,
@@ -33,15 +34,16 @@ from onboard_contracts import (
     resource_id,
     seal_document,
 )
-from sbtd_deployment import legacy_graft_operations, reject_legacy_execution
+from sbtd_deployment import legacy_graft_operations
 from sbtd_migration import (
     _CURRENT_RUNTIME_FILES,
     _HISTORICAL_RUNTIME_FILES,
     _lineage_signed_bytes,
     historical_lineage_grants_verify,
+    apply_migration,
     runtime_versions,
 )
-from sbtd_migration_files import snapshot
+from sbtd_migration_files import snapshot, snapshot_with_mode
 from sbtd_migration_verify import validate_deployment_reports, verify_migration
 
 # Measured from the rc.2 tag with declared dependencies. Not an allowlist.
@@ -138,37 +140,27 @@ class NewPlanTests(unittest.TestCase):
                 )
             self.assertEqual(legacy_graft_operations(manifest["payload"]), [])
 
-    def test_legacy_execution_refuses_before_write(self):
+    def test_legacy_apply_refuses_sealed_inputs_before_lineage_or_writes(self):
         with tempfile.TemporaryDirectory() as directory:
-            target = Path(directory) / "config.toml"
-            target.write_bytes(b"before\n")
-            before = target.read_bytes()
-            mode = stat.S_IMODE(target.stat().st_mode)
-            with self.assertRaises(ContractError) as raised:
-                reject_legacy_execution(
-                    {
-                        "projects": [
-                            {
-                                "private_operations": [
-                                    {
-                                        "change": {"kind": "build-graft"},
-                                        "target": str(target),
-                                    }
-                                ]
-                            }
-                        ],
-                        "shared_operations": [],
-                    }
-                )
-            self.assertEqual(raised.exception.code, "unsupported-in-rc.3")
-            self.assertEqual(target.read_bytes(), before)
-            self.assertEqual(stat.S_IMODE(target.stat().st_mode), mode)
+            base = Path(directory).resolve()
+            built = build_completed_historical(base)
+            before = snapshot(base)
+            for previous in (None, built["apply_path"]):
+                with self.subTest(previous=previous), self.assertRaises(ContractError) as raised:
+                    apply_migration(
+                        built["manifest_path"], previous_receipt_path=previous,
+                        confirmed=True, no_routing_approvals=True,
+                    )
+                self.assertEqual(raised.exception.code, "unsupported-in-rc.3")
+                self.assertEqual(snapshot(base), before)
 
 
 def _graft_operation(
-    root: Path, target: Path, owner: str, selector: str, kind: str, earlier: list[dict]
+    root: Path, target: Path, owner: str, selector: str, kind: str, earlier: list[dict],
+    *, package: Path,
 ) -> dict:
     policy = archived_graft_policy()
+    policy["path"] = str(package / "assets/graft-build-policy.json")
     rid = resource_id(owner, str(target))
     # rc.2 _operation chains by target to any earlier apply operation.
     requirement = (
@@ -222,19 +214,26 @@ def _mode_proof(
     operation: dict,
     mode: str,
     after: dict,
+    observed_at: str,
 ) -> dict:
-    from sbtd_migration_verify import _mode_signed_bytes
-
     recorded = {"type": after["type"], "checksum": after["checksum"]}
+    message = {
+        "schema_version": 1,
+        "purpose": "post-write-mode",
+        "deployment_id": deployment_id,
+        "resource_id": operation["resource_id"],
+        "mode": mode,
+        "after": recorded,
+        "observed_at": observed_at,
+    }
     return {
         "kind": "signed-attestation",
         "resource_id": operation["resource_id"],
         "mode": mode,
         "after": recorded,
+        "observed_at": observed_at,
         "signature": base64.b64encode(
-            private.sign(
-                _mode_signed_bytes(deployment_id, operation["resource_id"], mode, recorded)
-            )
+            private.sign(canonical_json_bytes(message))
         ).decode("ascii"),
     }
 
@@ -339,6 +338,8 @@ def build_completed_historical(
     predecessor: str | None = None,
     drift: bool = True,
     signed_route: bool = False,
+    untouched_template: bool = False,
+    graph_mode: int | None = None,
 ) -> dict:
     """Model a completed rc.2 deployment without running Graft."""
     import sbtd_migration_plan as migration_plan
@@ -354,6 +355,19 @@ def build_completed_historical(
 
     roots = [legacy_project(base, name) for name in ("alpha", "beta")]
     agents = roots[0] / "AGENTS.md"
+    old_package = base / "archived-install"
+    old_ignore = old_package / "assets/migration-local-ignore.txt"
+    old_ignore.parent.mkdir(parents=True)
+    old_ignore.write_bytes((SCRIPTS.parent / "assets/migration-local-ignore.txt").read_bytes())
+    archive_digests = {}
+    if untouched_template:
+        relative = "templates/agents/AGENTS.project.md"
+        template = old_package / relative
+        template.parent.mkdir(parents=True)
+        original_rules = b"# Aligned rules from the isolated historical fixture\n"
+        template.write_bytes(original_rules)
+        agents.write_bytes(original_rules)
+        archive_digests[relative] = hashlib.sha256(original_rules).hexdigest()
     hashes_path = roots[0] / ".trellis/.template-hashes.json"
     hashes = json.loads(hashes_path.read_bytes())
     hashes["hashes"]["AGENTS.md"] = hashlib.sha256(agents.read_bytes()).hexdigest()
@@ -402,6 +416,9 @@ def build_completed_historical(
         approval.write_bytes(canonical_json_bytes(routing))
     with (
         mock.patch.dict(os.environ, environment),
+        mock.patch.object(migration_plan, "_IGNORE_ASSET", old_ignore),
+        mock.patch.object(migration_plan, "_PROJECT_AGENTS_TEMPLATE", template)
+        if untouched_template else nullcontext(),
         mock.patch.object(migration_plan, "_ROUTING_APPROVAL_PUBLIC_KEY", routing_public)
         if routing_public is not None else nullcontext(),
     ):
@@ -416,18 +433,19 @@ def build_completed_historical(
     payload["deployment"] = {"mode": "init-projects", "platform": "codex", "inputs": []}
     graft_ops: dict[str, list[dict]] = {}
     for project in payload["projects"]:
-        if project.get("agents_no_touch") is not None:
-            raise AssertionError("fixture AGENTS.md must not be an untouched template")
         root = Path(project["root"])
         earlier = project["private_operations"]
         operations = [
             _graft_operation(
-                root, root / "graft", "directory", "whole-resource", "build-graft", earlier
-            ),
-            _graft_operation(
-                root, root / "AGENTS.md", "markdown", "graft-agents", "configure-graft", earlier
+                root, root / "graft", "directory", "whole-resource", "build-graft",
+                earlier, package=old_package,
             ),
         ]
+        if project.get("agents_no_touch") is None:
+            operations.append(_graft_operation(
+                root, root / "AGENTS.md", "markdown", "graft-agents", "configure-graft",
+                earlier, package=old_package,
+            ))
         project["private_operations"].extend(operations)
         graft_ops[str(root)] = operations
     sealed = seal_document("manifest", payload)
@@ -453,6 +471,11 @@ def build_completed_historical(
         graph = root / "graft"
         graph.mkdir()
         (graph / "INDEX.md").write_bytes(b"graph\n")
+        if graph_mode is not None and root == roots[0]:
+            if os.name == "posix":
+                # A temp directory can inherit a group the test user cannot setgid.
+                os.chown(graph, -1, os.getegid())
+            graph.chmod(graph_mode)
         deploy_results = []
         for operation in graft_ops[str(root)]:
             target = Path(operation["target"])
@@ -481,7 +504,7 @@ def build_completed_historical(
                 snapshot(Path(operation["target"])),
                 backup,
             )
-            if operation["selector"] == "graft-agents":
+            if operation["selector"] == "graft-agents" or target == graph and graph_mode is not None and root == roots[0]:
                 observed = f"{stat.S_IMODE(target.stat().st_mode):04o}"
                 proof_specs.append((operation, observed, result["after"]))
             deploy_results.append(result)
@@ -543,13 +566,17 @@ def build_completed_historical(
                 "deployment_id": deployment["deployment_id"],
                 "attestations": [
                     _mode_proof(
-                        private, deployment["deployment_id"], operation, mode, after
+                        private, deployment["deployment_id"], operation, mode, after,
+                        _iso(created + timedelta(seconds=22)),
                     )
                     for operation, mode, after in proof_specs
                 ],
             }
         )
     )
+    old_ignore.unlink()
+    if untouched_template:
+        template.write_bytes(b"# Rules installed later at the same location\n")
     (vault / "untrusted-mode.txt").write_text("0640\n")
     if drift:
         (roots[1] / "AGENTS.md").chmod(0o600)
@@ -568,6 +595,8 @@ def build_completed_historical(
         "roots": roots,
         "routing_public": routing_public,
         "attestation": attestation,
+        "archive_digests": archive_digests,
+        "old_package": old_package,
     }
 
 
@@ -579,6 +608,7 @@ def _verify(built: dict):
         mock.patch.dict(os.environ, built["environment"]),
         mock.patch.object(migration, "_LINEAGE_PUBLIC_KEY", built["public"]),
         mock.patch.object(migration, "_LINEAGE_DOCUMENT", built["pair"]),
+        mock.patch.dict(contracts._ARCHIVED_FILES, built["archive_digests"]),
         mock.patch.object(migration_plan, "_ROUTING_APPROVAL_PUBLIC_KEY", built["routing_public"])
         if built["routing_public"] is not None else nullcontext(),
     ):
@@ -672,6 +702,146 @@ class PublicVerifyTests(unittest.TestCase):
             self.assertIsNone(agents["mode_source"])
             self.assertIn("DACL", agents["reason"])
             self.assertEqual(windows_rows[str(beta / "graft")]["status"], "drifted")
+
+    def test_in_place_template_replacement_does_not_erase_historical_proof(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            built = build_completed_historical(base, drift=False, untouched_template=True)
+            alpha, beta = built["roots"]
+            manifest = json.loads(built["manifest_path"].read_bytes())
+            proof = manifest["payload"]["projects"][0]["agents_no_touch"]
+            template = Path(proof["template"]["path"])
+            self.assertEqual(template, built["old_package"] / "templates/agents/AGENTS.project.md")
+            self.assertNotEqual(snapshot(template), proof["template"]["state"])
+            self.assertFalse((built["old_package"] / "assets/graft-build-policy.json").exists())
+            before = snapshot(base)
+            envelope, code = _verify(built)
+            self.assertEqual(code, 2, envelope)
+            self.assertEqual(envelope["status"], "not-verified")
+            rows = envelope["migration"]["verification"]["payload"]["legacy_resources"]
+            self.assertEqual({row["target"] for row in rows}, {
+                str(alpha / "graft"), str(beta / "graft"), str(beta / "AGENTS.md"),
+            })
+            self.assertEqual(snapshot(base), before)
+
+    def test_mixed_blocked_and_not_verified_projects_keep_both_results(self):
+        with tempfile.TemporaryDirectory() as directory:
+            built = build_completed_historical(Path(directory).resolve(), drift=False)
+            alpha, beta = built["roots"]
+
+            def read_candidate(path):
+                if path == alpha / ".trellis":
+                    raise ContractError("read-failed", "fixture unreadable cleanup candidate")
+                return snapshot(path)
+
+            with mock.patch("sbtd_migration_verify.snapshot", side_effect=read_candidate):
+                envelope, code = _verify(built)
+            self.assertEqual(code, 2, envelope)
+            self.assertEqual(envelope["status"], "blocked")
+            self.assertEqual({item["root"]: item["status"] for item in envelope["projects"]}, {
+                str(alpha): "blocked", str(beta): "not-verified",
+            })
+
+    def test_sidecar_for_another_deployment_is_not_mode_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            built = build_completed_historical(Path(directory).resolve(), drift=False)
+            path = built["attestation"]
+            old = json.loads(path.read_bytes())
+            old["deployment_id"] = "f" * 64
+            path.write_bytes(canonical_json_bytes(old))
+            verified, code = _verify(built)
+            self.assertEqual(code, 2)
+            rows = verified["migration"]["verification"]["payload"]["legacy_resources"]
+            self.assertTrue(rows)
+            self.assertTrue(all(row["status"] == "not-verified" and row["mode_source"] is None for row in rows))
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX permission bits")
+    def test_existing_graph_attestation_accepts_setgid(self):
+        with tempfile.TemporaryDirectory() as directory:
+            built = build_completed_historical(Path(directory).resolve(), drift=False, graph_mode=0o2750)
+            graph = built["roots"][0] / "graft"
+            self.assertEqual(stat.S_IMODE(graph.stat().st_mode), 0o2750)
+            envelope, code = _verify(built)
+            self.assertEqual(code, 2, envelope)
+            rows = envelope["migration"]["verification"]["payload"]["legacy_resources"]
+            observed = next(row for row in rows if row["target"] == str(graph))
+            self.assertEqual((observed["bytes"], observed["mode"], observed["status"]), (
+                "match", "match", "verified",
+            ))
+            self.assertEqual(envelope["status"], "not-verified")
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX permission evidence")
+    def test_undated_late_and_wrong_purpose_proofs_do_not_mask_independent_rows(self):
+        with tempfile.TemporaryDirectory() as directory:
+            built = build_completed_historical(Path(directory).resolve(), drift=True)
+            alpha, beta = built["roots"]
+            path = built["attestation"]
+            original = json.loads(path.read_bytes())
+            entry = original["attestations"][0]
+            late = _mode_proof(
+                built["private"], original["deployment_id"], entry, entry["mode"], entry["after"],
+                _iso(datetime.now(timezone.utc) + timedelta(days=1)),
+            )
+            lineage = json.loads(built["pair"].read_bytes())
+            variants = (
+                {key: value for key, value in entry.items() if key != "observed_at"},
+                late,
+                {**entry, "signature": lineage["signature"]},
+            )
+            for variant in variants:
+                with self.subTest(variant=variant):
+                    path.write_bytes(canonical_json_bytes({
+                        **original, "attestations": [variant, original["attestations"][1]],
+                    }))
+                    envelope, code = _verify(built)
+                    self.assertEqual(code, 3, envelope)
+                    rows = {
+                        row["target"]: row
+                        for row in envelope["migration"]["verification"]["payload"]["legacy_resources"]
+                    }
+                    self.assertEqual(rows[str(alpha / "AGENTS.md")]["status"], "not-verified")
+                    self.assertEqual(rows[str(beta / "AGENTS.md")]["mode"], "differ")
+                    self.assertEqual(rows[str(beta / "graft")]["bytes"], "differ")
+
+    @unittest.skipUnless(os.name == "posix", "requires a POSIX no-follow observation")
+    def test_replacement_during_hashing_is_unverified_and_keeps_other_rows(self):
+        from sbtd_migration_files import _hash_stream
+
+        for relative in ("AGENTS.md", "graft"):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory).resolve()
+                built = build_completed_historical(base, drift=False, graph_mode=0o2750)
+                alpha, beta = built["roots"]
+                target = alpha / relative
+                leaf = target / "INDEX.md" if target.is_dir() else target
+                identity = leaf.stat()
+
+                def replace_after_read(handle):
+                    digest = _hash_stream(handle)
+                    if os.path.samestat(identity, os.fstat(handle.fileno())):
+                        mode = stat.S_IMODE(target.stat().st_mode)
+                        if target.is_dir():
+                            target.rename(base / "prior-graft")
+                            target.mkdir()
+                            leaf.write_bytes(b"graph\n")
+                        else:
+                            replacement = base / "replacement"
+                            replacement.write_bytes(target.read_bytes())
+                            os.replace(replacement, target)
+                        target.chmod(mode)
+                    return digest
+
+                with mock.patch("sbtd_migration_files._hash_stream", side_effect=replace_after_read):
+                    envelope, code = _verify(built)
+                self.assertEqual(code, 2, envelope)
+                rows = {
+                    row["target"]: row
+                    for row in envelope["migration"]["verification"]["payload"]["legacy_resources"]
+                }
+                self.assertEqual(rows[str(target)]["status"], "not-verified")
+                self.assertEqual(rows[str(target)]["bytes"], "unreadable")
+                self.assertIsNone(rows[str(target)]["mode_source"])
+                self.assertEqual(rows[str(beta / "AGENTS.md")]["status"], "verified")
 
     def test_equal_onboard_and_bad_lineage_fail_closed(self):
         import sbtd_migration as migration
@@ -819,12 +989,16 @@ class PublicVerifyTests(unittest.TestCase):
                 self.assertEqual(rows[str(agents)]["status"], "not-verified")
                 self.assertTrue(all(project["status"] == "blocked" for project in payload["projects"]))
 
-            def unreadable(path: Path) -> dict:
+            def unreadable(path: Path, *, mode: bool = False):
                 if path in {route, agents}:
                     raise ContractError("read-failed", "fixture unreadable routing")
-                return snapshot(path)
+                return snapshot_with_mode(path) if mode else snapshot(path)
 
-            with mock.patch("sbtd_migration_verify.snapshot", side_effect=unreadable):
+            with (
+                mock.patch("sbtd_migration_verify.snapshot", side_effect=unreadable),
+                mock.patch("sbtd_migration_verify.snapshot_with_mode",
+                           side_effect=lambda path: unreadable(path, mode=True)),
+            ):
                 check_unavailable()
             if os.name == "posix":
                 from sbtd_migration import _check_stage_backups

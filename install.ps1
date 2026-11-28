@@ -290,14 +290,17 @@ if not callable(build_parser):
     raise SystemExit("onboard.py does not expose build_parser().")
 parser = build_parser()
 for action in ("init", "reset"):
-    args = parser.parse_args(["plan", "--action", action])
+    args = parser.parse_args(["plan", "--action", action, "--retirement-evidence", "probe"])
     if args.mode != "plan" or getattr(args, "action", None) != action:
         raise SystemExit("plan does not support both --action init and --action reset.")
+reset = parser.parse_args(["reset", "--retirement-backup-root", "probe", "--confirm-retirement", "probe"])
+if reset.mode != "reset" or getattr(reset, "confirm_retirement", None) != "probe":
+    raise SystemExit("reset does not support retirement confirmation.")
 '@
   $arguments = $PythonPrefix + @("-IB", "-", (Get-OnboardPy))
   $probe | & $PythonExe @arguments
   if ($LASTEXITCODE -ne 0) {
-    Stop-WithMessage "The selected SBTD Onboard source must support plan --action init and plan --action reset. Use a current sbtd-workflow-onboard directory or pass -SourceRoot to a compatible source. No onboarding actions were run."
+    Stop-WithMessage "The selected Onboard source must support retirement-aware plan and reset. Pass -SourceRoot for a compatible package. No onboarding actions were run."
   }
 }
 
@@ -1035,9 +1038,7 @@ if ($Help) {
 
 Validate-SourceRoot $SourceRoot
 Find-Python
-if (-not $script:ProjectsOnly) {
-  Assert-PlanActionSupport
-}
+Assert-PlanActionSupport
 Show-Logo
 Resolve-InteractiveInputs
 Update-ProjectsCheck

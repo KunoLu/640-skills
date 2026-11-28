@@ -23,7 +23,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import quote
 
-from onboard import gitignore_verdicts
+from onboard import gitignore_verdicts, native_git_argv
 from sbtd_project import (
     TaskDataError,
     open_regular_file,
@@ -103,7 +103,7 @@ class TaskStore:
         environment = {
             key: value
             for key, value in os.environ.items()
-            if not key.startswith("GIT_")
+            if not key.upper().startswith("GIT_")
         }
         environment.update(
             LC_ALL="C", GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull
@@ -112,9 +112,14 @@ class TaskStore:
 
     def _git(self, *arguments: str) -> subprocess.CompletedProcess[str]:
         try:
+            environment = self._git_environment()
+            argv = native_git_argv(self.root, *arguments, path=environment.get("PATH", ""))
+            cwd = Path(argv[0]).parent
+            environment.update(PATH=str(cwd), GIT_TERMINAL_PROMPT="0")
             result = subprocess.run(
-                ["git", "-C", str(self.root), *arguments],
-                env=self._git_environment(),
+                argv,
+                cwd=cwd,
+                env=environment,
                 capture_output=True,
                 timeout=15,
                 check=False,

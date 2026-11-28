@@ -989,7 +989,9 @@ def historical_lineage_grants_verify(
     )
 
 
-def _bind_legacy_d7(manifest: Mapping[str, Any]) -> None:
+def _bind_legacy_d7(
+    manifest: Mapping[str, Any], *, current_onboard: str | None = None
+) -> dict[str, Any]:
     """Read-only. Exact signed predecessor to this executor. No write grant.
 
     rc.3 cannot have produced this deployment. Equality with the executing
@@ -998,20 +1000,13 @@ def _bind_legacy_d7(manifest: Mapping[str, Any]) -> None:
     sealed = manifest["payload"]["tool_versions"]
     if sealed.get("graft") != contracts.ARCHIVED_GRAFT_PIN:
         _fail("version-conflict", "the historical graft pin is not the archived pin")
-    policy = contracts.archived_graft_policy()
-    operations = _legacy_deploy_operations(manifest)
-    if not operations:
+    if not _legacy_deploy_operations(manifest):
         _fail(
             "version-conflict",
             "legacy verification requires historical Graft operations",
         )
-    for operation in operations:
-        if operation["change"].get("source_ref") != policy:
-            _fail(
-                "ownership-conflict",
-                "the historical policy is not the archived policy",
-            )
-    current_onboard = runtime_versions()["onboard"]
+    if current_onboard is None:
+        current_onboard = runtime_versions()["onboard"]
     sealed_onboard = sealed.get("onboard")
     if not isinstance(sealed_onboard, str) or sealed_onboard == current_onboard:
         _fail(
@@ -1025,6 +1020,7 @@ def _bind_legacy_d7(manifest: Mapping[str, Any]) -> None:
             "version-conflict",
             "the historical runtime is not an exact signed predecessor of this runtime",
         )
+    return contracts.archived_graft_policy_for(manifest["payload"])
 
 
 def _validate_context(
@@ -1051,10 +1047,21 @@ def _validate_context(
     current_versions = runtime_versions()
     legacy_operations = _legacy_deploy_operations(manifest) if readonly_legacy else ()
     historical_targets = {Path(operation["target"]) for operation in legacy_operations}
+    archived_package = None
+    archive_references: dict[str, Mapping[str, Any]] = {}
     if legacy_operations:
         # Ordinary and followup verifies stay read-only too. Lineage binding
         # applies only when this manifest itself carries historical Graft ops.
-        _bind_legacy_d7(manifest)
+        policy = _bind_legacy_d7(manifest, current_onboard=current_versions["onboard"])
+        archived_package = Path(policy["path"]).parent.parent
+        archived_sources = (
+            policy,
+            contracts.archived_file_reference(archived_package, "templates/agents/AGENTS.project.md"),
+            contracts.archived_file_reference(archived_package, "assets/migration-local-ignore.txt"),
+            contracts.archived_file_reference(archived_package, "assets/migration-paused-agents.txt"),
+            *contracts.archived_installation_references(manifest["payload"], archived_package),
+        )
+        archive_references = {ref["path"]: ref for ref in archived_sources}
     elif previous_package is not None or sealed_versions != current_versions:
         _require_runtime_lineage(
             manifest,
@@ -1110,10 +1117,8 @@ def _validate_context(
                     "physical-alias",
                     "managed resources have ambiguous physical ownership",
                 )
-    archived_policy = contracts.archived_graft_policy() if readonly_legacy else None
-
     def resolve_reference(reference: Mapping[str, Any]) -> Mapping[str, Any]:
-        if archived_policy is not None and reference == archived_policy:
+        if archive_references.get(reference["path"]) == reference:
             return reference
         return _original_reference(
             reference, manifest, previous, deployment, cleanup,
@@ -1126,10 +1131,10 @@ def _validate_context(
 
     def read_original(reference: Mapping[str, Any]) -> bytes:
         resolved = resolve_reference(reference)
-        if archived_policy is not None and resolved == archived_policy:
+        if archive_references.get(resolved["path"]) == resolved:
             _fail(
                 "ownership-conflict",
-                "the archived policy is a frozen identity, not a live or local file",
+                "a frozen archive identity is not a live package source",
             )
         return _read_reference(resolved)
 
@@ -1148,6 +1153,7 @@ def _validate_context(
         },
         cleanup_only=cleanup_only,
         readonly_legacy=readonly_legacy,
+        archived_package=archived_package,
     )
 
 
@@ -1575,6 +1581,9 @@ def apply_migration(
                 "future-evidence",
                 "a previous receipt is later than the current operation",
             )
+    from sbtd_deployment import reject_legacy_execution
+
+    reject_legacy_execution(manifest["payload"])
     _validate_context(manifest_path, manifest, previous)
     _bind_apply_routing_anchor(
         manifest_path,

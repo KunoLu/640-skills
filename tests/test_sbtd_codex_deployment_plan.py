@@ -13,10 +13,12 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "sbtd-workflow-onboard/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from onboard_contracts import ContractError, operation_id, resource_id, seal_document
-from sbtd_migration import runtime_versions
+from sbtd_deployment import validate_archived_graft_declarations
+from sbtd_migration import apply_migration, runtime_versions
+from sbtd_migration_files import save_document, snapshot
 from sbtd_migration_plan import plan_migration, validate_legacy_inputs
 
-from tests.onboard_contract_fixtures import legacy_graft_operation
+from tests.onboard_contract_fixtures import legacy_graft_operation, legacy_graft_versions
 from tests.test_sbtd_migration_apply import file_contents, legacy_project
 from tests.test_sbtd_migration_plan import _reader
 
@@ -53,14 +55,32 @@ class CodexDeploymentPlanTests(unittest.TestCase):
                     op["phase"] == "deploy" for op in payload["projects"][0]["private_operations"]
                 ))
                 self.assertEqual(payload["shared_operations"], [])
-                broken = copy.deepcopy(payload)
-                broken["projects"][0]["private_operations"].append(legacy_graft_operation(
-                    target=str(root / "graft"), owner_kind="directory", selector="whole-resource",
-                    kind="build-graft", dependents=[str(root)],
+                from tests.test_sbtd_migration_rc3_graft import RC2_ONBOARD
+
+                archived = copy.deepcopy(payload)
+                archived["deployment"] = {"mode": "init-projects", "platform": "codex", "inputs": []}
+                archived["tool_versions"] = legacy_graft_versions(RC2_ONBOARD)
+                archived["projects"][0]["private_operations"].extend((
+                    legacy_graft_operation(
+                        target=str(root / "graft"), owner_kind="directory", selector="whole-resource",
+                        kind="build-graft", dependents=[str(root)],
+                    ),
+                    legacy_graft_operation(
+                        target=str(root / "AGENTS.md"), owner_kind="markdown", selector="graft-agents",
+                        kind="configure-graft", dependents=[str(root)], before=snapshot(root / "AGENTS.md"),
+                    ),
                 ))
-                with self.assertRaises(ContractError):
-                    validate_legacy_inputs(seal_document("manifest", broken), _reader)
-                self.assertEqual(file_contents(base), before)
+                historical = seal_document("manifest", archived)
+                validate_archived_graft_declarations(historical["payload"])
+                evidence = base / "evidence"
+                evidence.mkdir(mode=0o700)
+                manifest_path = evidence / "rc2-manifest.json"
+                save_document(manifest_path, historical, private_root=evidence)
+                unchanged = snapshot(base)
+                with self.assertRaises(ContractError) as failure:
+                    apply_migration(manifest_path, confirmed=True, no_routing_approvals=True)
+                self.assertEqual(failure.exception.code, "unsupported-in-rc.3")
+                self.assertEqual(snapshot(base), unchanged)
 
     def test_resealed_shared_host_root_cannot_replace_the_active_codex_home(self):
         with tempfile.TemporaryDirectory() as directory:

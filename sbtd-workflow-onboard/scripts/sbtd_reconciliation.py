@@ -77,7 +77,6 @@ def _check_candidate_path(
             "private-scope",
             f"the {label} evidence path must be a new physical path inside the manifest directory",
         )
-    require_private_directory(candidate.parent)
     for path in reserved:
         if contracts._publication_paths_overlap(str(candidate), str(path)):
             _fail(
@@ -305,6 +304,15 @@ def reconcile_deployment(
         _check_candidate_path(
             label, candidate, private=private, reserved=reserved, protected=protected
         )
+
+    roots = [Path(project["root"]) for project in payload["projects"]]
+    smoke_dirs = deployment._preflight_smoke_evidence_paths(
+        private,
+        (str(root) for root in roots),
+        reserved=reserved | {missing_path, output_path} | {path for path, _ in protected},
+    )
+    for candidate in (missing_path, output_path):
+        require_private_directory(candidate.parent)
     if snapshot(missing_path) != _ABSENT:
         _fail(
             "state-conflict",
@@ -312,17 +320,6 @@ def reconcile_deployment(
         )
     if snapshot(output_path) != _ABSENT:
         _fail("state-conflict", "the reconciliation evidence target already exists")
-
-    roots = [Path(project["root"]) for project in payload["projects"]]
-    smoke_dirs = deployment._preflight_smoke_evidence_paths(
-        private,
-        (str(root) for root in roots),
-        reserved=(
-            reserved
-            | {missing_path, output_path}
-            | {path for path, directory in protected if directory}
-        ),
-    )
     if zero_write:
         # A zero-write observation still has to prove its complete inherited
         # deployment set before creating any report evidence.
@@ -376,7 +373,6 @@ def reconcile_deployment(
         operations,
         results,
         evidence_dirs=smoke_dirs,
-        include_unwritten=zero_write,
         context_paths=(manifest_path, apply_path),
     )
     for operation in operations:

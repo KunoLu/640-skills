@@ -71,6 +71,7 @@ __all__ = [
     "restore_directory_reference",
     "save_document",
     "snapshot",
+    "snapshot_with_mode",
     "withdraw_directory_reference",
     "write_file",
 ]
@@ -157,16 +158,64 @@ def _read_regular(path: Path) -> bytes:
         _fail("read-failed", "file cannot be read safely")
 
 
+def _hash_stream(handle: Any) -> str:
+    digest = hashlib.sha256()
+    while chunk := handle.read(_CHUNK):
+        digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _hash_file(path: Path) -> str:
     """Streaming SHA-256 of one nofollow regular file."""
-    digest = hashlib.sha256()
     try:
         with open_regular_file(path, "migration file") as handle:
-            while chunk := handle.read(_CHUNK):
-                digest.update(chunk)
+            return _hash_stream(handle)
     except TaskDataError:
         _fail("read-failed", "file cannot be read safely")
-    return digest.hexdigest()
+
+
+def _entry_at(parent: int, name: str) -> os.stat_result | None:
+    try:
+        return os.stat(name, dir_fd=parent, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+
+
+def _require_same_observation(
+    before: os.stat_result | None, after: os.stat_result | None, *, identity_only: bool = False
+) -> None:
+    if before is None and after is None:
+        return
+    if (
+        before is None or after is None
+        or not os.path.samestat(before, after)
+        or not identity_only and (
+            before.st_mode, before.st_nlink, before.st_size, before.st_mtime_ns, before.st_ctime_ns
+        ) != (
+            after.st_mode, after.st_nlink, after.st_size, after.st_mtime_ns, after.st_ctime_ns
+        )
+    ):
+        _fail("state-conflict", "the resource changed during its read-only observation")
+
+
+@contextlib.contextmanager
+def _open_observed_at(
+    parent: int, name: str, info: os.stat_result, *, ancestor: bool = False
+) -> Iterator[int]:
+    directory = stat.S_ISDIR(info.st_mode)
+    if not (directory or stat.S_ISREG(info.st_mode)):
+        _fail("unsafe-path", "a historical resource contains a link or special entry")
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+    if directory:
+        flags |= os.O_DIRECTORY
+    fd = os.open(name, flags, dir_fd=parent)
+    try:
+        _require_same_observation(info, os.fstat(fd), identity_only=ancestor)
+        yield fd
+        _require_same_observation(info, os.fstat(fd), identity_only=ancestor)
+        _require_same_observation(info, _entry_at(parent, name), identity_only=ancestor)
+    finally:
+        os.close(fd)
 
 
 def _contained(path: Path, root: Path) -> bool:
@@ -182,7 +231,7 @@ def _bytes_checksum(content: bytes) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _list_children(directory: Path) -> list[os.DirEntry]:
+def _list_children(directory: Path | int) -> list[os.DirEntry]:
     try:
         with os.scandir(directory) as listing:
             children = list(listing)
@@ -192,33 +241,60 @@ def _list_children(directory: Path) -> list[os.DirEntry]:
     return children
 
 
-def _scan_into(directory: Path, prefix: str, entries: list[dict[str, Any]]) -> None:
+def _scan_into(
+    directory: Path | int,
+    prefix: str,
+    entries: list[dict[str, Any]] | None,
+    observed: dict[str, os.stat_result] | None = None,
+) -> None:
     for child in _list_children(directory):
         name = child.name
         relative = name if not prefix else f"{prefix}/{name}"
         try:
-            info = child.stat(follow_symlinks=False)
+            info = (
+                _entry_at(directory, name) if isinstance(directory, int)
+                else child.stat(follow_symlinks=False)
+            )
         except OSError:
             _fail("read-failed", "directory entry cannot be inspected")
-        child_path = Path(child.path)
+        if info is None:
+            _fail("state-conflict", "directory entry disappeared during observation")
+        if observed is not None:
+            if entries is None:
+                _require_same_observation(observed.pop(relative, None), info)
+            else:
+                observed[relative] = info
         if _is_reparse(info):
             _fail("unsafe-path", "directory contains a link or special entry")
         if stat.S_ISDIR(info.st_mode):
-            entries.append({"path": relative, "type": "directory", "checksum": None})
-            _scan_into(child_path, relative, entries)
+            if entries is not None:
+                entries.append({"path": relative, "type": "directory", "checksum": None})
+            if isinstance(directory, int):
+                with _open_observed_at(directory, name, info) as fd:
+                    _scan_into(fd, relative, entries, observed)
+            else:
+                _scan_into(Path(child.path), relative, entries)
         elif stat.S_ISREG(info.st_mode):
+            if entries is None:
+                continue
+            if isinstance(directory, int):
+                with _open_observed_at(directory, name, info) as fd:
+                    with os.fdopen(fd, "rb", closefd=False) as handle:
+                        checksum = _hash_stream(handle)
+            else:
+                checksum = _hash_file(Path(child.path))
             entries.append(
                 {
                     "path": relative,
                     "type": "file",
-                    "checksum": _hash_file(child_path),
+                    "checksum": checksum,
                 }
             )
         else:
             _fail("unsafe-path", "directory contains a link or special entry")
 
 
-def _scan_directory(root: Path) -> tuple[str, list[dict[str, Any]]]:
+def _scan_directory(root: Path | int) -> tuple[str, list[dict[str, Any]]]:
     """One walk producing the PRD flat wire digest and every canonical entry.
 
     The directory checksum is the SHA-256 of the canonical JSON of the
@@ -229,7 +305,13 @@ def _scan_directory(root: Path) -> tuple[str, list[dict[str, Any]]]:
     """
     entries: list[dict[str, Any]] = []
     try:
-        _scan_into(root, "", entries)
+        observed = {} if isinstance(root, int) else None
+        _scan_into(root, "", entries, observed)
+        if observed is not None:
+            # Recheck earlier entries after measuring later ones, without rehashing.
+            _scan_into(root, "", None, observed)
+            if observed:
+                _fail("state-conflict", "directory entries changed during observation")
     except RecursionError:
         _fail("unsafe-path", "directory tree is deeper than the traversal limit")
     entries.sort(key=lambda entry: entry["path"])
@@ -300,6 +382,43 @@ def snapshot(path: Path) -> dict[str, Any]:
         checksum, _ = _scan_directory(target)
         return {"type": "directory", "checksum": checksum}
     _fail("unsafe-path", "path is a link or special file, not absent")
+
+
+def snapshot_with_mode(path: Path) -> tuple[dict[str, Any], str | None]:
+    """Observe contract bytes and POSIX mode of the same no-follow object."""
+    target = _canonical(path)
+    if os.name != "posix":
+        before = _lstat(target)
+        state = snapshot(target)
+        _require_same_observation(before, _lstat(_canonical(target)))
+        return state, None  # Windows st_mode does not prove a DACL.
+    with contextlib.ExitStack() as stack:
+        parent = os.open(target.anchor, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        stack.callback(os.close, parent)
+        for name in target.parts[1:-1]:
+            info = _entry_at(parent, name)
+            if info is None:
+                _require_same_observation(None, _entry_at(parent, name))
+                return dict(_ABSENT), None
+            if not stat.S_ISDIR(info.st_mode):
+                _fail("unsafe-path", "a historical resource parent is not a real directory")
+            parent = stack.enter_context(_open_observed_at(parent, name, info, ancestor=True))
+        info = _entry_at(parent, target.name)
+        if info is None:
+            _require_same_observation(None, _entry_at(parent, target.name))
+            return dict(_ABSENT), None
+        if stat.S_ISREG(info.st_mode) and info.st_nlink != 1:
+            _fail("unsafe-path", "a historical file has ambiguous physical ownership")
+        with _open_observed_at(parent, target.name, info) as fd:
+            if stat.S_ISDIR(info.st_mode):
+                checksum, _ = _scan_directory(fd)
+                kind = "directory"
+            else:
+                with os.fdopen(fd, "rb", closefd=False) as handle:
+                    checksum = _hash_stream(handle)
+                kind = "file"
+            mode = f"{stat.S_IMODE(os.fstat(fd).st_mode):04o}"
+            return {"type": kind, "checksum": checksum}, mode
 
 
 def directory_snapshot(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -1388,6 +1507,7 @@ def _hold_windows_original(
     """Hold the verified object until its successor has claimed the vacant name."""
     permissions = _retirement_permissions
     with permissions._file(target, permissions._DELETE | permissions._READ_DATA, share=0) as (live, fd):
+        permissions._require_primary_stream_only(live)
         info = os.fstat(fd)
         if (stat.S_IMODE(info.st_mode) != mode or _windows_handle_checksum(fd) != checksum
                 or permissions._read_handle(live) != raw):
@@ -1405,8 +1525,9 @@ def _hold_windows_original(
             raise
         else:
             try:
+                permissions._require_primary_stream_only(live)
                 permissions._delete_handle(live, read_only=not info.st_mode & stat.S_IWUSR)
-            except OSError:
+            except (ContractError, OSError):
                 raise RetainedObjectError(held) from None
 
 
@@ -1423,6 +1544,7 @@ def _windows_replay_stage(
     checksum = _bytes_checksum(content)
     holder = _private_sibling(target.parent, ".sbtd-retirement-stage-")
     identity = holder.lstat()
+    retained = False
     try:
         staged = holder / "candidate"
         try:
@@ -1481,8 +1603,12 @@ def _windows_replay_stage(
         finally:
             if not opened:
                 _unlink_quiet(staged)
+    except RetainedObjectError:
+        retained = True
+        raise
     finally:
-        _release_removal_holder(holder, identity)
+        if not retained:
+            _release_removal_holder(holder, identity)
     with permissions._file(target, permissions._READ_DATA, share=1) as (live, live_fd):
         intact = _windows_handle_checksum(live_fd) == checksum and permissions._read_handle(live) == raw
     if not intact or (mode is not None and _windows_mode(target) != mode):
@@ -1514,6 +1640,7 @@ def _remove_windows_file(target: Path, checksum: str, expected_digest: str, expe
                 or permissions._read_handle(handle) != raw
             ):
                 _fail("state-conflict", "retirement file changed before Windows removal")
+            permissions._require_primary_stream_only(handle)
             permissions._delete_handle(handle, read_only=read_only)
         except OSError:
             _fail("write-failed", "the verified Windows file could not be removed")

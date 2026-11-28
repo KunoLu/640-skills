@@ -61,7 +61,7 @@ class GlobalRetirementTests(unittest.TestCase):
             "after": snapshot(path),
         }
 
-    def retirement_args(self, *results):
+    def retirement_args(self, *results, platform="codex"):
         vault = require_private_directory(self.root / "vault", create=True)
         history = vault / "rc2-output.json"
         history.write_bytes(canonical_json_bytes({"graftWiring": {"operationResults": list(results)}}))
@@ -72,7 +72,7 @@ class GlobalRetirementTests(unittest.TestCase):
             "schema_version": 1, "payload": binding,
             "descriptor_id": hashlib.sha256(canonical_json_bytes(binding)).hexdigest(),
         }))
-        return ("--platform", "codex", "--retirement-backup-root", str(vault),
+        return ("--platform", platform, "--retirement-backup-root", str(vault),
                 "--retirement-evidence", str(descriptor))
 
     def test_present_launcher_and_unproven_binding_stop_reset_before_installation(self):
@@ -146,7 +146,8 @@ class GlobalRetirementTests(unittest.TestCase):
             self.historical_result(self.config, "toml", "graft-mcp"),
             self.historical_result(agents, "markdown", "graft-agents", backup=original),
         )
-        code, stdout = self.cli("plan", "--action", "reset", "--projects-root", str(project), *args, human=True)
+        code, stdout = self.cli("plan", "--action", "reset", "--projects-root", f"{project},{project}",
+                                *args, human=True)
         self.assertEqual(code, 0, stdout)
         confirmation = stdout.index("Confirm these targets with --confirm-retirement")
         self.assertLess(stdout.index(f"{str(self.config)!r}: 'sbtd-graft': remove-file"), confirmation)
@@ -241,6 +242,52 @@ class GlobalRetirementTests(unittest.TestCase):
                 self.assertFalse(rows[0]["write_authority"])
                 for path in (default, named, override):
                     self.assertEqual(path.read_bytes(), original)
+
+    def test_omp_reset_checks_the_alternate_config_only_in_the_selected_agent(self):
+        default = self.home / ".omp/agent/.mcp.json"
+        named = self.home / ".omp/profiles/work/agent/.mcp.json"
+        override = self.home / "private-agent/.mcp.json"
+        harmless = canonical_json_bytes({"mcpServers": {}})
+        dependent = canonical_json_bytes({"mcpServers": {"sbtd-graft": {
+            "type": "stdio", "command": sys.executable,
+            "args": ["-E", "-s", str(self.launcher), "mcp", "--node",
+                     str(self.root / "node"), "--entry", str(self.root / "cli.js")],
+            "env": {"DO_NOT_TRACK": "1", "DNT": "1"},
+        }}})
+        for path, raw in ((default, dependent), (named, dependent), (override, harmless)):
+            path.parent.mkdir(parents=True)
+            path.write_bytes(raw)
+        named.with_name("mcp.json").write_bytes(harmless)
+        self.env["PI_CODING_AGENT_DIR"] = str(override.parent)
+        code, preview = self.cli("plan", "--action", "reset", "--platform", "omp")
+        self.assertEqual(code, 0, preview["graftRetirement"])
+        self.assertEqual(preview["graftRetirement"]["items"], [])
+        self.env["OMP_PROFILE"] = "work"
+        args = self.retirement_args(self.historical_result(named, "json", "graft-omp-mcp"), platform="omp")
+        code, reset = self.cli("reset", "--yes", *args)
+        self.assertEqual(code, 2, reset)
+        report = reset["graftRetirement"]
+        (row,) = report["items"]
+        self.assertEqual((row["path"], row["at_risk"], row["write_authority"]), (str(named), True, False))
+        self.assertEqual(report["targetsToRetire"], [])
+        self.assertTrue(self.launcher.is_file())
+        self.assertEqual(default.read_bytes(), dependent)
+        self.assertEqual(named.read_bytes(), dependent)
+        self.assertEqual(override.read_bytes(), harmless)
+
+    @unittest.skipUnless(os.name == "posix", "symlink fixture")
+    def test_duplicate_project_spelling_does_not_hide_a_linked_input(self):
+        project = self.root / "project"
+        project.mkdir()
+        alias = self.root / "project-alias"
+        alias.symlink_to(project, target_is_directory=True)
+        code, report = self.cli(
+            "plan", "--action", "reset", "--platform", "codex",
+            "--projects-root", f"{project},{alias}",
+        )
+        self.assertEqual(code, 2, report)
+        self.assertTrue(report["graftRetirement"]["blocked"])
+        self.assertTrue(alias.is_symlink())
 
     def test_unproven_project_fence_is_not_replaced_by_reset_template(self):
         project = self.root / "project"

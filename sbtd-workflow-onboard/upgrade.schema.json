@@ -56,6 +56,8 @@
     "resource": {
       "type": "object",
       "required": ["id", "kind", "target", "source", "before", "desired", "classification", "decision", "details"],
+      "if": { "properties": { "kind": { "const": "retirement" } } },
+      "else": { "properties": { "desired": { "anyOf": [{ "$ref": "#/$defs/presentState" }, { "type": "null" }] } } },
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "kind": { "enum": ["skill", "agents", "mcp", "shell", "retirement"] },

@@ -174,7 +174,9 @@ class OmpDeploymentPlanTests(unittest.TestCase):
             self.assertEqual(file_contents(base), before)
 
 
-    def test_full_omp_deployment_writes_active_mcp_and_no_host_hooks(self):
+    def test_full_omp_deployment_writes_active_rules_and_no_mcp_or_hooks(self):
+        from onboard import GLOBAL_AGENTS_TEMPLATE
+
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             root = legacy_project(base, "project")
@@ -183,10 +185,20 @@ class OmpDeploymentPlanTests(unittest.TestCase):
             )
             for path in (home, vault, evidence):
                 path.mkdir(mode=0o700)
+            active = home / "active-omp" / "agent"
+            active.mkdir(parents=True, mode=0o700)
+            mcp = active / "mcp.json"
+            foreign_mcp = b'{"mcpServers": {"foreign": {"command": "existing-server", "args": []}}}\n'
+            mcp.write_bytes(foreign_mcp)
             environment = {
                 "HOME": str(home),
                 "USERPROFILE": str(home),
                 "CODEX_HOME": str(home / ".codex"),
+                "PI_CODING_AGENT_DIR": str(active),
+                "OMP_PROFILE": "default",
+                "PI_PROFILE": "default",
+                "PI_CONFIG_DIR": ".omp",
+                "CLAUDE_CONFIG_DIR": str(home / ".claude"),
                 "AGENT_SKILLS_DIR": str(home / ".agent/skills"),
                 "GIT_CONFIG_NOSYSTEM": "1",
             }
@@ -236,6 +248,9 @@ class OmpDeploymentPlanTests(unittest.TestCase):
                 refs = result["projects"][0]["report_refs"]
                 self.assertTrue(refs)
                 self.assertTrue(all(Path(ref["path"]).is_file() and Path(ref["path"]).stat().st_size > 0 for ref in refs))
+                self.assertEqual((active / "AGENTS.md").read_bytes(), GLOBAL_AGENTS_TEMPLATE.read_bytes())
+                self.assertEqual(mcp.read_bytes(), foreign_mcp)
+                self.assertFalse((home / ".omp/agent/AGENTS.md").exists())
                 self.assertFalse((home / ".omp/agent/mcp.json").exists())
                 self.assertFalse((home / ".codex/hooks.json").exists())
                 installed = [

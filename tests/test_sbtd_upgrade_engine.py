@@ -256,6 +256,11 @@ def build_host_resources(scope, *, package_root=None):
     return resources
 
 
+def _canonical_host_scope(scope):
+    # This fixture does not expose physical host config aliases.
+    return scope
+
+
 def plan_retirement(scope, *, vault=None, evidence=None, retiring_launchers=(), required_targets=()):
     return {
         "disclosure": {
@@ -1092,7 +1097,7 @@ class UpgradeEngineTests(unittest.TestCase):
 
     # -- host resources --------------------------------------------------------
 
-    def test_host_profile_lifecycle_and_semantic_verify(self):
+    def test_legacy_profile_plan_cannot_be_verified_or_probed(self):
         home = self.base / "home"
         home.mkdir()
         profile = home / ".bashrc"
@@ -1112,54 +1117,33 @@ class UpgradeEngineTests(unittest.TestCase):
             },
             files={"managed/profile.sh": "# sbtd-managed-bin\nexport PATH=\"$HOME/bin:$PATH\"\n"},
         )
-        # The fixture inventory requires at least one skill resource; add a
-        # current no-op skill so the combined set is valid.
-        skills = self._skills_root()
-        current = skills / "skill-a"
-        current.mkdir()
-        (current / "SKILL.md").write_bytes(b"same\n")
-        (package / "payload/skill-a").mkdir(parents=True)
-        (package / "payload/skill-a/SKILL.md").write_bytes(b"same\n")
-        fixture = json.loads((package / "upgrade_fixture.json").read_text(encoding="utf-8"))
-        fixture["resources"] = [self._skill_fixture(current, "payload/skill-a")]
-        (package / "upgrade_fixture.json").write_text(json.dumps(fixture), encoding="utf-8")
         self._register(package)
         vault = self._vault()
         scope = {
             "schema_version": 1,
-            "skills_roots": [str(skills)],
             "shell_profiles": [
                 {"path": str(profile), "shell": "bash", "bin": str(self.base / "bin")}
             ],
         }
         plan = self._plan(scope, vault, package)
+        plan = self._forge(plan, lambda payload: payload.pop("graftRetirement"))
         rows = {row["id"]: row for row in plan["payload"]["resources"]}
         self.assertEqual(rows[f"shell@{profile}"]["decision"], "install")
         receipt = self._apply_local(plan)
         self.assertEqual(receipt["payload"]["status"], "complete")
         managed = (package / "managed/profile.sh").read_bytes()
         self.assertEqual(profile.read_bytes(), managed)
-        verification = sbtd_upgrade.verify_upgrade(plan, receipt=receipt)
-        self.assertEqual(verification["payload"]["status"], "aligned")
-        self.assertEqual(verification["payload"]["hosts"]["probe"], False)
-        (profile_row,) = verification["payload"]["hosts"]["shell_profiles"]
-        self.assertEqual(profile_row["disk"]["status"], "aligned")
-        self.assertEqual(profile_row["host"], "unverified")
-        # Unrelated user additions keep managed alignment; ownership loss drifts.
-        with profile.open("ab") as handle:
-            handle.write(b"# user additions\n")
-        still = sbtd_upgrade.verify_upgrade(plan, receipt=receipt)
-        self.assertEqual(still["payload"]["hosts"]["shell_profiles"][0]["disk"]["status"], "aligned")
-        self.assertEqual(still["payload"]["status"], "aligned")
-        profile.write_text("# user-owned profile without the managed block\n", encoding="utf-8")
-        drifted = sbtd_upgrade.verify_upgrade(plan, receipt=receipt)
-        self.assertEqual(drifted["payload"]["status"], "drift")
-        probed = sbtd_upgrade.verify_upgrade(plan, probe=True)
-        self.assertEqual(probed["payload"]["probe"], True)
-        self.assertEqual(
-            probed["payload"]["hosts"]["shell_profiles"][0]["disk"]["status"],
-            "drifted",
-        )
+        profile.unlink()
+        before_vault = sorted(vault.iterdir())
+        provider = sys.modules["sbtd_upgrade_hosts"]
+        with mock.patch.object(provider, "verify_hosts") as probe_hosts:
+            for probe in (False, True):
+                with self.subTest(probe=probe), self.assertRaises(ContractError) as unsupported:
+                    sbtd_upgrade.verify_upgrade(plan, receipt=receipt, probe=probe)
+                self.assertEqual(unsupported.exception.code, "unsupported-in-rc.3")
+        probe_hosts.assert_not_called()
+        self.assertFalse(profile.exists())
+        self.assertEqual(sorted(vault.iterdir()), before_vault)
 
     def test_host_resource_retries_after_original_source_is_removed(self):
         home = self.base / "home"
@@ -1202,7 +1186,7 @@ class UpgradeEngineTests(unittest.TestCase):
         self.assertEqual(profile.read_bytes(), b"# sbtd-managed-bin\n")
 
 
-    def test_host_preserve_downgrades_to_exception_without_leaking_config(self):
+    def test_legacy_mcp_preserve_does_not_authorize_verification(self):
         home = self.base / "home"
         home.mkdir()
         config = home / "config.json"
@@ -1210,14 +1194,10 @@ class UpgradeEngineTests(unittest.TestCase):
             json.dumps({"mcpServers": {"other": {"command": "secret-SECRET-cmd"}}}),
             encoding="utf-8",
         )
-        skills = self._skills_root()
-        current = skills / "skill-a"
-        current.mkdir()
-        (current / "SKILL.md").write_bytes(b"same\n")
         package = self._package(
             fixture={
                 "baseline_id": "b1",
-                "resources": [self._skill_fixture(current, "payload/skill-a")],
+                "resources": [],
                 "host_resources": [
                     {
                         "id": f"mcp@{config}",
@@ -1229,7 +1209,6 @@ class UpgradeEngineTests(unittest.TestCase):
                 ],
             },
             files={
-                "payload/skill-a/SKILL.md": "same\n",
                 "managed/mcp.json": json.dumps({"mcpServers": {"graft": {"command": "run"}}}),
             },
         )
@@ -1237,16 +1216,16 @@ class UpgradeEngineTests(unittest.TestCase):
         vault = self._vault()
         scope = {
             "schema_version": 1,
-            "skills_roots": [str(skills)],
             "hosts": [{
                 "id": "fixture-host", "platform": "codex",
                 "config_home": str(home), "config": str(config),
-                "skills_roots": [str(skills)], "project_roots": [],
+                "skills_roots": [], "project_roots": [],
                 "runtime": {"python": "/usr/bin/python3", "node": "/usr/bin/node", "cli": "/usr/bin/graft"},
             }],
             "decisions": {str(config): "preserve"},
         }
         plan = self._plan(scope, vault, package)
+        plan = self._forge(plan, lambda payload: payload.pop("graftRetirement"))
         rows = {row["id"]: row for row in plan["payload"]["resources"]}
         self.assertEqual(rows[f"mcp@{config}"]["decision"], "preserve")
         self.assertIsNone(rows[f"mcp@{config}"]["desired"])
@@ -1254,10 +1233,15 @@ class UpgradeEngineTests(unittest.TestCase):
         self.assertEqual(
             self._receipt_rows(receipt)[f"mcp@{config}"]["result"], "preserved"
         )
-        verification = sbtd_upgrade.verify_upgrade(plan, receipt=receipt)
-        self.assertEqual(verification["payload"]["status"], "exceptions")
-        self.assertIn("fixture-host", verification["payload"]["exceptions"])
-        self.assertNotIn("SECRET", json.dumps(verification))
+        provider = sys.modules["sbtd_upgrade_hosts"]
+        with (
+            mock.patch.object(provider, "verify_hosts") as probe_hosts,
+            self.assertRaises(ContractError) as unsupported,
+        ):
+            sbtd_upgrade.verify_upgrade(plan, receipt=receipt, probe=True)
+        self.assertEqual(unsupported.exception.code, "unsupported-in-rc.3")
+        probe_hosts.assert_not_called()
+        self.assertNotIn("SECRET", unsupported.exception.message)
         self.assertIn("secret-SECRET-cmd", config.read_text(encoding="utf-8"))
 
     # -- recovery --------------------------------------------------------------
@@ -1581,6 +1565,22 @@ class UpgradeEngineTests(unittest.TestCase):
         recovery_receipt = self._apply_recovery_local(recovery_plan)
         jsonschema.validate(recovery_receipt, schema)
         jsonschema.validate(plan["payload"]["scope"], schema)
+
+    def test_schema_and_engine_refuse_an_absent_agents_goal(self):
+        import jsonschema
+
+        plan, _receipt, _skill, _agents, vault = self._recovery_batch()
+        schema = json.loads((ROOT / "sbtd-workflow-onboard" / "upgrade.schema.json").read_text(encoding="utf-8"))
+        forged = self._forge(plan, lambda payload: next(
+            row for row in payload["resources"] if row["kind"] == "agents"
+        ).update(desired={"type": "absent", "checksum": None}))
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(forged, schema)
+        destination = vault / "invalid-absent-agents.json"
+        with self.assertRaises(ContractError) as invalid:
+            sbtd_upgrade.save_plan(forged, destination)
+        self.assertEqual(invalid.exception.code, "invalid-inventory")
+        self.assertFalse(destination.exists())
 
     def test_historical_plan_and_embedded_recovery_accept_absent_disclosure(self):
         import jsonschema
@@ -2609,26 +2609,26 @@ class UpgradeEngineTests(unittest.TestCase):
         }, vault, package)
         real_save = sbtd_upgrade._save_once
         real_scan = sbtd_upgrade._scan_intents
+        receipt_failed = False
 
         def fail_final_receipt(path, document, vault_arg):
+            nonlocal receipt_failed
             if Path(path).name.startswith("upgrade-receipt-") and any(
                 row.get("result") == "succeeded"
                 for row in document["payload"]["resources"]
             ):
+                receipt_failed = True
                 raise OSError("injected receipt persistence failure")
             return real_save(path, document, vault_arg)
 
-        scans: list[str] = []
-
-        def broken_second_scan(vault_arg, prefix, id_field):
-            scans.append(prefix)
-            if len(scans) > 1:
+        def unreadable_after_failure(vault_arg, prefix, id_field):
+            if receipt_failed:
                 raise OSError("injected intent scan failure")
             return real_scan(vault_arg, prefix, id_field)
 
         with (
             mock.patch.object(sbtd_upgrade, "_save_once", fail_final_receipt),
-            mock.patch.object(sbtd_upgrade, "_scan_intents", broken_second_scan),
+            mock.patch.object(sbtd_upgrade, "_scan_intents", unreadable_after_failure),
             self.assertRaises(ContractError) as caught,
         ):
             self._apply_local(plan)

@@ -103,6 +103,8 @@ rc.3 removes Graft from the workflow. There is no `install-graft` command and no
 
 Root installers never approve retirement by themselves. When retirement is required, they stop and direct you to this plan/confirm sequence. `--no-mcp` only skips the installer's generic MCP menu. It is not forwarded to Onboard and it is not host wiring.
 
+On Windows, a file with a named data stream is not a retirement candidate: the ordinary byte backup cannot restore that stream. A source that is too old to support explicit retirement confirmation is refused before onboarding.
+
 From the installed Onboard directory, run the plan and inspect its JSON. Only after approving its targets, set `PLAN_PATH` to `cleanup_legacy.plan_path` and `PLAN_ID` to the top-level `plan_id`.
 
 ```bash
@@ -133,7 +135,7 @@ An upgrade plan includes the same `graftRetirement` disclosure. Confirm that dis
 
 A sealed migration plan that still contains `build-graft` or `configure-graft` fails closed as `unsupported-in-rc.3`. Regenerate the plan. Historical `migration verify` reads an old receipt only when the installed signature binds that exact predecessor to this executing successor. A missing or wrong signature is `version-conflict`. Verify stays read-only, does not rerun smoke, and does not start Graft. It compares recorded bytes with a signed post-write mode. Bytes or a trusted mode that differ are `drifted`. Both matching is `verified`. Matching bytes with no trusted post-write permission evidence are `not-verified`. Other resources continue. None of these results authorize a write. A past rc.2 deployment is not verifiable merely because it once succeeded. Fresh migration deploy and reconcile do not run a Graft CLI. A local deployment check, when the executing code performs one, is a trusted read-only `check-projects` plus a recheck of sealed targets. It is not business API, host, or model acceptance. This section does not claim that check passed.
 
-Historical permission evidence, when supplied, is only `migration --phase verify --post-write-attestation <private-file>`. That flag is verify-only. The detached signed record must bind the exact historical deployment ID, resource ID, recorded after-state, and permission. It does not rewrite the old manifest or receipt and does not grant a write. Do not mint a post-hoc signature or use a release private key. Released rc.2 byte-only evidence cannot prove unchanged permissions.
+`migration --phase verify --post-write-attestation <private-file>` accepts only existing evidence from the trusted issuer for that deployment and resource. The signed post-write mode, after-state and `observed_at` must describe the original execution window. Runtime lineage is a separate check. An operator must not create a post-hoc signature or supply a new trust key. An rc.2 byte-only receipt cannot prove permissions; matching bytes without trusted permission evidence remain `not-verified`. No verification verdict authorizes a write.
 
 Fresh migration smoke checks one selected project against its manifest and successful apply receipt. A matching `.trellis` tree is expected until separately confirmed cleanup. The same tree still blocks ordinary onboarding; unrelated project-state errors still block migration smoke.
 

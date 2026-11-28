@@ -229,4 +229,3 @@ class OmpSourceDiscoveryTests(unittest.TestCase):
                 self.assertEqual(failure.exception.code, "invalid-config")
                 self.assertEqual(plugins.read_bytes(), original)
                 self.assertFalse((agent / "mcp.json").exists())
-

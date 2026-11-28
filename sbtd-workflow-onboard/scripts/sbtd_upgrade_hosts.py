@@ -62,19 +62,15 @@ _HOST_TIMEOUT = 150.0
 _HOST_SHUTDOWN = 10.0
 _HOST_LOAD_EVIDENCE_SCOPE = "isolated-host/selected-projection"
 _LIVE_RELOAD = {"status": "unverified", "reason": "original-domain-not-authorized"}
-_UNSAFE_MARKERS = (b"sbtd-graft", b"sbtd_graft_entry.py")
+_REMOVED_SERVER = "sbtd-graft"
+_REMOVED_LAUNCHER = "sbtd_graft_entry.py"
 
 
 def validate_project(root: Path) -> dict[str, Any]:
     """Prove a selected project root is a real directory. Does not build a graph."""
-    path = Path(root)
-    try:
-        info = path.lstat()
-    except OSError:
-        _fail("unsafe-path", "a selected project root cannot be stated")
-    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
-        _fail("unsafe-path", "a selected project root is not a directory")
-    return {"root": str(path)}
+    if _directory_or_absent(str(root)) != "directory":
+        _fail("unsafe-path", "a selected project root does not exist")
+    return {"root": str(root)}
 
 
 def validate_runtime(node: Path, cli: Path) -> dict[str, Any]:
@@ -115,7 +111,8 @@ def _argv_invokes_removed_runtime(argv: Sequence[str]) -> bool:
         name = Path(item).name.lower()
         if name in {"graft", "graft.exe", "graft.cmd", "graft.ps1"}:
             return True
-        if item.endswith("sbtd_graft_entry.py") or "sbtd-graft" in item:
+        folded = item.lower()
+        if _REMOVED_LAUNCHER in folded or _REMOVED_SERVER in folded:
             return True
     return False
 
@@ -220,14 +217,11 @@ class _JsonLines:
                 if message.get("success") is not True:
                     raise _ProbeError("failed", "host-request-refused")
                 return message.get("data")
-            if message.get("error") is not None:
+            if "error" in message:
                 error = message["error"]
-                if (
-                    isinstance(error, Mapping)
-                    and type(error.get("code")) is int
-                    and error["code"] == -32601
-                    and "result" not in message
-                ):
+                if "result" in message or not isinstance(error, Mapping):
+                    raise _ProbeError("failed", "protocol-evidence-invalid")
+                if type(error.get("code")) is int and error["code"] == -32601:
                     raise _ProbeError("unsupported", "host-method-unsupported")
                 raise _ProbeError("failed", "host-request-refused")
             if message.get("success") is False:
@@ -371,13 +365,13 @@ def _link_outcome(entry: Mapping[str, Any], status: str) -> dict[str, Any]:
 def _copy_mixed_root(
     source: Path,
     target: Path,
+    pre: Sequence[tuple[str, str]],
     authorized: Mapping[str, Mapping[str, Any]],
     destinations: Path,
     outcomes: list[dict[str, Any]] | None,
 ) -> None:
     from sbtd_probe_links import _validate_live, materialize_authorized_skill
 
-    pre = _root_entries(source)
     if any(kind == "other" for _name, kind in pre):
         _fail("unsafe-path", "directory contains a link or special entry")
     plain: dict[str, dict[str, Any]] = {}
@@ -443,15 +437,16 @@ def _copy_skill_roots(
                 _validate_live(entry["payload"])
         info = _lstat(source)
         if info is None:
-            continue
+            _fail("skills-root-missing", "a selected Skills root is absent")
         if _is_reparse(info) or not stat.S_ISDIR(info.st_mode):
             _fail("unsafe-path", "a selected Skills root is not a safe directory")
         target = destinations / str(index)
-        linked = [name for name, kind in _root_entries(source) if kind == "link"]
+        entries = _root_entries(source)
+        linked = [name for name, kind in entries if kind == "link"]
         if not linked:
             state = snapshot(source)
             if state["type"] == "absent":
-                continue
+                _fail("state-conflict", "a selected Skills root disappeared during the probe copy")
             if state["type"] != "directory":
                 _fail("unsafe-path", "a selected Skills root is not a safe directory")
             backup_reference(
@@ -460,7 +455,7 @@ def _copy_skill_roots(
         else:
             if any(os.path.normpath(str(source / name)) not in authorized for name in linked):
                 _fail("unsafe-path", "a selected Skills root contains an unauthorized link")
-            _copy_mixed_root(source, target, authorized, destinations, outcomes)
+            _copy_mixed_root(source, target, entries, authorized, destinations, outcomes)
         copies.append(str(target))
     return copies
 
@@ -525,6 +520,44 @@ def _validate_bin(value: Any, shell: str = "") -> None:
         _fail("unsafe-path", "the managed PATH entry cannot be represented in a POSIX PATH")
 
 
+def _same_file_entry(left: Path, right: Path) -> bool:
+    """Only existing case aliases of a single directory entry compare equal."""
+    if str(left) == str(right):
+        return True
+    if str(left).casefold() != str(right).casefold():
+        return False
+    first, second = (_lstat(_canonical(path)) for path in (left, right))
+    return (
+        first is not None and second is not None
+        and stat.S_ISREG(first.st_mode) and stat.S_ISREG(second.st_mode)
+        and first.st_ino != 0 and first.st_nlink == second.st_nlink == 1
+        and os.path.samestat(first, second)
+    )
+
+
+def _canonical_host_scope(scope: dict[str, Any]) -> dict[str, Any]:
+    """Seal the effective config spelling while its alias can still be proven."""
+    raw = scope["hosts"]
+    hosts = _scope_hosts(scope)
+    aliases = {
+        declared["config"]: host["config"]
+        for declared, host in zip(raw, hosts, strict=True)
+        if declared["config"] != host["config"]
+    }
+    if not aliases:
+        return scope
+    decisions: dict[str, str] = {}
+    for target, decision in _scope_decisions(scope).items():
+        target = aliases.get(target, target)
+        if decisions.setdefault(target, decision) != decision:
+            _fail("decision-conflict", "different decisions name one selected host config")
+    return {
+        **scope,
+        "hosts": [{**declared, "config": host["config"]} for declared, host in zip(raw, hosts, strict=True)],
+        "decisions": decisions,
+    }
+
+
 def _scope_hosts(scope: Mapping[str, Any]) -> list[dict[str, Any]]:
     from sbtd_upgrade_inventory import normalize_host_platform
 
@@ -555,10 +588,13 @@ def _scope_hosts(scope: Mapping[str, Any]) -> list[dict[str, Any]]:
         ids.add(host_id)
         home_path = Path(config_home)
         config_path = Path(config)
-        if config_path == home_path or not config_path.is_relative_to(home_path):
+        if platform == "codex":
+            canonical_config = home_path / "config.toml"
+            if not _same_file_entry(config_path, canonical_config):
+                _fail("scope-conflict", "Codex config must be config_home/config.toml")
+            config = str(canonical_config)
+        elif config_path == home_path or not config_path.is_relative_to(home_path):
             _fail("scope-conflict", "a scope host config must live inside its config_home")
-        if platform == "codex" and str(config_path) != str(home_path / "config.toml"):
-            _fail("scope-conflict", "Codex config must be config_home/config.toml")
         skills_roots = _string_list(entry.get("skills_roots") or [], "host skills_roots")
         if any(os.path.normpath(item) not in top_roots for item in skills_roots):
             _fail("scope-conflict", "a scope host skills root is not a selected top-level root")
@@ -648,26 +684,20 @@ def _protected_history(path: str) -> bool:
 
 
 def _regular_or_absent(path: str) -> str:
-    """``file`` or ``absent``. Symlinks and special files fail closed."""
-    try:
-        info = os.lstat(path)
-    except FileNotFoundError:
+    """Inspect only the path chain, not siblings or file contents."""
+    info = _lstat(_canonical(Path(path)))
+    if info is None:
         return "absent"
-    except OSError:
-        _fail("unsafe-path", "a selected retirement path cannot be stated")
-    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
-        _fail("unsafe-path", "a selected retirement path is not a regular file")
+    if not stat.S_ISREG(info.st_mode):
+        _fail("unsafe-path", "a selected path is not a regular file")
     return "file"
 
 
 def _directory_or_absent(path: str) -> str:
-    try:
-        info = os.lstat(path)
-    except FileNotFoundError:
+    info = _lstat(_canonical(Path(path)))
+    if info is None:
         return "absent"
-    except OSError:
-        _fail("unsafe-path", "a selected project root cannot be stated")
-    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+    if not stat.S_ISDIR(info.st_mode):
         _fail("unsafe-path", "a selected project root is not a directory")
     return "directory"
 
@@ -796,7 +826,7 @@ def plan_retirement(
     """Read-only retirement disclosure and resources for one upgrade scope."""
     if not isinstance(scope, Mapping):
         _fail("scope-conflict", "the upgrade scope must be a JSON object")
-    _scope_decisions(scope)
+    preserved = [Path(path) for path, decision in _scope_decisions(scope).items() if decision == "preserve"]
     _scope_shell_profiles(scope)
     bindings = list(evidence or [])
     # Keep evidence scoped to the selected domain after an authorized file removal.
@@ -824,6 +854,12 @@ def plan_retirement(
         rendered = module.render_candidates(report, purpose="upgrade")
         if not isinstance(rendered, dict):
             _fail("invalid-inventory", "retirement rendering must return an object")
+        if any(
+            _same_file_entry(Path(item["target"]), path)
+            for item in rendered["candidates"] if isinstance(item, Mapping) and _is_abs(item.get("target"))
+            for path in preserved
+        ):
+            _fail("decision-conflict", "a retirement candidate conflicts with an explicit preserve decision")
         reports.append(report)
         rendered_parts.append(rendered)
     disclosure = _merge_rendered(rendered_parts)
@@ -862,10 +898,22 @@ def _candidate_fields(item: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _render_target_bytes(report: Mapping[str, Any], target: str, before: bytes) -> bytes:
+    # Validate this file again without reopening siblings that may already be retired.
+    current = {**report, "items": [
+        item for item in report["items"] if isinstance(item, Mapping) and item.get("path") == target
+    ]}
+    rendered = _retirement().retirement_file_bytes(
+        report=current, purpose="upgrade", target=target, before=before,
+    )
+    if not isinstance(rendered, (bytes, bytearray)):
+        _fail("invalid-inventory", "retirement rendering must return bytes")
+    return bytes(rendered)
+
+
 def _resources(
     rendered_parts: Sequence[Mapping[str, Any]], reports: Sequence[Mapping[str, Any]]
 ) -> list[dict[str, Any]]:
-    module = _retirement()
     grouped: dict[str, list[dict[str, Any]]] = {}
     report_for: dict[str, dict[str, Any]] = {}
     for rendered, report in zip(rendered_parts, reports, strict=True):
@@ -884,7 +932,6 @@ def _resources(
         before = snapshot(Path(target))
         if before["type"] != "file" or any(item["before"] != before for item in items):
             _fail("state-conflict", "retirement candidates no longer match the live file bytes")
-        before_bytes = read_file(Path(target), before)
         source = {"path": target, "state": before}
         base = {
             "id": contracts.resource_id(_OWNER_KIND, target),
@@ -921,12 +968,8 @@ def _resources(
                 }
             )
             continue
-        rendered_bytes = module.retirement_file_bytes(
-            report=report_for[target], purpose="upgrade", target=target, before=before_bytes
-        )
-        if not isinstance(rendered_bytes, (bytes, bytearray)):
-            _fail("invalid-inventory", "retirement rendering must return bytes")
-        desired = {"type": "file", "checksum": hashlib.sha256(bytes(rendered_bytes)).hexdigest()}
+        rendered = _render_target_bytes(report_for[target], target, read_file(Path(target), before))
+        desired = {"type": "file", "checksum": hashlib.sha256(rendered).hexdigest()}
         resources.append(
             {
                 **base,
@@ -998,19 +1041,7 @@ def render_resource(
     if not isinstance(details, Mapping) or details.get("action") != "edit":
         _fail("unsupported-operation", "remove-file retirement is not rendered as empty bytes")
     target = Path(str(resource.get("target")))
-    live = snapshot(target)
-    if live != resource.get("before"):
-        _fail("state-conflict", "the retirement target changed before rendering")
-    before = read_file(target, live)
-    rendered = _retirement().retirement_file_bytes(
-        report=details.get("report"),
-        purpose="upgrade",
-        target=str(target),
-        before=before,
-    )
-    if not isinstance(rendered, (bytes, bytearray)):
-        _fail("invalid-inventory", "retirement rendering must return bytes")
-    return bytes(rendered)
+    return _render_target_bytes(details["report"], str(target), read_file(target, resource["before"]))
 
 
 def _live_mode(path: Path) -> str | None:
@@ -1031,142 +1062,54 @@ def _require_live_mode(path: Path, items: Sequence[Mapping[str, Any]]) -> str:
     return mode
 
 
-def _authorization_for(
-    host_id: str,
-    child: Path,
-    authorizations: Sequence[Mapping[str, Any]],
-    used: set[int],
-) -> Mapping[str, Any] | None:
-    for index, item in enumerate(authorizations):
-        if index in used or not isinstance(item, Mapping):
-            continue
-        payload = item.get("payload")
-        if not isinstance(payload, Mapping) or payload.get("host_id") != host_id:
-            continue
-        skill = payload.get("skill_path")
-        if isinstance(skill, str) and Path(skill) == child:
-            used.add(index)
-            return item
-    return None
-
-
-def _materialize_link(
-    host_id: str, item: Mapping[str, Any], evidence: list[dict[str, Any]]
-) -> str | None:
-    from sbtd_probe_links import materialize_authorized_skill
-
-    payload = item.get("payload")
-    if not isinstance(payload, Mapping):
-        return "invalid-argument"
+def _file_registers_removed_server(path: Path, role: str) -> bool:
     try:
-        holder, root = _probe_fixture("sbtd-skill-link-")
-        try:
-            materialize_authorized_skill(
-                payload, destination=root / "materialized", private_root=root,
+        if _regular_or_absent(str(path)) == "absent":
+            return False
+        raw = read_file(path)
+        retirement = _retirement()
+        if role == "codex-hooks":
+            commands = retirement._hook_commands(retirement._json_document(raw))
+            return commands is None or any(
+                _REMOVED_SERVER in command.lower() or _REMOVED_LAUNCHER in command.lower()
+                or _argv_invokes_removed_runtime(retirement._hook_argv(command) or ())
+                for values in commands.values() for command in values
             )
-        finally:
-            shutil.rmtree(holder, ignore_errors=True)
-    except ContractError as error:
-        return error.code
-    state = payload.get("state")
-    target = payload.get("target")
-    evidence.append(
-        {
-            "host_id": host_id,
-            "authorization_id": item.get("authorization_id"),
-            "status": "materialized",
-            "target": target,
-            "state_checksum": state.get("checksum") if isinstance(state, Mapping) else None,
-        }
-    )
-    return None
-
-
-def _skill_names(
-    host: Mapping[str, Any], authorizations: Sequence[Mapping[str, Any]]
-) -> dict[str, Any]:
-    names: list[str] = []
-    evidence: list[dict[str, Any]] = []
-    used: set[int] = set()
-    roots = [Path(root) for root in host["skills_roots"]]
-    for root in roots:
-        kind = _directory_or_absent(str(root))
-        if kind != "directory":
-            return {"status": "unavailable", "reason": "skills-root-missing", "skills": names}
-        try:
-            with os.scandir(root) as listing:
-                children = sorted(listing, key=lambda entry: entry.name)
-        except OSError:
-            return {"status": "failed", "reason": "skills-root-unreadable", "skills": names}
-        for child in children:
-            try:
-                info = child.stat(follow_symlinks=False)
-            except OSError:
-                return {"status": "failed", "reason": "skills-entry-unreadable", "skills": names}
-            path = Path(child.path)
-            if stat.S_ISLNK(info.st_mode):
-                item = _authorization_for(host["id"], path, authorizations, used)
-                if item is None:
-                    return {
-                        "status": "failed", "reason": "unsafe-path",
-                        "skills": names, "link_authorizations": evidence,
-                    }
-                reason = _materialize_link(host["id"], item, evidence)
-                if reason is not None:
-                    return {
-                        "status": "failed", "reason": reason,
-                        "skills": names, "link_authorizations": evidence,
-                    }
-                names.append(child.name)
-            elif stat.S_ISDIR(info.st_mode):
-                names.append(child.name)
-    for index, item in enumerate(authorizations):
-        if index in used or not isinstance(item, Mapping):
-            continue
-        payload = item.get("payload")
-        if not isinstance(payload, Mapping) or payload.get("host_id") != host["id"]:
-            continue
-        skill = payload.get("skill_path")
-        if not isinstance(skill, str) or not any(Path(skill).is_relative_to(root) for root in roots):
-            continue
-        reason = _materialize_link(host["id"], item, evidence)
-        if reason is not None:
-            return {
-                "status": "failed", "reason": reason,
-                "skills": names, "link_authorizations": evidence,
-            }
-    return {"status": "verified", "skills": names, "link_authorizations": evidence}
-
-def _file_registers_removed_server(path: Path) -> bool:
-    try:
-        info = path.lstat()
-    except FileNotFoundError:
-        return False
-    except OSError:
+        omp = role == "omp-mcp"
+        document = retirement._json_document(raw) if omp else retirement._toml_document(raw)
+        for name, entry in retirement._servers(document, omp=omp).items():
+            if name == _REMOVED_SERVER or name.startswith(f"{_REMOVED_SERVER}-"):
+                return True
+            if not isinstance(entry, Mapping):
+                return True
+            command, args = entry.get("command", ""), entry.get("args", [])
+            if not isinstance(command, str) or not isinstance(args, list) or any(not isinstance(arg, str) for arg in args):
+                return True
+            if _argv_invokes_removed_runtime((command, *args)):
+                return True
+    except (ContractError, OSError):
         return True
-    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
-        return True
-    try:
-        raw = path.read_bytes()
-    except OSError:
-        return True
-    return any(marker in raw for marker in _UNSAFE_MARKERS)
+    return False
 
 
-def _retained_server_would_launch(host: Mapping[str, Any], proven: Path | None) -> bool:
-    """True when a retained config would start the removed server if loaded."""
-    paths = [Path(host["config"])]
+def _retained_server_would_launch(host: Mapping[str, Any], project: Path) -> bool:
+    """Check only effective registration files in the selected host and project."""
     if host["platform"] == "codex":
-        paths.append(Path(host["config_home"]) / "hooks.json")
-    if proven is not None:
-        paths.extend(
-            (
-                proven / ".codex" / "config.toml",
-                proven / "hooks.json",
-                proven / ".omp" / "agent" / "mcp.json",
-            )
+        paths = (
+            (Path(host["config"]), "codex-mcp"),
+            (Path(host["config_home"]) / "hooks.json", "codex-hooks"),
+            (project / ".codex" / "config.toml", "codex-mcp"),
+            (project / ".codex" / "hooks.json", "codex-hooks"),
+            (project / "hooks.json", "codex-hooks"),
         )
-    return any(_file_registers_removed_server(path) for path in paths)
+    else:
+        paths = (
+            (Path(host["config"]), "omp-mcp"),
+            (project / ".codex" / "config.toml", "codex-mcp"),
+            (project / ".omp" / "mcp.json", "omp-mcp"),
+            (project / ".omp" / ".mcp.json", "omp-mcp"),
+        )
+    return any(_file_registers_removed_server(path, role) for path, role in paths)
 
 
 def _proven_project_root(host: Mapping[str, Any]) -> Path | None:
@@ -1304,18 +1247,20 @@ def _probe_selected_host(
     try:
         require_private_directory(fixture / "home", create=True)
         outcomes: list[dict[str, Any]] = []
+        selected_links = _host_links(host["id"], authorizations)
         copies = _copy_skill_roots(
             host["skills_roots"],
             fixture / "skills-roots",
-            link_authorizations=_host_links(host["id"], authorizations),
+            link_authorizations=selected_links,
             outcomes=outcomes,
         )
+        if sorted(row["authorization_id"] for row in outcomes if row["status"] == "materialized") != sorted(
+            item["authorization_id"] for item in selected_links
+        ):
+            _fail("skill-identity-unproven", "an authorized link was not materialized in the probe projection")
         expected = _expected_skill_names(
             copies,
-            required=[
-                item["payload"]["skill_name"]
-                for item in _host_links(host["id"], authorizations)
-            ],
+            required=[item["payload"]["skill_name"] for item in selected_links],
         )
         if platform == "codex":
             codex_home = fixture / "codex-home"
@@ -1325,8 +1270,6 @@ def _probe_selected_host(
                 _CODEX_FIXTURE_CONFIG
                 + f'\n[projects.{quoted}]\ntrust_level = "untrusted"\n'
             ).encode("utf-8")
-            if any(marker in config for marker in _UNSAFE_MARKERS):
-                raise _ProbeError("failed", "unsafe-registered-server")
             (codex_home / "config.toml").write_bytes(config)
             env = _probe_env(
                 fixture,
@@ -1442,24 +1385,6 @@ def _host_entry(
             "live_reload": dict(_LIVE_RELOAD),
         }
         return entry
-    preflight = _skill_names(host, authorizations)
-    if preflight.get("status") not in {"verified", "not-applicable"}:
-        entry["status"] = "fail"
-        entry["host"] = {
-            "status": "failed",
-            "checks": {
-                "binding": {"status": "not-applicable"},
-                "protocol": {"status": "not-applicable"},
-                "host_load": {
-                    "status": "failed",
-                    "reason": preflight.get("reason"),
-                    "evidence_scope": _HOST_LOAD_EVIDENCE_SCOPE,
-                },
-                "skills": preflight,
-            },
-            "live_reload": dict(_LIVE_RELOAD),
-        }
-        return entry
     try:
         evidence = _probe_selected_host(host, authorizations)
     except _ProbeError as error:
@@ -1471,10 +1396,8 @@ def _host_entry(
         skills = {
             "status": error.kind,
             "reason": error.reason,
-            "skills": list(preflight.get("skills") or []),
+            "skills": [],
         }
-        if preflight.get("link_authorizations") is not None:
-            skills["link_authorizations"] = preflight["link_authorizations"]
         entry["status"] = "unavailable" if error.kind == "unavailable" else "fail"
         entry["host"] = {
             "status": "failed" if error.kind == "failed" else error.kind,
@@ -1499,7 +1422,7 @@ def _host_entry(
                     "reason": error.code,
                     "evidence_scope": _HOST_LOAD_EVIDENCE_SCOPE,
                 },
-                "skills": preflight,
+                "skills": {"status": "failed", "reason": error.code, "skills": []},
             },
             "live_reload": dict(_LIVE_RELOAD),
         }
@@ -1515,8 +1438,6 @@ def _host_entry(
         skill_status["reason"] = "skills-evidence-mismatch"
     if evidence["link_authorizations"]:
         skill_status["link_authorizations"] = evidence["link_authorizations"]
-    elif preflight.get("link_authorizations"):
-        skill_status["link_authorizations"] = preflight["link_authorizations"]
     load_status = {
         "status": "verified" if protocol_ok and skills_ok else "failed",
         "evidence_scope": _HOST_LOAD_EVIDENCE_SCOPE,
@@ -1559,6 +1480,10 @@ def verify_hosts(
             _host_entry(host, probe=bool(probe), authorizations=authorizations)
         )
     for profile in _scope_shell_profiles(scope):
+        try:
+            absent = _regular_or_absent(profile["path"]) == "absent"
+        except ContractError:
+            absent = False
         result["shell_profiles"].append(
             {
                 "path": profile["path"],
@@ -1568,8 +1493,7 @@ def verify_hosts(
                 "disk": {"status": "not-applicable"},
                 "runtime": {"status": "not-applicable"},
                 "host": {"status": "not-applicable"},
-                "legacy": {"status": "none", "lines": []},
+                "legacy": {"status": "absent" if absent else "unverified", "lines": []},
             }
         )
     return result
-

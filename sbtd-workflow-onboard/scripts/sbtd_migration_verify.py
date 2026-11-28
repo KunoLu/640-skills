@@ -38,7 +38,6 @@ import importlib.util
 import json
 import os
 import re
-import stat
 import sys
 from collections.abc import Mapping
 from datetime import datetime
@@ -47,13 +46,15 @@ from typing import Any, NoReturn
 
 import onboard_contracts as contracts
 import sbtd_migration as migration
-from sbtd_migration_files import read_file, snapshot
+from sbtd_migration_files import _canonical, _hash_file, read_file, snapshot, snapshot_with_mode
 from sbtd_project import _reject_json_duplicates
 
 __all__ = [
     "ONBOARD_CLI_BOOTSTRAP",
+    "ONBOARD_CLI_SMOKE_BOUND_SCHEMA",
     "ONBOARD_CLI_SMOKE_SCHEMA",
     "onboard_cli_smoke_command",
+    "onboard_cli_smoke_producer",
     "validate_deployment_reports",
     "verify_migration",
 ]
@@ -72,6 +73,7 @@ _EVIDENCE_VALIDATOR = (
 # contract-backed/app-mocked/blocked/not-needed runs cannot prove acceptance.
 _GENUINE_MODES = frozenset({"full-stack", "smoke-only", "backend-only"})
 ONBOARD_CLI_SMOKE_SCHEMA = "sbtd-onboard-cli-smoke-1"
+ONBOARD_CLI_SMOKE_BOUND_SCHEMA = "sbtd-onboard-cli-smoke-2"
 ONBOARD_CLI_BOOTSTRAP = (
     "import os,runpy,sys;sys.argv=sys.argv[1:];"
     "sys.path.insert(0,os.path.dirname(sys.argv[0]));"
@@ -95,14 +97,18 @@ _ONBOARD_CLI_SMOKE_KEYS = frozenset(
     }
 )
 _ONBOARD_CLI_SMOKE_BOUND_KEYS = _ONBOARD_CLI_SMOKE_KEYS | {"manifestId", "applyId"}
+_ONBOARD_CLI_SMOKE_STAMPED_KEYS = _ONBOARD_CLI_SMOKE_BOUND_KEYS | {"producer"}
 
 
 def onboard_cli_smoke_command(
-    root: Path, *, context_paths: tuple[Path, Path] | None = None
+    root: Path,
+    *,
+    context_paths: tuple[Path, Path] | None = None,
+    executable: str | None = None,
 ) -> list[str]:
     """Exact check-projects argv. Token membership is not acceptance."""
     command = [
-        sys.executable,
+        sys.executable if executable is None else executable,
         "-I",
         "-B",
         "-c",
@@ -124,6 +130,31 @@ def onboard_cli_smoke_command(
             ]
         )
     return command
+
+
+def onboard_cli_smoke_producer(
+    command: list[str], onboard_version: str, manifest_id: str, apply_id: str
+) -> dict[str, str]:
+    """Bind an invocation to the trusted Python image and its migration evidence."""
+    try:
+        interpreter = Path(sys.executable)
+        if not interpreter.is_absolute():
+            raise ValueError
+        image = _hash_file(_canonical(interpreter.resolve(strict=True)))
+    except (contracts.ContractError, OSError, RuntimeError, ValueError):
+        _fail("runtime-unavailable", "the trusted Python interpreter image cannot be measured")
+    binding = {
+        "schema": ONBOARD_CLI_SMOKE_BOUND_SCHEMA,
+        "command": command,
+        "onboardVersion": onboard_version,
+        "manifestId": manifest_id,
+        "applyId": apply_id,
+        "imageSha256": image,
+    }
+    return {
+        "imageSha256": image,
+        "invocationSha256": hashlib.sha256(contracts.canonical_json_bytes(binding)).hexdigest(),
+    }
 
 _PROJECT_OUTCOME = {
     "verified": ("", ""),
@@ -168,12 +199,13 @@ def _fail(code: str, message: str, exit_code: int = 2) -> NoReturn:
 def _now() -> str:
     return datetime.now().astimezone().isoformat(timespec="microseconds")
 
-_MODE_TEXT = re.compile(r"^0[0-7]{3}$")
+_MODE_TEXT = re.compile(r"[0-7]{4}")
 _NO_WRITE = "Do not clean up, deploy, or repair. This result does not authorize a write."
 
 
 def _mode_signed_bytes(
-    deployment_id: str, resource_id: str, mode: str, after: Mapping[str, Any]
+    deployment_id: str, resource_id: str, mode: str, after: Mapping[str, Any],
+    observed_at: str,
 ) -> bytes:
     """Bytes covered by one attestation. Not the deployment document hash."""
     return contracts.canonical_json_bytes(
@@ -183,12 +215,14 @@ def _mode_signed_bytes(
             "deployment_id": deployment_id,
             "resource_id": resource_id,
             "mode": mode,
+            "observed_at": observed_at,
             "after": {"type": after.get("type"), "checksum": after.get("checksum")},
         }
     )
 
 
-def _installed_lineage_key() -> Any:
+def _historical_mode_issuer() -> Any:
+    """Use the installed trust anchor; a purpose-bound mode proof is not lineage."""
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
     from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
@@ -199,68 +233,11 @@ def _installed_lineage_key() -> Any:
     return key
 
 
-def _attested_mode(
-    proofs: list[Any],
-    deployment_id: str,
-    resource_id: str,
-    after: Mapping[str, Any],
-) -> tuple[str | None, dict[str, str] | None]:
-    """A signature over this deployment. A result field is not one."""
-    matches = [
-        proof
-        for proof in proofs
-        if isinstance(proof, Mapping) and proof.get("resource_id") == resource_id
-    ]
-    if len(matches) != 1:
-        return None, None
-    proof = matches[0]
-    mode = proof.get("mode")
-    signature = proof.get("signature")
-    recorded = {"type": after.get("type"), "checksum": after.get("checksum")}
-    if (
-        proof.get("kind") != "signed-attestation"
-        or not isinstance(mode, str)
-        or _MODE_TEXT.fullmatch(mode) is None
-        or proof.get("after") != recorded
-        or proof.get("deployment_id") != deployment_id
-        or not isinstance(signature, str)
-        or not signature
-    ):
-        return None, None
-    try:
-        from cryptography.exceptions import InvalidSignature
-
-        _installed_lineage_key().verify(
-            base64.b64decode(signature, validate=True),
-            _mode_signed_bytes(deployment_id, resource_id, mode, after),
-        )
-    except (InvalidSignature, ValueError, TypeError, OSError, contracts.ContractError):
-        return None, None
-    return mode, {"kind": "signed-attestation", "purpose": "post-write-mode"}
-
-
-def _posix_mode(path: Path) -> str | None:
-    """POSIX permission bits only. Windows DACL is not invented from chmod."""
-    if os.name != "posix":
-        return None
-    try:
-        info = path.lstat()
-    except OSError:
-        return None
-    if stat.S_ISLNK(info.st_mode) or not (
-        stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)
-    ):
-        return None
-    return f"{stat.S_IMODE(info.st_mode):04o}"
-
-
-def _classify_legacy_resource(
+def _observe_legacy_resource(
     operation: Mapping[str, Any],
     result: Mapping[str, Any] | None,
-    state: Mapping[str, Any] | None,
-    proofs: list[Any],
-    deployment_id: str,
-) -> dict[str, Any]:
+    proof: Mapping[str, Any] | None,
+) -> tuple[Mapping[str, Any] | None, dict[str, Any]]:
     """Compare recorded bytes and a signed post-write mode. No writes."""
     record: dict[str, Any] = {
         "resource_id": operation["resource_id"],
@@ -271,31 +248,27 @@ def _classify_legacy_resource(
         "mode_source": None,
         "reason": "the live resource could not be read; an absent or unreadable path is not drift",
     }
-    if (
-        state is None
-        or result is None
-        or result.get("status") != "succeeded"
-        or not isinstance(result.get("after"), Mapping)
-    ):
-        return record
+    try:
+        state, live = snapshot_with_mode(Path(operation["target"]))
+    except contracts.ContractError as error:
+        if error.code == "state-conflict":
+            record["reason"] = "the live resource changed during observation; this is not proven drift"
+        return None, record
+    except (OSError, RuntimeError):
+        return None, record
+    if result is None or result.get("status") != "succeeded":
+        return state, record
     after = result["after"]
     record["bytes"] = "match" if state == after else "differ"
-    # post_write_mode on the result is ignored. Resealing that field is not proof.
-    mode, source = _attested_mode(proofs, deployment_id, operation["resource_id"], after)
-    if mode is not None and state["type"] != "absent":
-        if os.name == "posix":
-            live = _posix_mode(Path(operation["target"]))
-            if live is None:
-                record["reason"] = (
-                    "recorded bytes were observed, but the live POSIX mode could not be read; this is not drift"
-                )
-            else:
-                record["mode"] = "match" if live == mode else "differ"
-                record["mode_source"] = source
-        else:
+    has_proof = proof is not None and proof["after"] == after
+    if state["type"] != "absent":
+        if os.name != "posix":
             record["reason"] = (
-                "recorded bytes were observed, but this platform has no POSIX mode and no DACL evidence"
+                "recorded bytes were observed, but no trusted POSIX mode or DACL evidence exists on this platform"
             )
+        elif has_proof and state["type"] == after["type"] and live is not None:
+            record["mode"] = "match" if live == proof["mode"] else "differ"
+            record["mode_source"] = {"kind": "signed-attestation", "purpose": "post-write-mode"}
     if record["bytes"] == "differ" or record["mode"] == "differ":
         record["status"] = "drifted"
         record["reason"] = (
@@ -308,11 +281,11 @@ def _classify_legacy_resource(
         record["reason"] = "recorded bytes and the trusted post-write mode match"
     elif state["type"] == "absent":
         record["reason"] = "the resource is still absent; no live permission mode exists"
-    elif record["bytes"] == "match" and mode is None:
+    elif record["bytes"] == "match" and not has_proof and os.name == "posix":
         record["reason"] = (
             "recorded bytes match, but no trusted post-write permission evidence exists"
         )
-    return record
+    return state, record
 
 
 
@@ -743,6 +716,36 @@ def _matches_onboard_cli_producer(
     )
 
 
+def _matches_onboard_cli_command(
+    document: Mapping[str, Any],
+    root: Path,
+    *,
+    context_paths: tuple[Path, Path] | None,
+    historical: bool,
+) -> bool:
+    command = document["command"]
+    if document["schema"] == ONBOARD_CLI_SMOKE_SCHEMA:
+        # V1 did not record the image. An unknown interpreter cannot be
+        # authenticated retroactively by walking a path from its report.
+        return command == onboard_cli_smoke_command(root, context_paths=context_paths)
+    if (
+        not isinstance(command, list) or not command
+        or not isinstance(command[0], str) or "\x00" in command[0]
+        or not Path(command[0]).is_absolute()
+        or os.path.normpath(command[0]) != command[0]
+        or not historical and command[0] != sys.executable
+        or command != onboard_cli_smoke_command(
+            root, context_paths=context_paths, executable=command[0]
+        )
+    ):
+        return False
+    # The original raw report reference seals the producer's captured stamp.
+    # Never read or execute an executable or package located by that report.
+    return document["producer"] == onboard_cli_smoke_producer(
+        command, document["onboardVersion"], document["manifestId"], document["applyId"]
+    )
+
+
 def _accept_onboard_cli_smoke(
     document: Mapping[str, Any],
     *,
@@ -756,12 +759,15 @@ def _accept_onboard_cli_smoke(
     context_paths: tuple[Path, Path] | None,
 ) -> None:
     """Trusted local check-projects capture. Not a business API pass."""
-    expected_keys = (
-        _ONBOARD_CLI_SMOKE_BOUND_KEYS
-        if context_paths is not None
-        else _ONBOARD_CLI_SMOKE_KEYS
-    )
-    if set(document) != expected_keys or document.get("schema") != ONBOARD_CLI_SMOKE_SCHEMA:
+    schema = document.get("schema")
+    expected_keys = None
+    if schema == ONBOARD_CLI_SMOKE_SCHEMA:
+        expected_keys = (
+            _ONBOARD_CLI_SMOKE_BOUND_KEYS if context_paths is not None else _ONBOARD_CLI_SMOKE_KEYS
+        )
+    elif schema == ONBOARD_CLI_SMOKE_BOUND_SCHEMA and context_paths is not None:
+        expected_keys = _ONBOARD_CLI_SMOKE_STAMPED_KEYS
+    if set(document) != expected_keys:
         _fail(
             "report-acceptance",
             "an Onboard CLI smoke record is not the trusted check-projects identity",
@@ -813,14 +819,18 @@ def _accept_onboard_cli_smoke(
             or not isinstance(apply_id, str)
             or document.get("manifestId") != manifest_id
             or document.get("applyId") != apply_id
+            or verified_manifest is not None and verified_manifest.get("manifest_id") != manifest_id
         ):
             _fail(
                 "report-acceptance",
                 "an Onboard CLI smoke record is bound to another migration apply",
                 3,
             )
-    if document.get("command") != onboard_cli_smoke_command(
-        root, context_paths=context_paths
+    if not _matches_onboard_cli_command(
+        document,
+        root,
+        context_paths=context_paths,
+        historical=verified_manifest is not None,
     ):
         _fail(
             "report-acceptance",
@@ -867,7 +877,9 @@ def validate_deployment_reports(
     native envelopes are supplied, they must pass unchanged v1/v2 validation
     and prove a genuine non-mock API smoke for this root, revision and window.
     When ``context_paths`` is supplied, the CLI record must also carry this
-    payload's manifest/apply IDs and the exact argv for those paths.
+    payload's manifest/apply IDs and the exact argv for those paths. V1
+    requires the installed command; V2 also binds its captured invocation
+    to a trusted Python image. No interpreter path from a report is opened.
     Fresh acceptance requires the installed runtime, which must also match
     the reconciliation observer when present. Pass ``verified_manifest`` only
     after checking the completed evidence's bindings, runtime and provenance.
@@ -904,7 +916,8 @@ def validate_deployment_reports(
     cli_smoke = [
         value
         for value in decoded
-        if isinstance(value, dict) and value.get("schema") == ONBOARD_CLI_SMOKE_SCHEMA
+        if isinstance(value, dict)
+        and value.get("schema") in (ONBOARD_CLI_SMOKE_SCHEMA, ONBOARD_CLI_SMOKE_BOUND_SCHEMA)
     ]
     envelopes = [
         value
@@ -1034,69 +1047,66 @@ def _check_approved_routing(
 
 
 def _load_post_write_attestation(
-    path: Path | None, deployment_id: str
-) -> list[dict[str, Any]]:
-    """Private signed sidecar. Embedded deployment fields are not proof."""
-    if path is None:
-        return []
+    path: Path | None, deployment: Mapping[str, Any]
+) -> dict[str, Mapping[str, Any]]:
+    """Read independently signed, contemporaneous mode claims; never mint proof."""
+    payload = deployment["payload"]
+    if path is None or os.name != "posix" or payload.get("reconciliation") is not None:
+        return {}
+    from cryptography.exceptions import InvalidSignature
     from sbtd_migration_files import require_private_directory
 
-    attestation = Path(path)
-    require_private_directory(attestation.parent)
-    before = snapshot(attestation)
-    if before.get("type") != "file":
-        _fail("binding-violation", "an unsigned post-write attestation is not accepted")
-    raw = read_file(attestation, before)
-    if snapshot(attestation) != before:
-        _fail("state-conflict", "the post-write attestation changed during verification")
+    deployment_id = deployment["deployment_id"]
     try:
-        document = json.loads(raw.decode("utf-8"))
-    except (UnicodeError, json.JSONDecodeError):
-        _fail("binding-violation", "an unsigned post-write attestation is not accepted")
-    entries = document.get("attestations") if isinstance(document, dict) else None
+        attestation = Path(path)
+        require_private_directory(attestation.parent)
+        document = _decode_report(read_file(attestation))
+        issuer = _historical_mode_issuer()
+    except (contracts.ContractError, OSError, ValueError, TypeError, RuntimeError):
+        return {}
     if (
         not isinstance(document, dict)
-        or document.get("schema_version") != 1
-        or document.get("purpose") != "post-write-mode"
-        or not isinstance(entries, list)
-        or not entries
+        or set(document) != {"schema_version", "purpose", "deployment_id", "attestations"}
+        or type(document["schema_version"]) is not int
+        or document["schema_version"] != 1
+        or document["purpose"] != "post-write-mode"
+        or document["deployment_id"] != deployment_id
+        or not isinstance(document["attestations"], list)
     ):
-        _fail("binding-violation", "an unsigned post-write attestation is not accepted")
-    if document.get("deployment_id") != deployment_id:
-        return []
-    proofs: list[dict[str, Any]] = []
-    for proof in entries:
+        return {}
+    started = _attempt_time(payload, "started_at")
+    finished = _attempt_time(payload, "finished_at")
+    proofs: dict[str, Mapping[str, Any]] = {}
+    seen: set[str] = set()
+    for proof in document["attestations"]:
+        if not isinstance(proof, dict) or not isinstance(proof.get("resource_id"), str):
+            continue
+        resource_id = proof["resource_id"]
+        if resource_id in seen:
+            proofs.pop(resource_id, None)
+            continue
+        seen.add(resource_id)
+        if set(proof) != {"kind", "resource_id", "mode", "after", "observed_at", "signature"}:
+            continue
+        mode, after, signature = proof["mode"], proof["after"], proof["signature"]
         if (
-            not isinstance(proof, Mapping)
-            or not isinstance(proof.get("signature"), str)
-            or not proof.get("signature")
-            or not isinstance(proof.get("resource_id"), str)
-            or not isinstance(proof.get("mode"), str)
-            or not isinstance(proof.get("after"), Mapping)
+            proof["kind"] != "signed-attestation"
+            or not isinstance(mode, str) or _MODE_TEXT.fullmatch(mode) is None
+            or not isinstance(after, dict) or set(after) != {"type", "checksum"}
+            or not isinstance(signature, str)
         ):
-            _fail("binding-violation", "an unsigned post-write attestation is not accepted")
-        after = proof["after"]
+            continue
         try:
-            from cryptography.exceptions import InvalidSignature
-
-            _installed_lineage_key().verify(
-                base64.b64decode(proof["signature"], validate=True),
-                _mode_signed_bytes(
-                    deployment_id, proof["resource_id"], proof["mode"], after
-                ),
+            observed = _attempt_time(proof, "observed_at")
+            if not started <= observed <= finished:
+                continue
+            issuer.verify(
+                base64.b64decode(signature, validate=True),
+                _mode_signed_bytes(deployment_id, resource_id, mode, after, proof["observed_at"]),
             )
-        except (InvalidSignature, ValueError, TypeError, OSError, contracts.ContractError):
-            _fail("binding-violation", "an unsigned post-write attestation is not accepted")
-        proofs.append(
-            {
-                "kind": "signed-attestation",
-                "deployment_id": deployment_id,
-                "resource_id": proof["resource_id"],
-                "mode": proof["mode"],
-                "after": {"type": after.get("type"), "checksum": after.get("checksum")},
-                "signature": proof["signature"],
-            }
-        )
+        except (InvalidSignature, ValueError, TypeError, contracts.ContractError):
+            continue
+        proofs[resource_id] = proof
     return proofs
 
 
@@ -1170,8 +1180,7 @@ def verify_migration(
         for operation in migration._operations(manifest)
     }
 
-    deployment_id = deployment["deployment_id"]
-    proofs = _load_post_write_attestation(post_write_attestation, deployment_id)
+    proofs = _load_post_write_attestation(post_write_attestation, deployment) if legacy_ops else {}
     for project in deployment["payload"]["projects"]:
         try:
             validate_deployment_reports(
@@ -1253,17 +1262,16 @@ def verify_migration(
             record = None
             if rid in legacy_observations:
                 state, record = legacy_observations[rid]
+            elif rid in legacy_by_id:
+                state, record = _observe_legacy_resource(
+                    legacy_by_id[rid], stage_results["deploy"].get(rid), proofs.get(rid)
+                )
+                legacy_observations[rid] = (state, record)
             else:
                 try:
                     state = snapshot(Path(target))
                 except (contracts.ContractError, OSError, RuntimeError):
                     state = None
-                if rid in legacy_by_id:
-                    record = _classify_legacy_resource(
-                        legacy_by_id[rid], stage_results["deploy"].get(rid),
-                        state, proofs, deployment_id,
-                    )
-                    legacy_observations[rid] = (state, record)
             if state is not None:
                 if track_freshness:
                     observed_states[target] = state
@@ -1359,7 +1367,7 @@ def verify_migration(
 
     status = contracts._aggregate(
         [project["status"] for project in projects],
-        ("failed", "not-verified", "blocked"),
+        contracts._VERIFY_STATUS_PRIORITY,
         "verified",
         None,
     )

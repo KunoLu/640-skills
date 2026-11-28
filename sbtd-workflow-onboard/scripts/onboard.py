@@ -665,6 +665,46 @@ def resolve_project_roots(
     return roots
 
 
+def native_git_argv(root: Path, *arguments: str, path: str | None = None) -> tuple[str, ...]:
+    """Select a native Git outside the checkout; never dispatch a PATH wrapper."""
+    from onboard_contracts import _path_contains
+
+    search = os.environ.get("PATH", "") if path is None else path
+    directories = search.split(os.pathsep)
+    if os.name == "posix":
+        directories[:0] = ["/usr/bin", "/bin"]
+    name = "git.exe" if os.name == "nt" else "git"
+    for directory in directories:
+        folder = Path(directory)
+        if not folder.is_absolute() or _path_contains(str(root), str(folder)):
+            continue
+        try:
+            executable = (folder / name).resolve(strict=True)
+            if not os.access(executable, os.X_OK) or _path_contains(str(root), str(executable)):
+                continue
+            if not executable.is_file():
+                continue
+            with executable.open("rb") as stream:
+                header = stream.read(4)
+        except (OSError, RuntimeError, ValueError):
+            continue
+        if os.name == "nt":
+            if executable.suffix.lower() != ".exe" or not header.startswith(b"MZ"):
+                continue
+        elif header not in {
+            b"\x7fELF", b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe",
+            b"\xfe\xed\xfa\xcf", b"\xcf\xfa\xed\xfe",
+            b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca",
+            b"\xca\xfe\xba\xbf", b"\xbf\xba\xfe\xca",
+        }:
+            continue
+        return (
+            str(executable), "--no-pager", "--no-optional-locks",
+            "-c", "core.fsmonitor=false", "-C", str(root), *arguments,
+        )
+    raise FileNotFoundError("a native Git installation outside the project is required")
+
+
 def subprocess_command(command: tuple[str, ...]) -> tuple[str, ...] | str:
     """Return an executable form of ``command`` for ``subprocess.run``.
 
@@ -2794,6 +2834,7 @@ def gitignore_verdicts(
     probes: tuple[str, ...],
     *,
     env: dict[str, str] | None = None,
+    native_git: bool = False,
 ) -> dict[str, GitignoreVerdict] | str:
     """Resolve every probe in one `git check-ignore` pass.
 
@@ -2825,6 +2866,7 @@ def gitignore_verdicts(
         timeout=60,
         stdin_text="".join(f"{probe}\0" for probe in probes),
         env=env,
+        native_git=native_git,
     )
     if result is None or result.returncode == 128:
         return GITIGNORE_PROBE_UNAVAILABLE
@@ -6126,10 +6168,25 @@ def run_project_command(
     timeout: int = 900,
     stdin_text: str | None = None,
     env: dict[str, str] | None = None,
+    *,
+    native_git: bool = False,
 ) -> subprocess.CompletedProcess[str] | None:
     try:
+        if native_git:
+            env = {
+                key: value for key, value in (os.environ if env is None else env).items()
+                if not key.upper().startswith("GIT_")
+            }
+            argv = native_git_argv(cwd, *command[1:], path=env.get("PATH", ""))
+            cwd = Path(argv[0]).parent
+            env.update(
+                PATH=str(cwd), GIT_TERMINAL_PROMPT="0",
+                GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
+            )
+        else:
+            argv = subprocess_command(command)
         return subprocess.run(
-            subprocess_command(command),
+            argv,
             cwd=str(cwd),
             check=False,
             capture_output=True,
@@ -6204,13 +6261,13 @@ def project_scaffold_conflict(project_root: Path, skip_agents: bool) -> str | No
             existing.append(relative)
         if not existing:
             return None
-        verdicts = gitignore_verdicts(project_root, tuple(existing))
+        verdicts = gitignore_verdicts(project_root, tuple(existing), native_git=True)
         if isinstance(verdicts, str) or any(
             not verdicts[path].ignored for path in existing
         ):
             return "Adding ignore rules would newly hide existing reserved data or its protection is unverified."
         tracked = run_project_command(
-            ("git", "ls-files", "-z", "--", *existing), project_root, timeout=60
+            ("git", "ls-files", "-z", "--", *existing), project_root, timeout=60, native_git=True
         )
         if tracked is None or tracked.returncode != 0 or tracked.stdout:
             return "Existing reserved data is tracked or its tracked state could not be verified."
@@ -7525,11 +7582,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     for mode in ("check", "plan", "init", "reset", "init-projects"):
         sub = subparsers.add_parser(mode)
-        if mode == "plan":
-            sub.add_argument(
-                "--action", choices=("init", "reset"), action=SingleValueAction,
-                help="Preview targets for this action without writing (default: init).",
-            )
         add_retirement_options(sub, mode)
         if mode in {"init", "init-projects"}:
             _add_migration_context(sub)

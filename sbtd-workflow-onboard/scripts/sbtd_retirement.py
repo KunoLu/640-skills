@@ -11,10 +11,12 @@ Evidence and retained originals must already be regular files lexically
 inside the caller-supplied vault. A declared ``backup_ref`` outside that
 vault is not evidence. Paths are walked without following links: ``.``,
 ``..``, symlinks, Windows junctions and other reparse points, hardlinks,
-and a lexical path that is not the physical path all fail closed. Place an
-rc2 upgrade receipt at the vault path its wrapper ``receipt_path`` names;
-that field must be the file actually read, and ``status`` must equal the
-payload status. Historical plans are not required to carry ``graftRetirement``.
+and a lexical path that is not the physical path all fail closed. Documents
+that establish authority also require private Windows ACLs; retained user
+bytes supply content, not authority. Place an rc2 upgrade receipt at the
+vault path its wrapper ``receipt_path`` names; that field must be the file
+actually read, and ``status`` must equal the payload status. Historical plans
+are not required to carry ``graftRetirement``.
 """
 
 from __future__ import annotations
@@ -39,6 +41,7 @@ from sbtd_retirement_paths import HISTORY_DIRS, LEGACY_LAUNCHER_RELATIVE
 
 REPORT_SCHEMA = "sbtd-retirement/1"
 RECEIPT_SCHEMA = "sbtd-retirement-receipt/1"
+_INTENT_SCHEMA = "sbtd-retirement-intent/1"
 DESCRIPTOR_SCHEMA = "sbtd-retirement-evidence/1"
 _PURPOSES = frozenset({"check", "plan", "reset", "upgrade", "cleanup"})
 _EXECUTABLE = frozenset({"reset", "upgrade", "cleanup"})
@@ -90,6 +93,7 @@ __all__ = [
     "retain_windows_permissions",
     "retained_windows_permissions",
     "apply_candidate",
+    "reconcile_candidate",
     "restore_candidate",
     "merge_reports",
 ]
@@ -166,7 +170,7 @@ def _walk(path: Path) -> str:
             info = current.lstat()
         except FileNotFoundError:
             return "absent"
-        except OSError:
+        except (OSError, ValueError):
             return "unreadable"
         if stat.S_ISLNK(info.st_mode) or _is_reparse(info):
             return "unsafe"
@@ -202,12 +206,12 @@ def _sha(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def _valid_windows_digest(value: Any) -> bool:
+def _is_sha256(value: Any) -> bool:
     return isinstance(value, str) and len(value) == 64 and all(char in "0123456789abcdef" for char in value)
 
 
 def _require_windows_digest(value: Any) -> None:
-    if not _valid_windows_digest(value):
+    if not _is_sha256(value):
         _fail("windows-permissions-unproven", "retirement requires a recorded Windows ACL digest")
 
 
@@ -358,10 +362,26 @@ def _overlap(vault: Path, selections: Mapping[str, Any]) -> None:
 
 
 def _contained(path: Path, vault: Path) -> None:
-    if _walk(path) != "file" or _alias(path):
-        _fail("unsafe-path", "retirement evidence must be a canonical regular file")
-    if path == vault or not path.is_relative_to(vault) or _alias(vault):
+    if path == vault or not path.is_relative_to(vault):
         _fail("scope-conflict", "retirement evidence must be a regular file inside the vault")
+    if _walk(path) != "file" or _alias(path) or _alias(vault):
+        _fail("unsafe-path", "retirement evidence must be a canonical regular file")
+
+
+def _private_parents(path: Path, vault: Path) -> None:
+    require = _files()["require_private_directory"]
+    parent = vault
+    for part in path.relative_to(vault).parts[:-1]:
+        parent /= part
+        require(parent)
+
+
+def _evidence_document(path: Path, vault: Path) -> Any:
+    _contained(path, vault)
+    if os.name == "nt":
+        _private_parents(path, vault)
+        _files()["assert_private_file"](path)
+    return _strict_json(_read_bytes(path))
 
 
 def _private_permissions_path(path: Path, private_root: Path) -> Path:
@@ -370,8 +390,7 @@ def _private_permissions_path(path: Path, private_root: Path) -> Path:
     path = _as_path(path, "Windows ACL backup")
     if path == private_root or not path.is_relative_to(private_root):
         _fail("scope-conflict", "the Windows ACL backup is outside the private vault")
-    if path.parent != private_root:
-        files["require_private_directory"](path.parent)
+    _private_parents(path, private_root)
     return path
 
 
@@ -413,7 +432,7 @@ def _sealed(document: Any, id_key: str, *, extra: frozenset[str] = frozenset()) 
         or set(document) - required - extra
     ):
         _fail("binding-violation", "retirement evidence is not a sealed document")
-    if document.get("schema_version") != 1 or not isinstance(document.get("payload"), dict):
+    if type(document.get("schema_version")) is not int or document["schema_version"] != 1 or not isinstance(document.get("payload"), dict):
         _fail("binding-violation", "retirement evidence is not a sealed document")
     if document.get(id_key) != _digest(document["payload"]):
         _fail("binding-violation", "retirement evidence digest does not match its payload")
@@ -462,10 +481,12 @@ def _result(value: Any) -> dict[str, Any] | None:
 def _operation_results(document: Any) -> list[dict[str, Any]]:
     found: list[Any] = []
     if isinstance(document, dict):
+        if "reconciliation" in document:
+            return []
         if isinstance(document.get("operationResults"), list):
             found.extend(document["operationResults"])
         wiring = document.get("graftWiring")
-        if isinstance(wiring, dict) and isinstance(wiring.get("operationResults"), list):
+        if isinstance(wiring, dict) and "reconciliation" not in wiring and isinstance(wiring.get("operationResults"), list):
             found.extend(wiring["operationResults"])
     results = [item for item in (_result(value) for value in found) if item is not None]
     if not results:
@@ -506,6 +527,9 @@ def _declared_operations(payload: Mapping[str, Any]) -> dict[str, dict[str, Any]
 
 
 def _deployment_results(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    if "reconciliation" in payload:
+        # A successful current-state observation does not establish who wrote it.
+        return []
     found: list[Any] = []
     shared = payload.get("shared_results")
     if isinstance(shared, list):
@@ -575,6 +599,7 @@ def _bind_results(
                 "role": role,
                 "before": result["before"],
                 "after": result["after"],
+                "operation": "install" if result["before"]["type"] == "absent" else "replace",
                 "backup_ref": checked,
             })
     return proofs
@@ -641,9 +666,10 @@ def _upgrade_proofs(
         desired = _state(row.get("desired")) if row.get("desired") is not None else None
         if after is None or before is None or desired != after or after["type"] != "file" or before == after:
             continue
-        mechanical_before = _state(row.get("mechanical_before"))
-        if mechanical_before == after:
+        if _state(row.get("mechanical_before")) != before or _state(row.get("mechanical_after")) != after:
             continue
+        if row["decision"] != ("install" if before["type"] == "absent" else "replace"):
+            _fail("binding-violation", "upgrade mutation contradicts its recorded before state")
         if ".." in Path(target).parts:
             _fail("unsafe-path", "upgrade evidence target is not canonical")
         backup = row.get("backup_ref")
@@ -666,6 +692,7 @@ def _upgrade_proofs(
             "role": role,
             "before": before,
             "after": after,
+            "operation": row["decision"],
             "backup_ref": checked,
             "launcher": launcher_path if isinstance(launcher_path, str) else None,
         })
@@ -682,8 +709,8 @@ def _binding_paths(item: Mapping[str, Any], vault: Path) -> tuple[str, ...]:
     if keys is None or set(item) != {"kind", *keys}:
         _fail("binding-violation", "retirement evidence binding is not a recognized shape")
     paths = tuple(_as_path(item.get(key), key) for key in keys)
-    for path in paths:
-        _contained(path, vault)
+    if any(path == vault or not path.is_relative_to(vault) for path in paths):
+        _fail("scope-conflict", "retirement evidence must be inside the vault")
     return tuple(str(path) for path in paths)
 
 
@@ -691,10 +718,10 @@ def _proofs_from_binding(item: Mapping[str, Any], selections: Mapping[str, Any],
     paths = _binding_paths(item, vault)
     kind = item["kind"]
     if kind == "operation-results":
-        return _bind_results(_operation_results(_strict_json(_read_bytes(Path(paths[0])))), selections, kind, paths, vault)
+        return _bind_results(_operation_results(_evidence_document(Path(paths[0]), vault)), selections, kind, paths, vault)
     if kind == "manifest-deployment":
-        manifest = _sealed(_strict_json(_read_bytes(Path(paths[0]))), "manifest_id")
-        deployment = _sealed(_strict_json(_read_bytes(Path(paths[1]))), "deployment_id")
+        manifest = _sealed(_evidence_document(Path(paths[0]), vault), "manifest_id")
+        deployment = _sealed(_evidence_document(Path(paths[1]), vault), "deployment_id")
         if deployment.get("manifest_id") != _digest(manifest):
             _fail("binding-violation", "deployment evidence is not bound to its manifest")
         return _bind_results(
@@ -706,8 +733,8 @@ def _proofs_from_binding(item: Mapping[str, Any], selections: Mapping[str, Any],
             _declared_operations(manifest),
         )
     receipt_path = Path(paths[1])
-    receipt_document = _strict_json(_read_bytes(receipt_path))
-    plan = _sealed(_strict_json(_read_bytes(Path(paths[0]))), "plan_id")
+    receipt_document = _evidence_document(receipt_path, vault)
+    plan = _sealed(_evidence_document(Path(paths[0]), vault), "plan_id")
     receipt = _sealed(receipt_document, "receipt_id", extra=_UPGRADE_WRAPPER)
     _upgrade_wrapper(receipt_document, receipt_path, receipt)
     return _upgrade_proofs(plan, receipt, selections, paths, vault)
@@ -724,8 +751,7 @@ def _load_evidence(
         if set(evidence[0]) != {"kind", "path"}:
             _fail("binding-violation", "retirement evidence descriptor is malformed")
         path = _as_path(evidence[0].get("path"), "descriptor")
-        _contained(path, vault)
-        payload = _sealed(_strict_json(_read_bytes(path)), "descriptor_id")
+        payload = _sealed(_evidence_document(path, vault), "descriptor_id")
         if payload.get("schema") != DESCRIPTOR_SCHEMA or not isinstance(payload.get("items"), list):
             _fail("binding-violation", "retirement evidence descriptor is malformed")
         proofs: list[dict[str, Any]] = []
@@ -952,23 +978,35 @@ def _attribute_mcp(before: bytes | None, after: bytes, *, omp: bool, toml: bool)
     return attributable, False
 
 
-def _hook_commands(document: Mapping[str, Any]) -> dict[str, list[str]] | None:
+def _group_hooks(group: Any) -> list[dict[str, Any]] | None:
+    if (
+        not isinstance(group, dict) or set(group) - {"matcher", "hooks"}
+        or (group.get("matcher") is not None and not isinstance(group["matcher"], str))
+    ):
+        return None
+    hooks = group.get("hooks", [])
+    if not isinstance(hooks, list) or any(
+        not isinstance(hook, dict) or not isinstance(hook.get("command"), str) for hook in hooks
+    ):
+        return None
+    return hooks
+
+
+def _hook_commands(document: Mapping[str, Any]) -> dict[str, list[str]]:
     hooks = document.get("hooks", {})
     if not isinstance(hooks, dict):
-        return None
+        _fail("invalid-config", "a selected Codex hooks table is malformed")
     found: dict[str, list[str]] = {}
     for event, groups in hooks.items():
         if not isinstance(groups, list):
-            return None
+            _fail("invalid-config", "a selected Codex hook event is malformed")
         commands = []
         for group in groups:
-            if not isinstance(group, dict) or not isinstance(group.get("hooks"), list):
-                return None
-            for hook in group["hooks"]:
-                command = hook.get("command") if isinstance(hook, dict) else None
-                if isinstance(command, str):
-                    commands.append(command)
-        found[str(event)] = commands
+            entries = _group_hooks(group)
+            if entries is None:
+                _fail("invalid-config", "a selected Codex hook group is malformed")
+            commands.extend(item["command"] for item in entries)
+        found[event] = commands
     return found
 
 
@@ -977,14 +1015,10 @@ def _strict_groups(groups: Any) -> list[str] | None:
         return None
     commands = []
     for group in groups:
-        if not isinstance(group, dict) or not isinstance(group.get("hooks"), list) or not group["hooks"]:
+        hooks = _group_hooks(group)
+        if hooks is None:
             return None
-        if set(group) - {"matcher", "hooks"}:
-            return None
-        for hook in group["hooks"]:
-            if not isinstance(hook, dict) or not isinstance(hook.get("command"), str):
-                return None
-            commands.append(hook["command"])
+        commands.extend(hook["command"] for hook in hooks)
     if len(commands) != len(set(commands)):
         return None
     return commands
@@ -993,8 +1027,11 @@ def _strict_groups(groups: Any) -> list[str] | None:
 def _retained_hook_groups(groups: list, commands: set[str]) -> list[dict[str, Any]]:
     retained = []
     for group in groups:
-        hooks = [hook for hook in group["hooks"] if hook["command"] in commands]
-        if hooks:
+        original = group.get("hooks", [])
+        hooks = [hook for hook in original if hook["command"] in commands]
+        if not original:
+            retained.append(group)
+        elif hooks:
             retained.append({**group, "hooks": hooks})
     return retained
 
@@ -1010,7 +1047,7 @@ def _attribute_hooks(before: bytes | None, after: bytes) -> tuple[list[tuple[str
         owned = []
         for event, groups in hooks.items():
             commands = _strict_groups(groups)
-            if not commands:
+            if not commands or any(not group.get("hooks") for group in groups):
                 return None
             for command in commands:
                 identity = _hook_identity(command)
@@ -1180,27 +1217,49 @@ def _proof_for(proofs: Sequence[Mapping[str, Any]], target: str) -> Mapping[str,
     matched = [item for item in proofs if item["target"] == target]
     if not matched:
         return None
-    if len({item["after"]["checksum"] for item in matched}) != 1:
+    first = matched[0]
+    if any(any(proof[key] != first[key] for key in ("role", "before", "after", "operation")) for proof in matched[1:]):
         return {"conflict": True}
-    return matched[-1]
+    if len({proof["launcher"] for proof in matched if proof.get("launcher")}) > 1:
+        return {"conflict": True}
+    # Use the stricter binding when equivalent evidence omits a launcher.
+    return min(matched, key=lambda proof: (not proof.get("launcher"), proof["kind"], proof["paths"]))
+
+
+def _launcher_paths(launcher: str) -> set[Path]:
+    """Alternate spellings for dependency reporting only; never a file authority."""
+    if not _abs(launcher) or "\x00" in launcher:
+        return set()
+    paths = {Path(os.path.normpath(launcher))}
+    try:
+        paths.add(Path(os.path.realpath(launcher)))
+    except (OSError, ValueError, RuntimeError):
+        pass
+    return paths
+
+
+def _retiring_paths(launchers: Sequence[str]) -> set[Path]:
+    return {path for launcher in launchers for path in _launcher_paths(launcher)}
 
 
 def _launcher_token(values: Sequence[Any], retiring: set[Path], *, cwd: Any = None) -> str | None:
     for value in values:
-        if not isinstance(value, str) or not value:
+        if not isinstance(value, str) or not value or "\x00" in value:
             continue
         if not _abs(value):
             if not _abs(cwd):
                 continue
             value = os.path.join(cwd, value)
+        if _points_at_retiring(value, retiring):
+            return value
         path = Path(os.path.normpath(value))
-        if path in retiring or (Path(path.name) == Path(_LAUNCHER_NAME) and _presence(str(path)) == "absent"):
+        if Path(path.name) == Path(_LAUNCHER_NAME) and _presence(str(path)) == "absent":
             return str(path)
     return None
 
 
 def _points_at_retiring(launcher: str, retiring: set[Path]) -> bool:
-    return bool(launcher) and Path(os.path.normpath(launcher)) in retiring
+    return bool(retiring and _launcher_paths(launcher) & retiring)
 
 
 def _watch(raw: bytes, role: str, retiring: set[Path]) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
@@ -1210,7 +1269,7 @@ def _watch(raw: bytes, role: str, retiring: set[Path]) -> tuple[list[tuple[str, 
     if role == "agents-fence":
         return recognized, pointed
     if role == "codex-hooks":
-        commands = _hook_commands(_json_document(raw)) or {}
+        commands = _hook_commands(_json_document(raw))
         for event, values in commands.items():
             for command in values:
                 identity = _hook_identity(command)
@@ -1250,19 +1309,6 @@ def _host_role(candidate: Mapping[str, Any]) -> str:
     if role == "codex-mcp" or candidate.get("format") == "toml":
         return "codex-mcp"
     return "omp-mcp"
-
-
-def _fixed_names(raw: bytes, role: str) -> set[str]:
-    if role not in {"omp-mcp", "codex-mcp"}:
-        return set()
-    omp = role == "omp-mcp"
-    document = _toml_document(raw) if role == "codex-mcp" else _json_document(raw)
-    found = set()
-    for key, entry in _servers(document, omp=omp).items():
-        if isinstance(key, str) and key.startswith(f"{_GLOBAL_KEY}-") and isinstance(entry, Mapping):
-            if _mcp_launcher(key, _plain(entry), omp=omp):
-                found.add(key)
-    return found
 
 
 def _json_drop(raw: bytes, table: str, keys: Sequence[str]) -> bytes | None:
@@ -1318,18 +1364,34 @@ def _selective_remove(live: bytes, role: str, keys: Sequence[str]) -> bytes | No
         return _json_drop(live, "mcpServers", keys)
     if role == "codex-mcp":
         return _toml_drop(live, _table_key(_toml_document(live), omp=False), keys)
-    if role == "codex-hooks":
-        return _json_drop(live, "hooks", keys)
     return None
 
 
-def _safe_retired(original: bytes, live: bytes, role: str, keys: Sequence[str]) -> bytes | None:
-    if role == "agents-fence" or not (_fixed_names(original, role) - _fixed_names(live, role)):
+def _safe_retired(
+    original: bytes, live: bytes, role: str, keys: Sequence[str], retiring: set[Path],
+) -> bytes | None:
+    if role == "agents-fence":
         return original
-    rendered = _selective_remove(live, role, keys)
-    if rendered is None or _fixed_names(rendered, role) - _fixed_names(live, role):
+    recognized_live, _ = _watch(live, role, retiring)
+    live_entries = set(recognized_live)
+
+    def safe(rendered: bytes) -> bool:
+        recognized, pointed = _watch(rendered, role, retiring)
+        return not (pointed or set(recognized) - live_entries or any(
+            entry in keys or _points_at_retiring(launcher, retiring) or _presence(launcher) == "absent"
+            for entry, launcher in recognized
+        ))
+
+    if safe(original):
+        return original
+    if role not in {"omp-mcp", "codex-mcp"}:
         return None
-    return rendered
+    document = _json_document(original) if role == "omp-mcp" else _toml_document(original)
+    if any(key in _servers(document, omp=role == "omp-mcp") for key in keys):
+        # Removing a replacement would discard a prior entry, not just the owned addition.
+        return None
+    rendered = _selective_remove(live, role, keys)
+    return rendered if rendered is not None and rendered != live and safe(rendered) else None
 
 
 def _retired_from_candidate(original: bytes, live: bytes, candidate: Mapping[str, Any]) -> bytes:
@@ -1343,9 +1405,12 @@ def _retired_from_candidate(original: bytes, live: bytes, candidate: Mapping[str
     if not attributed or attributed[1]:
         _fail("ownership-conflict", "live bytes are not an attributable edit of the retained original")
     keys = [item.get("entry") for item in candidate.get("entries") or [] if isinstance(item, Mapping)]
-    rendered = _safe_retired(original, live, role, [key for key in keys if isinstance(key, str)])
+    if set(keys) != {entry for entry, _launcher in attributed[0]}:
+        _fail("binding-violation", "retirement candidate entries differ from the proved changes")
+    retiring = _retiring_paths(candidate.get("retiring_launchers", []))
+    rendered = _safe_retired(original, live, role, keys, retiring)
     if rendered is None:
-        _fail("unsupported-operation", "retirement would resurrect a fixed-root entry")
+        _fail("unsupported-operation", "retirement would leave or restore an older launcher dependency")
     return rendered
 
 
@@ -1384,9 +1449,11 @@ def _classify_file(
     if proof and not proof.get("conflict") and proof.get("before", {}).get("type") == "absent" and not created_only:
         proven = False
     file_safe = None
+    replay_blocked = False
     if proven and original is not None and not created_only:
-        file_safe = _safe_retired(original, raw, role, [entry for entry, _launcher in entries])
+        file_safe = _safe_retired(original, raw, role, [entry for entry, _launcher in entries], retiring)
         if file_safe is None:
+            replay_blocked = True
             proven = False
     recognized_live, pointed = _watch(raw, role, retiring)
     shown = {entry: launcher for entry, launcher in recognized_live}
@@ -1425,7 +1492,9 @@ def _classify_file(
         elif this_write:
             status, reason = "proven", "the retained original shows this entry changed"
         elif proof and proof.get("conflict"):
-            status, reason = "not-verified", "the retained original does not match the recorded before state"
+            status, reason = "not-verified", "retirement evidence disagrees or does not match the retained original"
+        elif replay_blocked:
+            status, reason = "unproven", "retirement would leave or restore an older launcher dependency"
         else:
             status, reason = "unproven", "no attributable managed change was proven"
         if this_write and not whole_file_writable:
@@ -1433,10 +1502,6 @@ def _classify_file(
         if this_write and whole_file_writable and os.name == "nt" and acl_digest is None:
             reason = "the Windows permissions could not be verified"
         action = "remove-file" if this_write and created_only else "edit" if this_write else None
-        if action == "edit" and file_safe is None:
-            this_write = False
-            action = None
-            status, reason = "unproven", "retirement would not preserve unrelated bytes"
         desired = {"type": "absent", "checksum": None} if action == "remove-file" else (
             {"type": "file", "checksum": _sha(file_safe)} if action == "edit" and file_safe is not None else None
         )
@@ -1517,17 +1582,22 @@ def inspect_retirement(
         vault = _files()["require_private_directory"](vault)
         _overlap(vault, parsed)
     proofs, descriptor = _load_evidence(evidence, parsed, vault)
-    retiring = {Path(os.path.normpath(path)) for path in parsed["retiring_launchers"]}
+    retiring = _retiring_paths(parsed["retiring_launchers"])
     items: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
     for config in parsed["configs"]:
         raw = _inspect_path(config["path"], errors)
         if raw is None:
             continue
-        items.extend(_classify_file(
-            config["path"], config["role"], raw, _proof_for(proofs, str(config["path"])),
-            retiring, errors,
-        ))
+        try:
+            items.extend(_classify_file(
+                config["path"], config["role"], raw, _proof_for(proofs, str(config["path"])),
+                retiring, errors,
+            ))
+        except ContractError as error:
+            if error.code != "invalid-config":
+                raise
+            errors.append({"path": str(config["path"]), "code": error.code, "reason": error.message})
     for root in parsed["projects"]:
         agents = root / "AGENTS.md"
         raw = _inspect_path(agents, errors)
@@ -1548,8 +1618,12 @@ def inspect_retirement(
     return report
 
 
-def _candidate(group: Sequence[Mapping[str, Any]]) -> dict[str, Any] | None:
+def _candidate(group: Sequence[Mapping[str, Any]], launchers: Sequence[str]) -> dict[str, Any] | None:
     first = group[0]
+    if any(any(item.get(key) != first.get(key) for key in (
+        "action", "before", "desired", "mode", "backup_ref",
+    )) for item in group[1:]):
+        return None
     path = Path(str(first["path"]))
     if not isinstance(first.get("mode"), str) or _mode(path) != first.get("mode"):
         _fail("state-conflict", "captured mode does not match the live file")
@@ -1557,7 +1631,7 @@ def _candidate(group: Sequence[Mapping[str, Any]]) -> dict[str, Any] | None:
         return None
     acl_digest = first.get("windows_acl_digest")
     if os.name == "nt":
-        if not _valid_windows_digest(acl_digest) or any(item.get("windows_acl_digest") != acl_digest for item in group):
+        if not _is_sha256(acl_digest) or any(item.get("windows_acl_digest") != acl_digest for item in group):
             return None
         try:
             capture_windows_permissions(path, acl_digest)
@@ -1585,6 +1659,7 @@ def _candidate(group: Sequence[Mapping[str, Any]]) -> dict[str, Any] | None:
         "historical_mode": "unknown",
         "mode": first.get("mode"),
         **({"windows_acl_digest": acl_digest} if os.name == "nt" else {}),
+        **({"retiring_launchers": list(launchers)} if launchers else {}),
         "before": first.get("before"),
         "desired": first.get("desired"),
         "recorded_after": first.get("recorded_after"),
@@ -1615,7 +1690,7 @@ def render_candidates(report: Mapping[str, Any], *, purpose: str) -> dict[str, A
         if not all(item.get("write_authority") is True for item in group):
             preserved.extend(group)
             continue
-        candidate = _candidate(group)
+        candidate = _candidate(group, report.get("retiring_launchers") or [])
         if candidate is None:
             drifted = True
             preserved.extend(group)
@@ -1787,32 +1862,24 @@ def backup_candidate(
     return backup
 
 
-def apply_candidate(
-    candidate: Mapping[str, Any],
-    *,
-    scope: Path,
-    vault: Path,
-    expected: Mapping[str, Any],
-    receipt_path: Path,
-    backup_path: Path | None = None,
-) -> dict[str, Any]:
-    """Backup, then restore the retained original or remove a created file."""
-    if candidate.get("write_authority") is not True or candidate.get("target") not in {None, candidate.get("path")}:
-        _fail("ownership-conflict", "retirement apply requires write authority")
-    files = _files()
-    scope = _as_path(scope, "scope")
-    vault = files["require_private_directory"](vault)
-    target = _as_path(candidate.get("path"), "target")
-    receipt = _as_path(receipt_path, "receipt")
-    if _walk(scope) != "other" or not target.is_relative_to(scope) or receipt == vault or not receipt.is_relative_to(vault):
-        _fail("scope-violation", "retirement target is outside its scope")
+def _target_scope(target: Path, scope: Path, vault: Path) -> None:
+    if (
+        target == scope or not target.is_relative_to(scope)
+        or _walk(scope) != "other" or not scope.is_dir() or _alias(scope)
+        or any(part in {".", ".."} for part in target.parts)
+    ):
+        _fail("scope-violation", "retirement target is outside its canonical scope")
     if target.is_relative_to(vault) or vault.is_relative_to(target):
         _fail("scope-conflict", "the retirement target overlaps the private vault")
-    receipt_kind = _walk(receipt)
-    if receipt_kind not in {"absent", "file"} or _alias(receipt):
-        _fail("scope-conflict", "retirement receipt must be a canonical file inside the vault")
-    if os.name == "nt":
-        files["require_private_directory"](receipt.parent)
+
+
+def _candidate_binding(
+    candidate: Mapping[str, Any], target: Path, scope: Path, vault: Path,
+    expected: Mapping[str, Any], receipt: Path, backup_path: Path | None, plan_id: str,
+) -> dict[str, Any]:
+    if candidate.get("write_authority") is not True or candidate.get("target") not in {None, candidate.get("path")}:
+        _fail("ownership-conflict", "retirement apply requires write authority")
+    _target_scope(target, scope, vault)
     state, mode = _expected_file(expected)
     if candidate.get("before") != state or candidate.get("mode") != mode:
         _fail("state-conflict", "expected state does not match the captured candidate")
@@ -1825,93 +1892,292 @@ def apply_candidate(
     if action not in {"remove-file", "edit"}:
         _fail("unsupported-operation", "retirement candidate action is not recognized")
     desired = _state(candidate.get("desired"))
-    if desired is None or desired["type"] != ("absent" if action == "remove-file" else "file"):
+    if desired is None or desired == state or desired["type"] != ("absent" if action == "remove-file" else "file"):
         _fail("binding-violation", "retirement desired state does not match its action")
-    if receipt_kind == "file":
-        previous = _sealed(_strict_json(_read_bytes(receipt)), "receipt_id")
-        if (
-            previous.get("schema") != RECEIPT_SCHEMA
-            or previous.get("candidate_id") != candidate.get("id")
-            or previous.get("target") != str(target)
-            or previous.get("before") != state
-            or previous.get("mode_before") != mode
-            or previous.get("after") != desired
-            or previous.get("action") != action
-            or (os.name == "nt" and previous.get("windows_acl_digest") != acl_digest)
-            or not _matches_after(target, previous)
-        ):
-            _fail("state-conflict", "an existing retirement receipt does not match the live target")
-        _assert_backup(previous.get("backup_ref"), previous.get("before"), previous.get("mode_before"), vault, target)
-        if os.name == "nt":
-            retained_windows_permissions(previous["backup_ref"], acl_digest, vault=vault)
-        return _apply_row(candidate, previous, receipt, writes=0, result="skipped-complete")
-    if _walk(target) != "file" or _snapshot(target) != state or _mode(target) != mode:
-        _fail("state-conflict", "captured bytes or mode changed since planning")
+    if not _is_sha256(plan_id):
+        _fail("binding-violation", "retirement requires a sealed plan identifier")
     if backup_path is None:
-        backup = backup_candidate(
-            candidate, destination=vault / f"retirement-backup-{candidate['id'][:32]}", vault=vault,
-        )
-    else:
-        backup = {"path": str(backup_path), "state": state}
-        _assert_backup(backup, state, mode, vault, target)
-    native_options: dict[str, Any] = {}
-    if os.name == "nt":
-        retained = retained_windows_permissions(backup, acl_digest, vault=vault)
-        native_options["expected_windows_digest"] = acl_digest
-        if action == "remove-file":
-            native_options["expected_windows_mode"] = int(mode, 8)
-        else:
-            native_options.update(windows_permissions=retained, windows_mode=int(mode, 8))
-        if _mode(target) != mode:
-            _fail("state-conflict", "captured mode changed before retirement")
-    if action == "remove-file":
-        files["remove_reference"](target, state, scope=scope, **native_options)
-        after = {"type": "absent", "checksum": None}
-        mode_after = None
-    else:
-        rendered = render_candidate_bytes(_read_bytes(target), candidate, vault=vault)
-        files["write_file"](target, rendered, state, scope=scope, **native_options)
-        after = _snapshot(target)
-        mode_after = _mode(target)
-        if after != desired or mode_after != mode:
-            _fail("state-conflict", "retirement did not preserve its intended bytes and captured mode")
-        if os.name == "nt":
-            capture_windows_permissions(target, acl_digest)
-    body = {
-        "schema": RECEIPT_SCHEMA,
+        suffix = _digest([plan_id, str(target), state, mode, acl_digest])[:32]
+        backup_path = vault / f"retirement-backup-{suffix}"
+    backup_path = _as_path(backup_path, "backup")
+    if backup_path == vault or not backup_path.is_relative_to(vault):
+        _fail("scope-conflict", "retirement backup is outside the private vault")
+    return {
+        "plan_id": plan_id,
         "candidate_id": candidate["id"],
+        "candidate_digest": _digest(dict(candidate)),
+        "scope": str(scope),
         "target": str(target),
+        "receipt_path": str(receipt),
         "before": state,
         "mode_before": mode,
+        "after": desired,
+        "mode_after": None if action == "remove-file" else mode,
         "historical_mode": "unknown",
         "mode_scope": "lstat-imode",
-        "after": after,
-        "mode_after": mode_after,
         **({
             "windows_acl_digest": acl_digest,
             "windows_acl_digest_after": None if action == "remove-file" else acl_digest,
         } if os.name == "nt" else {}),
-        "backup_ref": backup,
+        "backup_ref": {"path": str(backup_path), "state": state},
         "action": action,
+    }
+
+
+def _intent_path(receipt: Path) -> Path:
+    return receipt.with_name(receipt.name + ".intent")
+
+
+def _optional_document(path: Path, vault: Path) -> dict[str, Any] | None:
+    if path == vault or not path.is_relative_to(vault):
+        _fail("scope-conflict", "retirement journal is outside the private vault")
+    kind = _walk(path)
+    if kind not in {"file", "absent"} or _alias(path):
+        _fail("scope-conflict", "retirement journal is not a canonical file inside the vault")
+    if kind == "absent":
+        return None
+    if os.name == "posix":
+        _private_parents(path, vault)
+        info = path.lstat()
+        if info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) & 0o022:
+            _fail("privacy-unproven", "retirement journal cannot be written by other users")
+    document = _evidence_document(path, vault)
+    if not isinstance(document, dict):
+        _fail("binding-violation", "retirement journal is not a sealed document")
+    return document
+
+
+def _file_identity(path: Path) -> list[int] | None:
+    if _walk(path) != "file" or _alias(path):
+        return None
+    try:
+        info = path.lstat()
+    except OSError:
+        return None
+    if not stat.S_ISREG(info.st_mode) or _is_reparse(info) or info.st_nlink != 1 or not info.st_ino:
+        return None
+    return [info.st_dev, info.st_ino, info.st_mtime_ns, info.st_ctime_ns]
+
+
+def _record(document: Mapping[str, Any], key: str) -> dict[str, Any]:
+    return {"schema_version": 1, "payload": document, key: _digest(document)}
+
+
+def _completion_body(intent: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": RECEIPT_SCHEMA,
+        **intent["transition"],
+        "intent_id": _digest(intent),
         "writes": 1,
     }
-    files["save_document"](
-        receipt,
-        {"schema_version": 1, "payload": body, "receipt_id": _digest(body)},
-        private_root=vault,
+
+
+def _journal(
+    receipt: Path, vault: Path, embedded: Mapping[str, Any] | None = None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, bool]:
+    intended = _optional_document(_intent_path(receipt), vault)
+    intent = None
+    if intended is not None:
+        intent = _sealed(intended, "intent_id")
+        if (
+            set(intent) != {"schema", "transition", "identity_before"}
+            or intent["schema"] != _INTENT_SCHEMA
+            or not isinstance(intent["transition"], dict)
+            or intent["transition"].get("receipt_path") != str(receipt)
+            or not isinstance(intent["identity_before"], list)
+            or len(intent["identity_before"]) != 4
+            or any(type(value) is not int for value in intent["identity_before"])
+        ):
+            _fail("binding-violation", "retirement intent is not bound to this receipt")
+    saved = _optional_document(receipt, vault)
+    if saved is not None and embedded is not None and not _same_value(saved, embedded):
+        _fail("binding-violation", "saved retirement receipt differs from its recorded completion")
+    document = saved if saved is not None else embedded
+    if document is None:
+        return intent, None, False
+    completed = _sealed(document, "receipt_id")
+    if (
+        completed.get("schema") != RECEIPT_SCHEMA
+        or type(completed.get("writes")) is not int or completed["writes"] != 1
+        or (intent is not None and not _same_value(completed, _completion_body(intent)))
+        or (intent is None and (embedded is not None or "plan_id" in completed or "intent_id" in completed))
+    ):
+        _fail("binding-violation", "retirement receipt does not bind an executed transition")
+    return intent, completed, saved is not None
+
+
+def _original_matches(target: Path, binding: Mapping[str, Any], identity: list[int] | None) -> bool:
+    try:
+        if identity is None or _file_identity(target) != identity:
+            return False
+        if _snapshot(target) != binding["before"] or _mode(target) != binding["mode_before"]:
+            return False
+        if os.name == "nt":
+            capture_windows_permissions(target, binding["windows_acl_digest"])
+        return _file_identity(target) == identity
+    except (ContractError, OSError):
+        return False
+
+
+def _interrupted(receipt: Path) -> None:
+    raise ContractError(
+        "retirement-interrupted",
+        "retirement intent has no proven completion and the original cannot be verified; preserve the target and backup",
+        exit_code=3, details={"writes": None, "retirement_intent": str(_intent_path(receipt))},
     )
-    return _apply_row(candidate, body, receipt, writes=1, result="retired")
+
+
+def _outcome(
+    target: Path, receipt: Path, vault: Path, binding: Mapping[str, Any],
+    intent: Mapping[str, Any] | None, completed: Mapping[str, Any] | None, saved: bool,
+) -> dict[str, Any] | None:
+    if intent is not None and not _same_value(intent["transition"], binding):
+        _fail("binding-violation", "retirement intent does not match the sealed plan resource")
+    if completed is not None and intent is None:
+        _fail("binding-violation", "retirement receipt has no intent bound to the sealed plan")
+    if completed is not None:
+        if not _matches_after(target, completed):
+            _fail("state-conflict", "an existing retirement receipt does not match the live target")
+        _verified_backup(completed, vault, target)
+        return _apply_row(
+            completed, receipt if saved else None, writes=0, result="skipped-complete",
+            completion=None if saved else _record(completed, "receipt_id"),
+        )
+    if intent is None:
+        return None
+    if not _original_matches(target, binding, intent["identity_before"]):
+        _interrupted(receipt)
+    _verified_backup(binding, vault, target)
+    return {"result": "retryable-before", "writes": 0}
+
+
+def reconcile_candidate(
+    candidate: Mapping[str, Any],
+    *,
+    scope: Path,
+    vault: Path,
+    expected: Mapping[str, Any],
+    receipt_path: Path,
+    backup_path: Path | None,
+    plan_id: str,
+    retirement_completion: Mapping[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Observe a confirmed plan's journal without adopting a matching user edit.
+
+    An embedded completion must come from an authenticated cumulative receipt.
+    """
+    vault = _files()["require_private_directory"](vault)
+    target = _as_path(candidate.get("path"), "target")
+    receipt = _as_path(receipt_path, "receipt")
+    binding = _candidate_binding(candidate, target, _as_path(scope, "scope"), vault, expected, receipt, backup_path, plan_id)
+    return _outcome(target, receipt, vault, binding, *_journal(receipt, vault, retirement_completion))
+
+
+
+def apply_candidate(
+    candidate: Mapping[str, Any],
+    *,
+    scope: Path,
+    vault: Path,
+    expected: Mapping[str, Any],
+    receipt_path: Path,
+    backup_path: Path | None = None,
+    plan_id: str,
+) -> dict[str, Any]:
+    """Retire one resource from a caller-validated plan behind an immutable intent."""
+    files = _files()
+    scope = _as_path(scope, "scope")
+    vault = files["require_private_directory"](vault)
+    target = _as_path(candidate.get("path"), "target")
+    receipt = _as_path(receipt_path, "receipt")
+    binding = _candidate_binding(candidate, target, scope, vault, expected, receipt, backup_path, plan_id)
+    intent, completed, saved = _journal(receipt, vault)
+    outcome = _outcome(target, receipt, vault, binding, intent, completed, saved)
+    if outcome is not None and outcome["result"] == "skipped-complete":
+        return outcome
+
+    identity = intent["identity_before"] if intent is not None else _file_identity(target)
+    if not _original_matches(target, binding, identity):
+        _fail("state-conflict", "captured bytes or mode changed since planning")
+    if intent is None and backup_path is None:
+        backup_candidate(candidate, destination=Path(binding["backup_ref"]["path"]), vault=vault)
+    retained = _verified_backup(binding, vault, target)
+    action, state, mode = (binding[key] for key in ("action", "before", "mode_before"))
+    rendered = None if action == "remove-file" else render_candidate_bytes(files["read_file"](target, state), candidate, vault=vault)
+    if intent is None:
+        _private_parents(receipt, vault)
+        intent = {"schema": _INTENT_SCHEMA, "transition": binding, "identity_before": identity}
+        intent_path = _intent_path(receipt)
+        intent_document = _record(intent, "intent_id")
+        files["save_document"](intent_path, intent_document, private_root=vault)
+        if not _same_value(_evidence_document(intent_path, vault), intent_document):
+            _fail("binding-violation", "saved retirement intent differs from the sealed transition")
+
+    native_options: dict[str, Any] = {}
+    if os.name == "nt":
+        native_options["expected_windows_digest"] = binding["windows_acl_digest"]
+        if action == "remove-file":
+            native_options["expected_windows_mode"] = int(mode, 8)
+        else:
+            native_options.update(windows_permissions=retained, windows_mode=int(mode, 8))
+    committed = False
+    try:
+        if not _original_matches(target, binding, identity):
+            _interrupted(receipt)
+        if action == "remove-file":
+            files["remove_reference"](target, state, scope=scope, **native_options)
+        else:
+            files["write_file"](target, rendered, state, scope=scope, **native_options)
+        committed = True
+        body = _completion_body(intent)
+        if not _matches_after(target, body):
+            _fail("state-conflict", "retirement did not preserve its intended bytes and permissions")
+    except (ContractError, OSError) as error:
+        writes = 1 if committed else 0 if _original_matches(target, binding, identity) else None
+        details = {**(getattr(error, "details", None) or {}), "writes": writes, "retirement_intent": str(_intent_path(receipt))}
+        if isinstance(error, ContractError):
+            error.details = details
+            raise
+        raise ContractError("operation-failed", "retirement could not prove its outcome", exit_code=3, details=details) from error
+
+    document = _record(body, "receipt_id")
+    try:
+        files["save_document"](receipt, document, private_root=vault)
+    except (ContractError, OSError):
+        # The caller can retain the measured completion in its private cumulative receipt.
+        # After a lost process, an intent and matching desired bytes alone are NOT enough.
+        pass
+    try:
+        if _same_value(_optional_document(receipt, vault), document):
+            return _apply_row(body, receipt, writes=1, result="retired")
+    except (ContractError, OSError):
+        pass
+    return _apply_row(body, None, writes=1, result="retired", completion=document)
 
 
 def _assert_backup(backup: Any, state: Any, mode: str | None, vault: Path, target: Path) -> None:
-    if _state(state) is None or not isinstance(backup, dict) or _state(backup.get("state")) != _state(state):
+    if (
+        _state(state) is None or state["type"] != "file"
+        or not isinstance(backup, dict) or set(backup) != {"path", "state"}
+        or backup["state"] != state
+    ):
         _fail("binding-violation", "retained original state does not match the recorded before state")
     path = _as_path(backup.get("path"), "backup")
     _contained(path, vault)
-    if _same_file(path, target) or _snapshot(path) != backup["state"]:
+    if _same_file(path, target):
         _fail("unsafe-path", "a retained original is a link to the live target")
+    if _snapshot(path) != state:
+        _fail("backup-conflict", "retained original bytes differ from the recorded state")
     if mode is not None and _mode(path) != mode:
         _fail("state-conflict", "retained original mode differs from the recorded mode")
+
+
+def _verified_backup(payload: Mapping[str, Any], vault: Path, target: Path) -> bytes | None:
+    backup = payload.get("backup_ref")
+    _assert_backup(backup, payload.get("before"), payload.get("mode_before"), vault, target)
+    if os.name == "nt":
+        return retained_windows_permissions(backup, payload.get("windows_acl_digest"), vault=vault)
+    return None
 
 
 def _matches_after(target: Path, payload: Mapping[str, Any]) -> bool:
@@ -1920,27 +2186,32 @@ def _matches_after(target: Path, payload: Mapping[str, Any]) -> bool:
         return False
     acl_digest = payload.get("windows_acl_digest")
     if os.name == "nt" and (
-        not _valid_windows_digest(acl_digest)
+        not _is_sha256(acl_digest)
         or "windows_acl_digest_after" not in payload
         or payload["windows_acl_digest_after"] != (None if after["type"] == "absent" else acl_digest)
         or payload.get("mode_after") != (None if after["type"] == "absent" else payload.get("mode_before"))
     ):
         return False
     if after["type"] == "absent":
-        return _walk(target) == "absent" and payload.get("mode_after") is None
-    if _walk(target) != "file" or _snapshot(target) != after or _mode(target) != payload.get("mode_after"):
+        return _walk(target) == "absent" and not _alias(target) and payload.get("mode_after") is None
+    identity = _file_identity(target)
+    if identity is None or _snapshot(target) != after or _mode(target) != payload.get("mode_after"):
         return False
     if os.name == "nt":
         capture_windows_permissions(target, acl_digest)
-    return True
+    return identity == _file_identity(target)
 
 
-def _apply_row(candidate: Mapping[str, Any], payload: Mapping[str, Any], receipt: Path, *, writes: int, result: str) -> dict[str, Any]:
+def _apply_row(
+    payload: Mapping[str, Any], receipt: Path | None, *, writes: int, result: str,
+    completion: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     return {
         "result": result,
         "writes": writes,
-        "receipt_path": str(receipt),
-        "target": str(candidate.get("path")),
+        "receipt_path": None if receipt is None else str(receipt),
+        **({"retirement_completion": completion} if completion is not None else {}),
+        "target": payload["target"],
         "before": payload.get("before"),
         "after": payload.get("after"),
         "mode_before": payload.get("mode_before"),
@@ -1959,6 +2230,9 @@ def restore_candidate(
     vault: Path,
     expected: Mapping[str, Any],
     target: Path,
+    plan_id: str | None = None,
+    backup_path: Path | None = None,
+    retirement_completion: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Restore only after the backup matches the receipt, and only that target."""
     files = _files()
@@ -1966,11 +2240,22 @@ def restore_candidate(
     scope = _as_path(scope, "scope")
     receipt = _as_path(receipt_path, "receipt")
     allowed = _as_path(target, "target")
-    if not receipt.is_relative_to(vault) or _walk(receipt) != "file":
+    _target_scope(allowed, scope, vault)
+    if retirement_completion is not None and plan_id is None:
+        _fail("binding-violation", "embedded retirement completion requires a sealed plan")
+    intent, payload, _saved = _journal(receipt, vault, retirement_completion)
+    if payload is None:
+        if intent is not None:
+            _interrupted(receipt)
         _fail("scope-conflict", "retirement receipt must be a regular file inside the vault")
-    payload = _sealed(_strict_json(_read_bytes(receipt)), "receipt_id")
-    if payload.get("schema") != RECEIPT_SCHEMA or payload.get("target") != str(allowed):
-        _fail("binding-violation", "retirement receipt target is not the allowed target")
+    backup = payload.get("backup_ref")
+    if (
+        payload.get("target") != str(allowed)
+        or (intent is not None and payload.get("scope") != str(scope))
+        or (plan_id is not None and payload.get("plan_id") != plan_id)
+        or (backup_path is not None and (not isinstance(backup, dict) or backup.get("path") != str(backup_path)))
+    ):
+        _fail("binding-violation", "retirement receipt is not bound to the allowed resource")
     if not isinstance(payload.get("mode_before"), str):
         _fail("state-conflict", "retirement recovery has no recorded mode")
     after = payload.get("after")
@@ -1983,11 +2268,10 @@ def restore_candidate(
         or (os.name == "nt" and expected.get("windows_acl_digest") != payload.get("windows_acl_digest_after"))
     ):
         _fail("state-conflict", "restore expected state does not match the receipt")
-    if _walk(scope) != "other" or not allowed.is_relative_to(scope) or not _matches_after(allowed, payload):
+    if not _matches_after(allowed, payload):
         _fail("state-conflict", "the current target differs from the recorded post-retirement state")
-    _assert_backup(payload.get("backup_ref"), payload.get("before"), payload["mode_before"], vault, allowed)
+    retained = _verified_backup(payload, vault, allowed)
     if os.name == "nt":
-        retained = retained_windows_permissions(payload["backup_ref"], payload.get("windows_acl_digest"), vault=vault)
         files["write_file"](
             allowed, files["read_file"](Path(payload["backup_ref"]["path"]), payload["before"]), after,
             scope=scope, windows_permissions=retained,
@@ -2033,19 +2317,24 @@ def merge_reports(reports: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             prior = seen.get(item["id"])
             if prior is not None and any(not _same_value(prior.get(key), item.get(key)) for key in (
                 "status", "write_authority", "path", "entry", "windows_acl_digest",
+                "mode", "before", "recorded_after", "desired", "action",
             )):
                 _fail("state-conflict", "retirement reports disagree on one entry")
+            if prior is not None and (prior.get("backup_ref") or {}).get("state") != (item.get("backup_ref") or {}).get("state"):
+                _fail("state-conflict", "retirement reports disagree on the retained original")
             if prior is None:
                 seen[item["id"]] = item
             elif item.get("at_risk") and not prior.get("at_risk"):
                 seen[item["id"]] = {**prior, "at_risk": True}
         merged["errors"].extend(report.get("errors") or [])
+        merged["retiring_launchers"].extend(report.get("retiring_launchers") or [])
         for entry in report.get("manual") or []:
             manual.setdefault(canonical_json_bytes(entry), entry)
         if report.get("evidence_descriptor"):
             descriptors.append(report["evidence_descriptor"])
     merged["items"] = sorted(seen.values(), key=lambda item: (item["path"], item["role"], item["entry"]))
     merged["manual"] = [manual[key] for key in sorted(manual)]
+    merged["retiring_launchers"] = sorted(set(merged["retiring_launchers"]))
     merged["evidence_descriptor"] = descriptors[0] if len(descriptors) == 1 else None
     if len(descriptors) > 1:
         merged["evidence_descriptors"] = descriptors

@@ -7,10 +7,11 @@ body, not a template and not the pause prefix.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
 import json
 import os
-import stat
 import sys
 import tempfile
 import unittest
@@ -20,7 +21,8 @@ from unittest import mock
 SCRIPTS = Path(__file__).resolve().parents[1] / "sbtd-workflow-onboard" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from onboard_contracts import ContractError, archived_graft_policy
+from onboard import main as onboard_main
+from onboard_contracts import ContractError, load_document, validate_declared_bindings
 from sbtd_deployment import (
     approved_agents_selector,
     execute_migration_deployment,
@@ -28,7 +30,7 @@ from sbtd_deployment import (
     load_deployment_context,
     reject_legacy_execution,
 )
-from sbtd_migration import apply_migration, cleanup_migration, runtime_versions
+from sbtd_migration import _result_index, apply_migration, cleanup_migration, runtime_versions
 from sbtd_migration_files import save_document, snapshot
 from sbtd_migration_plan import _check_followup_predecessor_outcomes, plan_migration
 from sbtd_migration_verify import verify_migration
@@ -36,6 +38,7 @@ from sbtd_migration_verify import verify_migration
 from tests.test_sbtd_codex_deployment import _isolated_home
 from tests.test_sbtd_migration_apply import legacy_project
 from tests.test_sbtd_migration_cleanup import _fake_vendor_adapter
+from tests.test_sbtd_migration_rc3_graft import build_completed_historical
 
 _GONE = (
     "verified_runtime",
@@ -108,33 +111,33 @@ class Rc3DeployCutoverTests(unittest.TestCase):
         for name in _GONE:
             self.assertFalse(hasattr(sbtd_deployment, name), name)
 
-    def test_sealed_graft_operation_rejects_before_write(self):
+    def test_public_init_refuses_a_bound_historical_deployment_before_writes(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            target = root / "AGENTS.md"
-            target.write_bytes(b"keep\n")
-            before = target.read_bytes()
-            mode = stat.S_IMODE(target.stat().st_mode)
-            backup = root / "backup"
-            with self.assertRaises(ContractError) as raised:
-                execute_resource(
-                    {
-                        "resource_id": "rid",
-                        "operation_id": "oid",
-                        "dependent_projects": [str(root)],
-                        "target": str(target),
-                        "selector": "graft-agents",
-                        "change": {"kind": "configure-graft"},
-                    },
-                    expected={"type": "file", "checksum": "unused"},
-                    root=root,
-                    private_root=root / "vault",
-                    backup_path=backup,
-                )
-            self.assertEqual(raised.exception.code, "unsupported-in-rc.3")
-            self.assertEqual(target.read_bytes(), before)
-            self.assertEqual(stat.S_IMODE(target.stat().st_mode), mode)
-            self.assertFalse(backup.exists())
+            base = Path(directory).resolve()
+            built = build_completed_historical(base, drift=False)
+            manifest = load_document(built["manifest_path"].read_bytes(), "manifest")
+            applied = load_document(built["apply_path"].read_bytes(), "apply_receipt")
+            validate_declared_bindings(manifest, {"apply_receipt": applied})
+            output = built["evidence"] / "new-deployment.json"
+            before = snapshot(base)
+            argv = [
+                str(SCRIPTS / "onboard.py"), "init-projects", "--yes", "--json",
+                "--projects-root", ",".join(map(str, built["roots"])),
+                "--migration-manifest", str(built["manifest_path"]),
+                "--migration-apply-receipt", str(built["apply_path"]),
+                "--deployment-evidence-out", str(output),
+            ]
+            with (
+                mock.patch.dict(os.environ, built["environment"]),
+                mock.patch.object(sys, "argv", argv),
+                contextlib.redirect_stdout(io.StringIO()) as stdout,
+            ):
+                self.assertEqual(onboard_main(), 2)
+            result = json.loads(stdout.getvalue())
+            self.assertEqual(result["status"], "blocked")
+            self.assertEqual(result["reason"], "a sealed plan still contains Graft operations; regenerate the plan")
+            self.assertIsNone(result["deploymentEvidence"])
+            self.assertEqual(snapshot(base), before)
 
     def test_reject_legacy_execution_does_not_touch_the_target(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -168,7 +171,7 @@ class Rc3DeployCutoverTests(unittest.TestCase):
             / "migration-paused-agents.txt"
         ).read_bytes()
         with tempfile.TemporaryDirectory() as directory:
-            base = Path(directory)
+            base = Path(directory).resolve()
             root = base / "project"
             vault = base / "vault"
             root.mkdir(mode=0o700)
@@ -256,7 +259,10 @@ class Rc3DeployCutoverTests(unittest.TestCase):
                 manifest_path, apply_path = batch.apply(batch.plan(deployment_mode="init"), "plan")
                 smoke = batch.evidence / "deployment-smoke"
                 digest = hashlib.sha256(str(batch.root).encode("utf-8")).hexdigest()
-                for output in (smoke, smoke / digest / "receipt.json", batch.codex / "AGENTS.md"):
+                for output in (
+                    smoke, smoke / "another-scope.json",
+                    smoke / digest / "receipt.json", batch.codex / "AGENTS.md",
+                ):
                     with self.subTest(output=output):
                         before = snapshot(base)
                         with self.assertRaises(ContractError) as failure:
@@ -344,50 +350,29 @@ class Rc3DeployCutoverTests(unittest.TestCase):
                 self.assertEqual(batch.agents.read_bytes(), batch.foreign)
                 self.assertEqual(snapshot(batch.home), home_before)
 
-    def test_readonly_followup_binds_predecessor_graft_and_mutation_rejects(self):
-        policy = archived_graft_policy()
-        operation = {
-            "phase": "deploy",
-            "target": "/tmp/project/graft",
-            "resource_id": "rid",
-            "selector": "whole-resource",
-            "change": {"kind": "build-graft", "source_ref": policy},
-        }
-        manifest = {
-            "payload": {
-                "projects": [
-                    {
-                        "root": "/tmp/project",
-                        "agents_no_touch": {"bound": True},
-                        "private_operations": [operation],
-                    }
-                ],
-                "shared_operations": [],
-            }
-        }
-        chain = [
-            (
-                manifest,
-                {
-                    "deploy": {
-                        "rid": {
-                            "status": "succeeded",
-                            "after": {"type": "directory", "checksum": "ab" * 32},
-                        }
-                    }
-                },
+    def test_historical_followup_still_requires_completed_predecessor_cleanup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            built = build_completed_historical(base, drift=False)
+            manifest = load_document(built["manifest_path"].read_bytes(), "manifest")
+            applied = load_document(built["apply_path"].read_bytes(), "apply_receipt")
+            deployment = load_document(built["deployment_path"].read_bytes(), "deployment_evidence")
+            validate_declared_bindings(
+                manifest, {"apply_receipt": applied, "deployment_evidence": deployment},
             )
-        ]
-        with self.assertRaises(ContractError) as raised:
-            _check_followup_predecessor_outcomes(chain, overwritten=())
-        self.assertEqual(raised.exception.code, "unsupported-in-rc.3")
-        outcomes = _check_followup_predecessor_outcomes(
-            chain, overwritten=(), bind_historical=True
-        )
-        self.assertEqual(
-            outcomes["/tmp/project/graft"]["type"],
-            "directory",
-        )
+            chain = [(manifest, {"apply": _result_index(applied), "deploy": _result_index(deployment)})]
+            unchanged = snapshot(base)
+            with self.assertRaises(ContractError) as raised:
+                _check_followup_predecessor_outcomes(chain, overwritten=())
+            self.assertEqual(raised.exception.code, "unsupported-in-rc.3")
+            with (
+                mock.patch("sbtd_migration._LINEAGE_PUBLIC_KEY", built["public"]),
+                mock.patch("sbtd_migration._LINEAGE_DOCUMENT", built["pair"]),
+                self.assertRaises(ContractError) as incomplete,
+            ):
+                _check_followup_predecessor_outcomes(chain, overwritten=(), bind_historical=True)
+            self.assertEqual(incomplete.exception.code, "followup-conflict")
+            self.assertEqual(snapshot(base), unchanged)
 
     def test_real_smoke_refs_are_on_disk_and_do_not_rewrite_the_seal(self):
         from sbtd_deployment_smoke import run_project_smoke

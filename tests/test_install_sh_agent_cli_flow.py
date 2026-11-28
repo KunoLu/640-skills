@@ -43,6 +43,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         self.env["FAKE_ONBOARD_CAPABILITY_LOG"] = str(self.capability_log_path)
         self.env["FAKE_PROJECT_ROOT"] = str(self.project_root)
         self.write_fake_python()
+        self.write_executable(self.bin_dir / "codex", '#!/bin/sh\n[ "$1 $2" = "mcp list" ]\n')
 
     def write_executable(self, path: Path, body: str) -> None:
         path.write_text(textwrap.dedent(body).lstrip(), encoding="utf-8")
@@ -174,7 +175,8 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 def build_parser():
                     parser = argparse.ArgumentParser()
                     modes = parser.add_subparsers(dest="mode", required=True)
-                    modes.add_parser("plan")
+                    modes.add_parser("plan").add_argument("--action", choices=("init", "reset"))
+                    modes.add_parser("reset")
                     return parser
 
                 if __name__ == "__main__":
@@ -522,16 +524,14 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             self.capability_log_path.read_text(encoding="utf-8"),
         )
 
-    def test_bash_plan_action_capability_is_limited_to_full_init_reset(self) -> None:
+    def test_project_only_rejects_pre_retirement_source_without_changing_workflow_forwarding(self) -> None:
         source = self.make_legacy_plan_action_source()
         completed = self.run_installer(projects_only=True, source_root=source)
 
-        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
-        self.assertIn("init-projects", self.modes())
-        self.assertFalse(self.capability_log_path.exists())
-
-        self.log_path.unlink()
-        self.args_log_path.unlink()
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertFalse(self.log_path.exists())
+        self.assertTrue(self.capability_log_path.is_file())
+        self.capability_log_path.unlink()
         completed = self.run_workflow_mode("migration", "--json", source_root=source)
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
@@ -1479,7 +1479,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             self.capability_log_path.read_text(encoding="utf-8"),
         )
 
-    def test_powershell_plan_action_capability_is_limited_to_full_init_reset(
+    def test_powershell_project_only_rejects_pre_retirement_source_before_workflow_forwarding(
         self,
     ) -> None:
         runtime, environment = self.powershell_fake_onboard_environment()
@@ -1488,12 +1488,10 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             runtime, environment, source_root=source, projects_only=True
         )
 
-        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
-        self.assertIn("init-projects", self.modes())
-        self.assertFalse(self.capability_log_path.exists())
-
-        self.log_path.unlink()
-        self.args_log_path.unlink()
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertFalse(self.log_path.exists())
+        self.assertTrue(self.capability_log_path.is_file())
+        self.capability_log_path.unlink()
         completed = subprocess.run(
             [
                 runtime,

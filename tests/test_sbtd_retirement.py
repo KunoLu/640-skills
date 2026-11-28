@@ -12,16 +12,19 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "sbtd-workflow-onboard" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from onboard_contracts import ContractError, canonical_json_bytes, operation_id, resource_id
-from sbtd_migration_files import require_private_directory, snapshot
+from sbtd_migration_files import require_private_directory, save_document, snapshot
 from sbtd_retirement import (
     apply_candidate,
+    backup_candidate,
     inspect_retirement,
     merge_reports,
+    reconcile_candidate,
     render_candidate_bytes,
     render_candidates,
     restore_candidate,
@@ -36,6 +39,14 @@ def _sha(raw: bytes) -> str:
 
 def _mode(path: Path) -> str:
     return f"{stat.S_IMODE(path.lstat().st_mode):04o}"
+
+
+def _seal(payload, key):
+    return {
+        "schema_version": 1,
+        "payload": payload,
+        key: _sha(canonical_json_bytes(payload)),
+    }
 
 
 def native_file_acl(path: Path, *, world_rights: str = "") -> str:
@@ -138,6 +149,18 @@ class RetirementProofTests(unittest.TestCase):
             "vault": str(self.vault),
             "retiring_launchers": [str(self.launcher)],
         }
+
+    def _execution(self, candidate, name):
+        return {
+            "scope": Path(candidate["path"]).parent,
+            "vault": self.vault,
+            "expected": {**candidate["before"], "mode": candidate["mode"],
+                         "windows_acl_digest": candidate.get("windows_acl_digest")},
+            "receipt_path": self.vault / f"{name}.json",
+            "plan_id": _sha(name.encode()),
+            "backup_path": self.vault / f"{name}.backup",
+        }
+
     def _bound_row(self, resource, *, result="succeeded", mutated=True, backup=None):
         after = resource["desired"]
         return {
@@ -208,6 +231,7 @@ class RetirementProofTests(unittest.TestCase):
             expected={**candidate["before"], "mode": candidate["mode"],
                       "windows_acl_digest": candidate.get("windows_acl_digest")},
             receipt_path=self.vault / "receipt.json",
+            plan_id=_sha(b"receipt plan"),
         )
         self.assertFalse(config.exists())
         again = apply_candidate(
@@ -215,6 +239,7 @@ class RetirementProofTests(unittest.TestCase):
             expected={**candidate["before"], "mode": candidate["mode"],
                       "windows_acl_digest": candidate.get("windows_acl_digest")},
             receipt_path=self.vault / "receipt.json",
+            plan_id=_sha(b"receipt plan"),
         )
         self.assertEqual(again["writes"], 0)
         backup = Path(again["backup_ref"]["path"])
@@ -228,6 +253,125 @@ class RetirementProofTests(unittest.TestCase):
                 expected={"type": "absent", "checksum": None, "mode": None}, target=config,
             )
         self.assertFalse(config.exists())
+
+    def test_later_plan_with_same_candidate_id_keeps_separate_backups(self):
+        config = self.home / "mcp.json"
+        retained = []
+        ids = set()
+        for index in (1, 2):
+            args = self._global()
+            args[-1] = str(self.home / f"cli-{index}.js")
+            raw = self._write(config, {"mcpServers": {"sbtd-graft": self._server(args)}})
+            evidence = self._evidence(_result(
+                str(config), "json", "graft-omp-mcp", {"type": "absent", "checksum": None}, snapshot(config),
+            ), name=f"history-{index}.json")
+            report = inspect_retirement(selections=self._select(config), evidence=evidence)
+            (candidate,) = render_candidates(report, purpose="reset")["candidates"]
+            ids.add(candidate["id"])
+            execution = self._execution(candidate, f"plan-{index}")
+            del execution["backup_path"]
+            outcome = apply_candidate(candidate, **execution)
+            self.assertEqual(outcome["writes"], 1)
+            self.assertFalse(config.exists())
+            retained.append((Path(outcome["backup_ref"]["path"]), raw))
+        self.assertEqual(len(ids), 1)
+        self.assertNotEqual(retained[0][0], retained[1][0])
+        for path, raw in retained:
+            self.assertEqual(path.read_bytes(), raw)
+
+    def test_receipt_save_failure_retains_a_measured_completion_for_rollback(self):
+        config = self.home / "mcp.json"
+        raw = self._write(config, {"mcpServers": {"sbtd-graft": self._server(self._global())}})
+        evidence = self._evidence(_result(
+            str(config), "json", "graft-omp-mcp", {"type": "absent", "checksum": None}, snapshot(config),
+        ))
+        report = inspect_retirement(selections=self._select(config), evidence=evidence)
+        (candidate,) = render_candidates(report, purpose="reset")["candidates"]
+        execution = self._execution(candidate, "retirement")
+        backup = backup_candidate(candidate, destination=execution["backup_path"], vault=self.vault)
+        receipt = execution["receipt_path"]
+        intent = receipt.with_name(receipt.name + ".intent")
+
+        def persist(path, document, **kwargs):
+            if path == receipt:
+                self.assertFalse(config.exists())
+                raise OSError("injected receipt write failure")
+            if path == intent:
+                self.assertEqual(config.read_bytes(), raw)
+            return save_document(path, document, **kwargs)
+
+        with patch("sbtd_migration_files.save_document", side_effect=persist):
+            outcome = apply_candidate(candidate, **execution)
+        self.assertEqual((outcome["writes"], outcome["receipt_path"]), (1, None))
+        self.assertEqual(outcome["backup_ref"], backup)
+        self.assertFalse(config.exists())
+        intended = json.loads(intent.read_bytes())["payload"]["transition"]
+        self.assertEqual(intended["plan_id"], execution["plan_id"])
+        self.assertEqual(intended["backup_ref"], backup)
+        self.assertEqual(intended["mode_before"], candidate["mode"])
+        self.assertEqual(intended["after"], {"type": "absent", "checksum": None})
+        if os.name == "nt":
+            self.assertEqual(intended["windows_acl_digest"], candidate["windows_acl_digest"])
+            self.assertIsNone(intended["windows_acl_digest_after"])
+        self.assertFalse(receipt.exists())
+
+        with self.assertRaises(ContractError) as interrupted:
+            reconcile_candidate(candidate, **execution)
+        self.assertEqual(interrupted.exception.code, "retirement-interrupted")
+        completion = outcome["retirement_completion"]
+        skipped = reconcile_candidate(candidate, **execution, retirement_completion=completion)
+        self.assertEqual((skipped["result"], skipped["writes"]), ("skipped-complete", 0))
+        restore = {
+            "scope": config.parent, "vault": self.vault, "target": config, "backup_path": execution["backup_path"],
+            "expected": {"type": "absent", "checksum": None, "mode": None},
+            "retirement_completion": completion,
+        }
+        with self.assertRaises(ContractError) as wrong_plan:
+            restore_candidate(receipt, **restore, plan_id=_sha(b"different plan"))
+        self.assertEqual(wrong_plan.exception.code, "binding-violation")
+        self.assertFalse(config.exists())
+        restore_candidate(receipt, **restore, plan_id=execution["plan_id"])
+        self.assertEqual(config.read_bytes(), raw)
+        self.assertEqual(_mode(config), candidate["mode"])
+
+    def test_intent_does_not_claim_a_users_matching_edit(self):
+        config = self.home / "mcp.json"
+        previous = {"theme": "dark"}
+        historic = self.vault / "historic.json"
+        old = self._write(historic, previous)
+        raw = self._write(config, {**previous, "mcpServers": {"sbtd-graft": self._server(self._global())}})
+        before = snapshot(historic)
+        evidence = self._evidence(_result(
+            str(config), "json", "graft-omp-mcp", before, snapshot(config),
+            {"path": str(historic), "state": before},
+        ))
+        report = inspect_retirement(selections=self._select(config), evidence=evidence)
+        (candidate,) = render_candidates(report, purpose="reset")["candidates"]
+        execution = self._execution(candidate, "interrupted")
+        backup_candidate(candidate, destination=execution["backup_path"], vault=self.vault)
+        with patch("sbtd_migration_files.write_file", side_effect=OSError("injected interruption")):
+            with self.assertRaises(ContractError) as error:
+                apply_candidate(candidate, **execution)
+        self.assertEqual(error.exception.details["writes"], 0)
+        self.assertEqual(config.read_bytes(), raw)
+        self.assertEqual(reconcile_candidate(candidate, **execution)["result"], "retryable-before")
+
+        config.write_bytes(old)
+        with self.assertRaises(ContractError) as conflict:
+            reconcile_candidate(candidate, **execution)
+        self.assertEqual(conflict.exception.code, "retirement-interrupted")
+        self.assertIsNone(conflict.exception.details["writes"])
+        self.assertFalse(execution["receipt_path"].exists())
+        with self.assertRaises(ContractError) as restore:
+            restore_candidate(
+                execution["receipt_path"], target=config, scope=config.parent, vault=self.vault,
+                plan_id=execution["plan_id"], backup_path=execution["backup_path"],
+                expected={**candidate["desired"], "mode": candidate["mode"],
+                          "windows_acl_digest": candidate.get("windows_acl_digest")},
+            )
+        self.assertEqual(restore.exception.code, "retirement-interrupted")
+        self.assertEqual(config.read_bytes(), old)
+        self.assertEqual(execution["backup_path"].read_bytes(), raw)
 
     @unittest.skipUnless(os.name == "nt", "Windows ACL semantics")
     def test_windows_remove_and_restore_preserves_native_descriptor(self):
@@ -249,10 +393,12 @@ class RetirementProofTests(unittest.TestCase):
         self.assertTrue(render_candidates(old_report, purpose="reset")["stop"])
         expected = {**candidate["before"], "mode": original_mode, "windows_acl_digest": candidate["windows_acl_digest"]}
         receipt = self.vault / "retirement.json"
+        plan_id = _sha(b"native retirement plan")
         with self.assertRaises(ContractError):
             apply_candidate(
                 candidate, scope=config.parent, vault=self.vault,
                 expected={**candidate["before"], "mode": original_mode}, receipt_path=receipt,
+                plan_id=plan_id,
             )
         changed_acl = native_file_acl(config, world_rights="ReadData")
         self.assertTrue(changed_acl != original_acl)
@@ -260,29 +406,41 @@ class RetirementProofTests(unittest.TestCase):
         self.assertEqual(config.read_bytes(), raw)
         self.assertTrue(render_candidates(report, purpose="reset")["stop"])
         with self.assertRaises(ContractError):
-            apply_candidate(candidate, scope=config.parent, vault=self.vault, expected=expected, receipt_path=receipt)
+            apply_candidate(
+                candidate, scope=config.parent, vault=self.vault, expected=expected,
+                receipt_path=receipt, plan_id=plan_id,
+            )
         self.assertTrue(config.is_file())
         self.assertTrue(native_file_acl(config, world_rights="ReadAttributes") == original_acl)
-        retired = apply_candidate(candidate, scope=config.parent, vault=self.vault, expected=expected, receipt_path=receipt)
+        retired = apply_candidate(
+            candidate, scope=config.parent, vault=self.vault, expected=expected,
+            receipt_path=receipt, plan_id=plan_id,
+        )
         self.assertFalse(config.exists())
         backup = Path(retired["backup_ref"]["path"])
         sidecar = backup.with_name(backup.name + ".windows-acl")
         self.assertTrue(sidecar.is_file())
         self.assertFalse(";;;WD)" in native_file_acl(backup))
         self.assertFalse(";;;WD)" in native_file_acl(sidecar))
-        previous = apply_candidate(candidate, scope=config.parent, vault=self.vault, expected=expected, receipt_path=receipt)
+        previous = apply_candidate(
+            candidate, scope=config.parent, vault=self.vault, expected=expected,
+            receipt_path=receipt, plan_id=plan_id,
+        )
         self.assertEqual(previous["result"], "skipped-complete")
         after = {"type": "absent", "checksum": None, "mode": None}
         old_receipt = self.vault / "mode-only-retirement.json"
         old_payload = json.loads(receipt.read_bytes())["payload"]
+        for key in ("plan_id", "candidate_digest", "scope", "receipt_path", "intent_id"):
+            del old_payload[key]
         del old_payload["windows_acl_digest"], old_payload["windows_acl_digest_after"]
         old_receipt.write_bytes(canonical_json_bytes({
             "schema_version": 1,
             "payload": old_payload,
             "receipt_id": _sha(canonical_json_bytes(old_payload)),
         }))
-        with self.assertRaises(ContractError):
+        with self.assertRaises(ContractError) as error:
             restore_candidate(old_receipt, scope=config.parent, vault=self.vault, expected=after, target=config)
+        self.assertEqual(error.exception.code, "state-conflict")
         self.assertFalse(config.exists())
         descriptor = sidecar.read_bytes()
         sidecar.write_bytes(b"not a security descriptor")
@@ -294,6 +452,33 @@ class RetirementProofTests(unittest.TestCase):
         self.assertEqual(config.read_bytes(), raw)
         self.assertEqual(_mode(config), original_mode)
         self.assertTrue(native_file_acl(config) == original_acl, "Windows owner, group and DACL changed")
+
+    @unittest.skipUnless(os.name == "nt", "Windows ACL semantics")
+    def test_windows_authority_documents_require_private_files_and_every_vault_parent(self):
+        first = require_private_directory(self.vault / "first", create=True)
+        second = require_private_directory(first / "second", create=True)
+        config = self.home / "mcp.json"
+        before = self.vault / "user-backup.json"
+        self._write(before, {"theme": "dark"})
+        native_file_acl(before, world_rights="ReadAttributes")
+        original = snapshot(before)
+        raw = self._write(config, {"theme": "dark", "mcpServers": {"sbtd-graft": self._server(self._global())}})
+        native_file_acl(config, world_rights="ReadAttributes")
+        result = _result(str(config), "json", "graft-omp-mcp", original, snapshot(config),
+                         {"path": str(before), "state": original})
+        nested = self._evidence(result, name="first/second/results.json")
+        separate = self._evidence(result, name="other-results.json")
+        self.assertEqual(Path(nested[0]["path"]).parent, second)
+        report = inspect_retirement(selections=self._select(config), evidence=nested)
+        self.assertTrue(report["items"][0]["write_authority"])
+
+        native_file_acl(first, world_rights="ReadAttributes")
+        native_file_acl(Path(separate[0]["path"]), world_rights="ReadAttributes")
+        for evidence in (nested, separate):
+            with self.subTest(evidence=evidence), self.assertRaises(ContractError) as error:
+                inspect_retirement(selections=self._select(config), evidence=evidence)
+            self.assertEqual(error.exception.code, "privacy-unproven")
+        self.assertEqual(config.read_bytes(), raw)
 
     def test_preexisting_same_shape_and_noop_are_not_claimed(self):
         config = self.home / "mcp.json"
@@ -312,6 +497,180 @@ class RetirementProofTests(unittest.TestCase):
         report = inspect_retirement(selections=self._select(config), evidence=evidence)
         self.assertFalse(any(item.get("write_authority") for item in report["items"]))
         self.assertEqual(config.read_bytes(), raw)
+
+    def test_same_post_state_with_conflicting_originals_is_not_verified_in_either_order(self):
+        config = self.home / "mcp.json"
+        raw = self._write(config, {"mcpServers": {"sbtd-graft": self._server(self._global())}})
+        before = self.vault / "prior.json"
+        self._write(before, {})
+        original = snapshot(before)
+        after = snapshot(config)
+        creation = self._evidence(_result(
+            str(config), "json", "graft-omp-mcp", {"type": "absent", "checksum": None}, after,
+        ), name="created.json")
+        replacement = self._evidence(_result(
+            str(config), "json", "graft-omp-mcp", original, after, {"path": str(before), "state": original},
+        ), name="changed.json")
+        self.assertEqual(render_candidates(
+            inspect_retirement(selections=self._select(config), evidence=creation), purpose="reset",
+        )["candidates"][0]["action"], "remove-file")
+        self.assertEqual(render_candidates(
+            inspect_retirement(selections=self._select(config), evidence=replacement), purpose="reset",
+        )["candidates"][0]["action"], "edit")
+        for evidence in (creation + replacement, replacement + creation):
+            report = inspect_retirement(selections=self._select(config), evidence=evidence)
+            (item,) = report["items"]
+            self.assertEqual(item["verification"], "not-verified")
+            self.assertFalse(item["write_authority"])
+            view = render_candidates(report, purpose="reset")
+            self.assertTrue(view["stop"])
+            self.assertEqual(view["candidates"], [])
+        self.assertEqual(config.read_bytes(), raw)
+
+    def test_current_state_deployment_observation_does_not_prove_a_write(self):
+        config = self.home / "mcp.json"
+        raw = self._write(config, {"mcpServers": {"sbtd-graft": self._server(self._global())}})
+        result = _result(str(config), "json", "graft-omp-mcp",
+                         {"type": "absent", "checksum": None}, snapshot(config))
+        manifest = _seal({"shared_operations": [{
+            "resource_id": result["resource_id"], "operation_id": result["operation_ids"][0],
+            "target": str(config), "selector": "graft-omp-mcp", "change": {"kind": "configure-graft"},
+        }], "projects": []}, "manifest_id")
+        manifest_file = self.vault / "manifest.json"
+        manifest_file.write_bytes(canonical_json_bytes(manifest))
+        historical = {"manifest_id": manifest["manifest_id"], "shared_results": [result], "projects": []}
+        observed = {**historical, "reconciliation": {"kind": "current-state", "historical_execution": "unknown"}}
+        for phase, payload in (("executed", historical), ("observed", observed)):
+            file = self.vault / f"{phase}.json"
+            file.write_bytes(canonical_json_bytes(_seal(payload, "deployment_id")))
+            evidence = [{"kind": "manifest-deployment", "manifest": str(manifest_file), "deployment": str(file)}]
+            report = inspect_retirement(selections=self._select(config), evidence=evidence)
+            (item,) = report["items"]
+            self.assertEqual(item["write_authority"], phase == "executed")
+        self.assertEqual(config.read_bytes(), raw)
+
+    def test_rollback_refuses_an_outside_backup_after_matching_the_post_state(self):
+        config = self.home / "mcp.json"
+        raw = self._write(config, {"mcpServers": {"sbtd-graft": self._server(self._global())}})
+        evidence = self._evidence(_result(
+            str(config), "json", "graft-omp-mcp", {"type": "absent", "checksum": None}, snapshot(config),
+        ))
+        report = inspect_retirement(selections=self._select(config), evidence=evidence)
+        (candidate,) = render_candidates(report, purpose="reset")["candidates"]
+        execution = self._execution(candidate, "real-retirement")
+        backup = backup_candidate(candidate, destination=execution["backup_path"], vault=self.vault)
+        outcome = apply_candidate(candidate, **execution)
+        self.assertFalse(config.exists())
+        outside = self.home / "original-outside-vault"
+        outside.write_bytes(raw)
+        outside.chmod(int(candidate["mode"], 8))
+        self.assertEqual(snapshot(outside), backup["state"])
+        legacy_payload = json.loads(Path(outcome["receipt_path"]).read_bytes())["payload"]
+        for key in ("plan_id", "candidate_digest", "scope", "receipt_path", "intent_id"):
+            del legacy_payload[key]
+        legacy_payload["backup_ref"]["path"] = str(outside)
+        moved_receipt = self.vault / "legacy-restore.json"
+        moved_receipt.write_bytes(canonical_json_bytes(_seal(legacy_payload, "receipt_id")))
+        after = {"type": "absent", "checksum": None, "mode": None}
+        with self.assertRaises(ContractError) as error:
+            restore_candidate(moved_receipt, scope=config.parent, vault=self.vault, expected=after, target=config)
+        self.assertEqual(error.exception.code, "scope-conflict")
+        self.assertFalse(config.exists())
+        self.assertEqual(outside.read_bytes(), raw)
+        restore_candidate(
+            execution["receipt_path"], scope=config.parent, vault=self.vault, expected=after, target=config,
+            plan_id=execution["plan_id"], backup_path=execution["backup_path"],
+        )
+        self.assertEqual(config.read_bytes(), raw)
+
+    def test_vault_overlap_is_refused(self):
+        config = self.home / "mcp.json"
+        evidence = self._evidence(_result(
+            str(config), "json", "graft-omp-mcp", {"type": "absent", "checksum": None},
+            {"type": "file", "checksum": _sha(b"not installed")},
+        ))
+        with self.assertRaises(ContractError) as error:
+            inspect_retirement(selections={
+                "host": "omp",
+                "configs": [{"role": "omp-mcp", "path": str(config)}],
+                "projects": [str(self.root)],
+                "vault": str(self.vault),
+                "retiring_launchers": [],
+            }, evidence=evidence)
+        self.assertEqual(error.exception.code, "scope-conflict")
+
+    def test_launcher_alias_is_reported_without_authorizing_a_config(self):
+        config = self.home / "mcp.json"
+        alias = self.home / "launcher-alias"
+        try:
+            alias.symlink_to(self.launcher)
+        except OSError as error:
+            if os.name == "nt" and error.winerror == 1314:
+                self.skipTest("the Windows test user cannot create symbolic links")
+            raise
+        raw = self._write(config, {"mcpServers": {"custom": {"command": str(alias)}}})
+        report = inspect_retirement(selections=self._select(config))
+        view = render_candidates(report, purpose="reset")
+        (item,) = view["blocked"]
+        self.assertEqual((item["entry"], item["launcher"]["path"]), ("custom", str(alias)))
+        self.assertFalse(item["recognized"])
+        self.assertFalse(item["write_authority"])
+        self.assertTrue(view["stop"])
+        self.assertEqual(view["candidates"], [])
+        self.assertEqual(config.read_bytes(), raw)
+
+    def test_replacement_cannot_restore_an_older_launcher_under_the_same_entry(self):
+        config = self.home / "mcp.json"
+        original_args = self._global()
+        original_args[-1] = str(self.home / "older-cli.js")
+        original = self.vault / "previous.json"
+        old = self._write(original, {"mcpServers": {"sbtd-graft": self._server(original_args)}})
+        raw = self._write(config, {"mcpServers": {"sbtd-graft": self._server(self._global())}})
+        before = snapshot(original)
+        evidence = self._evidence(_result(
+            str(config), "json", "graft-omp-mcp", before, snapshot(config),
+            {"path": str(original), "state": before},
+        ))
+        report = inspect_retirement(selections=self._select(config), evidence=evidence)
+        view = render_candidates(report, purpose="reset")
+        self.assertTrue(view["stop"])
+        self.assertEqual(view["candidates"], [])
+        self.assertIn("older launcher dependency", view["blocked"][0]["reason"])
+        self.assertEqual(config.read_bytes(), raw)
+        self.assertEqual(original.read_bytes(), old)
+
+    def test_matcher_only_group_preserves_detection_of_a_sibling_hook(self):
+        config = self.home / "hooks.json"
+        join = subprocess.list2cmdline if os.name == "nt" else shlex.join
+        command = join([sys.executable, "-E", "-s", str(self.launcher), "hook", "--root", str(self.home),
+                        "--node", str(self.node), "--entry", str(self.cli), "--event", "session-start"])
+        matcher = {"matcher": "startup"}
+        handler = {"hooks": [{"type": "command", "command": command}]}
+        raw = self._write(config, {"hooks": {"SessionStart": [matcher, handler]}})
+        selections = self._select(config, host="codex")
+        selections["configs"] = [{"role": "codex-hooks", "path": str(config)}]
+        view = render_candidates(inspect_retirement(selections=selections), purpose="reset")
+        (blocked,) = view["blocked"]
+        self.assertTrue(view["stop"])
+        self.assertEqual(blocked["launcher"]["path"], str(self.launcher))
+
+        original = self.vault / "hooks-backup.json"
+        old = self._write(original, {"hooks": {"SessionStart": [matcher]}})
+        before = snapshot(original)
+        evidence = self._evidence(_result(
+            str(config), "json", "graft-hooks", before, snapshot(config),
+            {"path": str(original), "state": before},
+        ))
+        report = inspect_retirement(selections=selections, evidence=evidence)
+        self.assertEqual(retirement_file_bytes(report=report, purpose="reset", target=str(config), before=raw), old)
+        for malformed in ({"hooks": None}, {"hooks": ["invalid"]}, {"matcher": 3}, {"hook": [handler]}):
+            unsafe = self._write(config, {"hooks": {"SessionStart": [malformed, handler]}})
+            with self.subTest(malformed=malformed):
+                report = inspect_retirement(selections=selections)
+                self.assertEqual(report["status"], "blocked")
+                self.assertEqual([(e["path"], e["code"]) for e in report["errors"]], [(str(config), "invalid-config")])
+                self.assertTrue(render_candidates(report, purpose="reset")["stop"])
+                self.assertEqual(config.read_bytes(), unsafe)
 
     def test_changed_fixed_root_restores_original_and_keeps_third_party(self):
         config = self.home / "mcp.json"
@@ -339,6 +698,7 @@ class RetirementProofTests(unittest.TestCase):
             expected={**candidate["before"], "mode": candidate["mode"],
                       "windows_acl_digest": candidate.get("windows_acl_digest")},
             receipt_path=self.vault / "fixed-receipt.json",
+            plan_id=_sha(b"fixed retirement plan"),
         )
         restored = json.loads(config.read_text())
         self.assertEqual(restored["mcpServers"], {"other": {"type": "stdio", "command": "keep"}})
@@ -482,42 +842,6 @@ class RetirementProofTests(unittest.TestCase):
             resource, self._bound_row(resource, result="reconciled", mutated=False),
         ))
         self.assertFalse(any(item.get("write_authority") for item in report["items"]))
-
-    def test_forged_plan_cannot_restore_and_vault_overlap_fails(self):
-        config = self.home / "mcp.json"
-        self._write(config, {"mcpServers": {}})
-        forged = self.vault / "forged.json"
-        payload = {
-            "schema": "sbtd-retirement-receipt/1",
-            "candidate_id": "forged",
-            "target": str(config),
-            "before": {"type": "file", "checksum": "ab" * 32},
-            "mode_before": "0640",
-            "after": {"type": "absent", "checksum": None},
-            "mode_after": None,
-            "backup_ref": {"path": str(self.home / "not-vault"), "state": {"type": "file", "checksum": "ab" * 32}},
-            "action": "remove-file",
-            "writes": 1,
-        }
-        from onboard_contracts import canonical_json_bytes
-        forged.write_bytes(json.dumps({
-            "schema_version": 1, "payload": payload,
-            "receipt_id": hashlib.sha256(canonical_json_bytes(payload)).hexdigest(),
-        }).encode())
-        with self.assertRaises(Exception):
-            restore_candidate(
-                forged, scope=config.parent, vault=self.vault,
-                expected={"type": "absent", "checksum": None, "mode": None}, target=config,
-            )
-        self.assertTrue(config.exists())
-        with self.assertRaises(Exception):
-            inspect_retirement(selections={
-                "host": "omp",
-                "configs": [{"role": "omp-mcp", "path": str(config)}],
-                "projects": [str(self.root)],
-                "vault": str(self.vault),
-                "retiring_launchers": [],
-            }, evidence=[{"kind": "operation-results", "path": str(forged)}])
 
     def test_fence_splice_preserves_project_body(self):
         project = self.home / "project"
@@ -705,6 +1029,7 @@ class RetirementProofTests(unittest.TestCase):
             expected={**candidate["before"], "mode": candidate["mode"],
                       "windows_acl_digest": candidate.get("windows_acl_digest")},
             receipt_path=self.vault / "toml-retirement.json",
+            plan_id=_sha(b"toml retirement plan"),
         )
         retired = config.read_text()
         self.assertIn(neighbors, retired)
@@ -753,9 +1078,12 @@ class RetirementProofTests(unittest.TestCase):
         config.write_bytes(raw)
         selections = self._select(config, host="codex")
         selections["configs"] = [{"role": "codex-mcp", "path": str(config)}]
-        with self.assertRaises(ContractError) as error:
-            inspect_retirement(selections=selections)
-        self.assertEqual(error.exception.code, "invalid-config")
+        report = inspect_retirement(selections=selections)
+        self.assertEqual(report["status"], "blocked")
+        self.assertEqual([(e["path"], e["code"]) for e in report["errors"]], [(str(config), "invalid-config")])
+        view = render_candidates(report, purpose="reset")
+        self.assertTrue(view["stop"])
+        self.assertEqual(view["candidates"], [])
         self.assertEqual(config.read_bytes(), raw)
 
     def test_nested_unowned_json_type_changes_block_attribution(self):

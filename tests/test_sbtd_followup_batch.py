@@ -1286,22 +1286,23 @@ class FollowupOperationTamperingTests(unittest.TestCase):
             def flip_mode(payload):
                 payload["deployment"]["mode"] = "init-projects"
 
-            def inject_hooks(payload):
-                from tests.onboard_contract_fixtures import legacy_graft_operation
+            def legacy_project_wiring(payload):
+                from tests.onboard_contract_fixtures import legacy_graft_operation, legacy_graft_versions
+                from tests.test_sbtd_migration_rc3_graft import RC2_ONBOARD
 
-                root = payload["projects"][0]["root"]
-                operation = legacy_graft_operation(
-                    target=str(Path(root) / "hooks.json"),
-                    owner_kind="json",
-                    selector="graft-hooks",
-                    kind="configure-graft",
-                    dependents=[root],
-                )
-                payload["shared_operations"].append(operation)
-                for project in payload["projects"]:
-                    project["shared_operation_ids"] = sorted(
-                        [*project["shared_operation_ids"], operation["operation_id"]]
-                    )
+                payload["tool_versions"] = legacy_graft_versions(RC2_ONBOARD)
+                project = payload["projects"][0]
+                root = Path(project["root"])
+                project["private_operations"].extend((
+                    legacy_graft_operation(
+                        target=str(root / "graft"), owner_kind="directory", selector="whole-resource",
+                        kind="build-graft", dependents=[str(root)],
+                    ),
+                    legacy_graft_operation(
+                        target=str(root / "AGENTS.md"), owner_kind="markdown", selector="graft-agents",
+                        kind="configure-graft", dependents=[str(root)], before=snapshot(root / "AGENTS.md"),
+                    ),
+                ))
 
             def flip_requirement(payload):
                 operation = next(
@@ -1318,7 +1319,6 @@ class FollowupOperationTamperingTests(unittest.TestCase):
             cases = [
                 ("platform", flip_platform, "semantic-violation"),
                 ("mode", flip_mode, "semantic-violation"),
-                ("hooks", inject_hooks, "semantic-violation"),
                 ("phase-after requirement", flip_requirement, "semantic-violation"),
             ]
             for name, mutate, code in cases:
@@ -1329,6 +1329,19 @@ class FollowupOperationTamperingTests(unittest.TestCase):
                 ):
                     validate_legacy_inputs(variant(mutate), _reader)
                 self.assertEqual(error.exception.code, code)
+
+            historical = variant(legacy_project_wiring)
+            sbtd_deployment.validate_archived_graft_declarations(historical["payload"])
+            historical_path = fixture.followup_evidence / "rc2-followup.json"
+            save_document(historical_path, historical, private_root=fixture.followup_evidence)
+            before = snapshot(fixture.base)
+            with (
+                mock.patch.dict(os.environ, fixture.environment),
+                self.assertRaises(ContractError) as failure,
+            ):
+                apply_migration(historical_path, confirmed=True, no_routing_approvals=True)
+            self.assertEqual(failure.exception.code, "unsupported-in-rc.3")
+            self.assertEqual(snapshot(fixture.base), before)
 
         with tempfile.TemporaryDirectory() as directory:
             fixture = FollowupMigration(Path(directory).resolve())

@@ -250,6 +250,58 @@ class HistoricalVerificationContractTests(unittest.TestCase):
         with self.assertRaisesRegex(contracts.ContractError, "byte verdict differs"):
             self.bind(self.payload)
 
+    def test_mixed_blocked_and_not_verified_use_same_envelope_priority(self):
+        self.payload["projects"][0]["status"] = "blocked"
+        self.payload["status"] = "blocked"
+        verification = contracts.seal_document("verification", self.payload)
+        summaries = [
+            {key: project[key] for key in ("root", "status", "reason", "nextStep")}
+            for project in self.payload["projects"]
+        ]
+        identifiers = {
+            "manifest_id": self.manifest["manifest_id"],
+            "verification_id": verification["verification_id"],
+        }
+        envelope = contracts.make_envelope(
+            "migration", "verify", "blocked", summaries, "Observation unavailable",
+            "Do not write.", verification, identifiers,
+        )
+        self.assertEqual([row["status"] for row in envelope["projects"]], ["blocked", "not-verified"])
+        with self.assertRaisesRegex(contracts.ContractError, "masks a failed or blocked project"):
+            contracts.make_envelope(
+                "migration", "verify", "not-verified", summaries, "Observation unavailable",
+                "Do not write.", verification, identifiers,
+            )
+
+    def test_archived_policy_binds_one_root_exact_relative_path_and_digest(self):
+        payload = copy.deepcopy(self.manifest["payload"])
+        operation = payload["projects"][0]["private_operations"][-1]
+        with tempfile.TemporaryDirectory() as directory:
+            package = Path(directory).resolve() / "former-package"
+            policy = operation["change"]["source_ref"]
+            policy["path"] = str(package / "assets/graft-build-policy.json")
+            operation["ownership"]["reference"] = copy.deepcopy(policy)
+            self.assertEqual(contracts.archived_graft_policy_for(payload), policy)
+
+            other = copy.deepcopy(operation)
+            payload["shared_operations"].append(other)
+            for wrong in (
+                str(package / "other/graft-build-policy.json"),
+                str(package.parent / "unrelated/assets/graft-build-policy.json"),
+            ):
+                wrong_ref = {**policy, "path": wrong}
+                other["change"]["source_ref"] = wrong_ref
+                other["ownership"]["reference"] = wrong_ref
+                with self.subTest(path=wrong), self.assertRaises(contracts.ContractError) as error:
+                    contracts.archived_graft_policy_for(payload)
+                self.assertEqual(error.exception.code, "ownership-conflict")
+            broken = {**policy, "state": fixtures.file_state(42)}
+            other["change"]["source_ref"] = broken
+            other["ownership"]["reference"] = broken
+            with self.assertRaises(contracts.ContractError) as error:
+                contracts.archived_graft_policy_for(payload)
+            self.assertEqual(error.exception.code, "ownership-conflict")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1313,6 +1313,24 @@ class WindowsRetirementDigestTests(unittest.TestCase):
 
 @unittest.skipUnless(os.name == "nt", "requires native Windows file security")
 class WindowsRetirementPermissionTests(unittest.TestCase):
+    def test_retirement_refuses_named_stream_without_modifying_either_stream(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            target = root / "selected.txt"
+            target.write_bytes(b"original")
+            descriptor = capture_windows_permissions(target)
+            before = snapshot(target)
+            alternate = Path(str(target) + ":fixture-note")
+            alternate.write_bytes(b"retain this metadata")
+            fingerprint = windows_permissions_digest(descriptor)
+            with self.assertRaises(ContractError):
+                write_file(target, b"replacement", before, scope=root,
+                           windows_permissions=descriptor, expected_windows_digest=fingerprint)
+            with self.assertRaises(ContractError):
+                remove_reference(target, before, scope=root, expected_windows_digest=fingerprint)
+            self.assertEqual(target.read_bytes(), b"original")
+            self.assertEqual(alternate.read_bytes(), b"retain this metadata")
+
     def test_publication_preserves_a_recreated_target_and_held_original(self):
         import sbtd_retirement_permissions as permissions
 
@@ -1334,11 +1352,12 @@ class WindowsRetirementPermissionTests(unittest.TestCase):
                     return
                 rename(handle, destination)
 
-            with mock.patch.object(permissions, "_rename_handle", side_effect=publish), self.assertRaises(RetainedObjectError):
+            with mock.patch.object(permissions, "_rename_handle", side_effect=publish), self.assertRaises(RetainedObjectError) as failure:
                 write_file(target, b"replacement", before, scope=root,
                            windows_permissions=descriptor, expected_windows_digest=windows_permissions_digest(descriptor))
             self.assertEqual(target.read_bytes(), b"new occupant")
             self.assertEqual(len(held), 1)
+            self.assertIn(str(held[0]), [ref["path"] for ref in failure.exception.retained_refs])
             self.assertEqual(held[0].read_bytes(), b"original")
             self.assertEqual(capture_windows_permissions(held[0]), descriptor)
 

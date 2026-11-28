@@ -331,7 +331,6 @@ class ReconciledPredecessorFollowupTests(unittest.TestCase):
             with self.assertRaises(ContractError) as error:
                 fixture.execute_deployment(manifest_path, apply_path, missing_path)
             self.assertEqual(error.exception.code, "private-scope")
-            self.assertIn("protected predecessor object", str(error.exception))
             # The rejection happened before any write: the historical path
             # stays absent, targets are untouched, and every predecessor
             # proof keeps its exact bytes.

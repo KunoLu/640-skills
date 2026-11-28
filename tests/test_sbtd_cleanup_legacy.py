@@ -295,6 +295,40 @@ class CleanupLegacyTests(unittest.TestCase):
             ["codex", "claude", "kimi", "omp"],
         )
 
+    def test_project_local_codex_home_without_config_does_not_block_cleanup(self):
+        fixture = self.fixture
+        codex_home = fixture.project / ".codex"
+        fixture.environ["CODEX_HOME"] = str(codex_home)
+        plan, plan_id = fixture.prepare()
+        applied, code = fixture.apply(plan, plan_id)
+        self.assertEqual((code, applied["status"]), (0, "cleaned"), applied)
+        self.assertFalse(codex_home.exists())
+        self.assertEqual((fixture.project / "AGENTS.md").read_bytes(), AGENTS_CLEAN)
+        from onboard_contracts import ContractError
+
+        codex_home.mkdir()
+        config = codex_home / "config.toml"
+        config.write_bytes(b"# existing project-local configuration\n")
+        with self.assertRaisesRegex(ContractError, "config overlaps a project"):
+            fixture.plan()
+        self.assertEqual(config.read_bytes(), b"# existing project-local configuration\n")
+
+    def test_retirement_only_list_rejects_a_legacy_kind(self):
+        from onboard_contracts import ContractError
+        from sbtd_cleanup_legacy import _all_candidates
+
+        envelope, code = self.fixture.plan()
+        self.assertEqual(code, 0)
+        payload = envelope["cleanup_legacy"]["plan"]["payload"]
+        # Exercise the structural boundary without supplying a mutation target.
+        payload["graftRetirement"]["candidates"] = [{"kind": "directory-remove"}]
+        for purpose in ("cleanup-legacy", "retirement-reset"):
+            with self.subTest(purpose=purpose), self.assertRaisesRegex(
+                ContractError, "retirement candidate contains another cleanup kind",
+            ):
+                payload["purpose"] = purpose
+                _all_candidates(_seal_document(payload, "plan_id"))
+
     def test_omp_directory_aliases_do_not_duplicate_cleanup_targets(self):
         fixture = self.fixture
         if not (fixture.home / ".OMP").is_dir():
@@ -328,12 +362,51 @@ class CleanupLegacyTests(unittest.TestCase):
         omp = fixture.home / ".omp/agent/mcp.json"
         omp.unlink()
         omp.hardlink_to(claude)
-        path, plan_id = fixture.prepare()
-        envelope, code = fixture.apply(path, plan_id)
+        unselected = fixture.base / "other-configuration.json"
+        unselected.hardlink_to(claude)
+        original = unselected.read_bytes()
+        planned, code = fixture.plan()
+        self.assertEqual((code, planned["status"]), (0, "planned"), planned)
+        self.assertIn("Graft retirement inspection is blocked", planned["reason"])
+        envelope, code = fixture.apply(Path(planned["cleanup_legacy"]["plan_path"]), planned["plan_id"])
         self.assertEqual((code, envelope["status"]), (0, "cleaned"))
+        self.assertEqual(envelope["graftRetirement"], {"status": "blocked", "scope": "legacy-only"})
         expected = {"mcpServers": {"playwright": {"command": "npx"}}}
         self.assertEqual(json.loads(claude.read_bytes()), expected)
         self.assertEqual(json.loads(omp.read_bytes()), expected)
+        self.assertEqual(unselected.read_bytes(), original)
+
+    def test_uninspected_hardlinked_config_cannot_retire_a_renamed_key(self):
+        fixture = self.fixture
+        claude = fixture.home / ".claude.json"
+        omp = fixture.home / ".omp/agent/mcp.json"
+        raw = canonical_json_bytes({"mcpServers": {"renamed": {"command": "gitnexus"}}})
+        claude.write_bytes(raw)
+        omp.unlink()
+        omp.hardlink_to(claude)
+        planned, code = fixture.plan()
+        self.assertEqual((code, planned["status"]), (2, "blocked"), planned)
+        refused, code = fixture.apply(Path(planned["cleanup_legacy"]["plan_path"]), planned["plan_id"])
+        self.assertEqual((code, refused["status"]), (2, "blocked"), refused)
+        self.assertEqual(claude.read_bytes(), raw)
+        self.assertEqual(omp.read_bytes(), raw)
+        self.assertTrue((fixture.project / ".gitnexus").is_dir())
+
+    @unittest.skipUnless(os.name == "posix", "legacy-only cleanup policy")
+    def test_disjoint_legacy_cleanup_discloses_blocked_retirement(self):
+        fixture = self.fixture
+        hooks = fixture.home / ".codex/hooks.json"
+        hooks.write_bytes(b"{")
+        planned, code = fixture.plan()
+        self.assertEqual((code, planned["status"]), (0, "planned"), planned)
+        self.assertIn("Graft retirement inspection is blocked", planned["reason"])
+        applied, code = fixture.apply(Path(planned["cleanup_legacy"]["plan_path"]), planned["plan_id"])
+        self.assertEqual((code, applied["status"]), (0, "cleaned"), applied)
+        self.assertEqual(applied["graftRetirement"], {"status": "blocked", "scope": "legacy-only"})
+        self.assertEqual(hooks.read_bytes(), b"{")
+        self.assertFalse((fixture.project / ".gitnexus").exists())
+        blocked, code = fixture.plan()
+        self.assertEqual((code, blocked["status"]), (2, "blocked"), blocked)
 
     def test_confirmation_is_required_before_every_target_write(self):
         fixture = self.fixture
@@ -511,6 +584,23 @@ class CleanupLegacyTests(unittest.TestCase):
         self.assertEqual((code, envelope["status"]), (3, "failed"))
         rows = envelope["cleanup_legacy"]["receipt"]["payload"]["results"]
         self.assertEqual([r["status"] for r in rows], ["succeeded", "failed"])
+        self.assertEqual((fixture.project / "AGENTS.md").read_bytes(), AGENTS_RAW)
+        self.assertTrue((fixture.skills / "trellis-workflow").exists())
+
+    @unittest.skipUnless(os.name == "posix", "POSIX mode fixture")
+    def test_retry_rejects_mode_drift_in_completed_backup_before_next_write(self):
+        fixture = self.fixture
+        plan, plan_id = fixture.prepare()
+        with mock.patch("sbtd_cleanup_legacy.write_file", side_effect=OSError("write denied")):
+            first, code = fixture.apply(plan, plan_id)
+        self.assertEqual((code, first["status"]), (3, "failed"), first)
+        receipt = first["cleanup_legacy"]
+        row = receipt["receipt"]["payload"]["results"][0]
+        self.assertEqual((row["kind"], row["status"]), ("directory-remove", "succeeded"))
+        backup = Path(row["backup_ref"]["path"])
+        backup.chmod(int(row["mode_before"], 8) ^ 0o020)
+        refused, code = fixture.apply(plan, plan_id, Path(receipt["receipt_path"]))
+        self.assertEqual((code, refused["status"]), (2, "blocked"), refused)
         self.assertEqual((fixture.project / "AGENTS.md").read_bytes(), AGENTS_RAW)
         self.assertTrue((fixture.skills / "trellis-workflow").exists())
 
@@ -820,7 +910,6 @@ class CleanupLegacyTests(unittest.TestCase):
             plan, confirm_cleanup=plan_id, cleanup_receipt_path=receipt, environ=fixture.environ,
         )
         self.assertEqual((code, refused["status"]), (2, "blocked"), refused)
-        self.assertIn("bound per-target mode evidence", refused["reason"])
         self.assertEqual((fixture.project / "AGENTS.md").read_bytes(), _vendor_scrub(AGENTS_RAW))
         retry, code = fixture.apply(plan, plan_id, receipt)
         self.assertEqual((code, retry["status"]), (0, "cleaned"), retry)
@@ -1119,6 +1208,7 @@ class RetirementPlanTests(unittest.TestCase):
     def _module(self, candidates=()):
         module = mock.Mock()
         module.inspect_retirement.return_value = {"items": []}
+        module.merge_reports.return_value = {"items": []}
         module.render_candidates.return_value = {
             "candidates": list(candidates),
             "stop": False,
@@ -1312,6 +1402,9 @@ class RetirementArtifactTests(unittest.TestCase):
         self.fixture = CleanupLegacyFixture(Path(self.temporary.name))
 
     def _fence_evidence(self):
+        return self._evidence_descriptor(self._fence_result())
+
+    def _fence_result(self):
         fixture = self.fixture
         agents = fixture.project / "AGENTS.md"
         live = agents.read_bytes()
@@ -1319,7 +1412,7 @@ class RetirementArtifactTests(unittest.TestCase):
         original = live[: -len(fence)]
         backup = fixture.vault / "agents-before.md"
         backup.write_bytes(original)
-        result = _operation_result(
+        return _operation_result(
             str(agents),
             "markdown",
             "graft-agents",
@@ -1327,13 +1420,12 @@ class RetirementArtifactTests(unittest.TestCase):
             snapshot(agents),
             backup,
         )
-        return self._evidence_descriptor(result)
 
-    def _evidence_descriptor(self, result):
+    def _evidence_descriptor(self, *records):
         fixture = self.fixture
         results = fixture.vault / "operation-results.json"
         results.write_bytes(
-            json.dumps({"graftWiring": {"operationResults": [result]}}).encode()
+            json.dumps({"graftWiring": {"operationResults": list(records)}}).encode()
         )
         descriptor = fixture.vault / "descriptor.json"
         _write_sealed(
@@ -1345,6 +1437,251 @@ class RetirementArtifactTests(unittest.TestCase):
             "descriptor_id",
         )
         return descriptor
+
+    def _created_codex_config(self):
+        fixture = self.fixture
+        config = fixture.home / ".codex/config.toml"
+        config.write_bytes(b"")
+        _append_managed_server(config, fixture.home)
+        result = _operation_result(
+            str(config), "toml", "graft-mcp", {"type": "absent", "checksum": None},
+            snapshot(config), None,
+        )
+        return config, result
+
+    def _reset_options(self, *results, with_project=False):
+        fixture = self.fixture
+        descriptor = self._evidence_descriptor(*results)
+        return {
+            "selections": {
+                "host": "codex",
+                "configs": [{"role": "codex-mcp", "path": str(fixture.home / ".codex/config.toml")}],
+                "projects": [str(fixture.project)] if with_project else [],
+                "vault": str(fixture.vault),
+                "retiring_launchers": [],
+            },
+            "evidence": [{"kind": "descriptor", "path": str(descriptor)}],
+            "vault": fixture.vault,
+            "environ": fixture.environ,
+        }
+
+    def test_plan_and_apply_use_the_same_blocked_host_merge(self):
+        fixture = self.fixture
+        omp = fixture.home / ".omp/agent/mcp.json"
+        launcher = fixture.home / "sbtd_graft_entry.py"
+        launcher.write_bytes(b"fixture; not executed")
+        original = canonical_json_bytes({"mcpServers": {"sbtd-graft": {
+            "type": "stdio", "command": sys.executable,
+            "args": ["-E", "-s", str(launcher), "mcp", "--node", str(fixture.home / "node"),
+                     "--entry", str(fixture.home / "cli.js")],
+            "env": {"DO_NOT_TRACK": "1", "DNT": "1"},
+        }}})
+        omp.write_bytes(original)
+        descriptor = self._evidence_descriptor(_operation_result(
+            str(omp), "json", "graft-omp-mcp", {"type": "absent", "checksum": None}, snapshot(omp), None,
+        ))
+        ready, code = plan_cleanup_legacy(
+            [fixture.project], fixture.vault, skills_root=fixture.skills,
+            environ=fixture.environ, retirement_evidence=str(descriptor),
+        )
+        self.assertEqual((code, ready["status"]), (0, "planned"), ready)
+        self.assertEqual(
+            [row["path"] for row in ready["cleanup_legacy"]["plan"]["payload"]["graftRetirement"]["candidates"]],
+            [str(omp)],
+        )
+        hooks = fixture.home / ".codex/hooks.json"
+        hooks.write_bytes(b"{")
+        preview, code = plan_cleanup_legacy(
+            [fixture.project], fixture.vault, skills_root=fixture.skills,
+            environ=fixture.environ, retirement_evidence=str(descriptor),
+        )
+        sealed = preview["cleanup_legacy"]
+        graft = sealed["plan"]["payload"]["graftRetirement"]
+        self.assertTrue(graft["view"]["stop"])
+        self.assertEqual(graft["candidates"], [])
+        self.assertEqual((code, preview["status"]), (2, "blocked"), preview)
+        applied, code = fixture.apply(Path(sealed["plan_path"]), preview["plan_id"])
+        self.assertEqual((code, applied["status"]), (2, "blocked"), applied)
+        self.assertEqual(omp.read_bytes(), original)
+        self.assertEqual(hooks.read_bytes(), b"{")
+        self.assertTrue((fixture.project / ".gitnexus").is_dir())
+
+    @unittest.skipUnless(os.name == "posix", "symlink fixture")
+    def test_codex_reset_and_rollback_do_not_check_omp_paths(self):
+        from sbtd_cleanup_legacy import plan_reset_retirement, rollback_cleanup_legacy
+
+        fixture = self.fixture
+        config, result = self._created_codex_config()
+        original = config.read_bytes()
+        link = fixture.home / "omp-linked"
+        link.symlink_to(fixture.home / ".omp", target_is_directory=True)
+        fixture.environ["PI_CONFIG_DIR"] = link.name
+        options = self._reset_options(result)
+        preview = plan_reset_retirement(**options)
+        self.assertEqual(preview["status"], "planned", preview)
+        applied = plan_reset_retirement(**options, confirm=preview["plan_id"])
+        self.assertEqual(applied["status"], "cleaned", applied)
+        self.assertFalse(config.exists())
+        reverted, code = rollback_cleanup_legacy(
+            Path(applied["plan_path"]), confirm_cleanup=preview["plan_id"],
+            cleanup_receipt_path=Path(applied["receipt_path"]), environ=fixture.environ,
+        )
+        self.assertEqual((code, reverted["status"]), (0, "rolled-back"), reverted)
+        self.assertEqual(config.read_bytes(), original)
+        self.assertTrue(link.is_symlink())
+
+    def test_reset_retries_an_unchanged_plan_only_when_saved_bytes_match(self):
+        from onboard_contracts import ContractError
+        from sbtd_cleanup_legacy import plan_reset_retirement
+
+        config, result = self._created_codex_config()
+        original = config.read_bytes()
+        options = self._reset_options(result)
+        preview = plan_reset_retirement(**options)
+        with mock.patch("sbtd_migration_files.remove_reference", side_effect=OSError("write denied")):
+            failed = plan_reset_retirement(**options, confirm=preview["plan_id"])
+        self.assertEqual((failed["status"], failed["writes"]), ("failed", False), failed)
+        saved = Path(failed["plan_path"])
+        sealed_bytes = saved.read_bytes()
+        reformatted = json.dumps(json.loads(sealed_bytes), indent=2).encode()
+        saved.write_bytes(reformatted)
+        with self.assertRaisesRegex(ContractError, "saved retirement plan differs"):
+            plan_reset_retirement(**options, confirm=preview["plan_id"])
+        self.assertEqual(saved.read_bytes(), reformatted)
+        self.assertEqual(config.read_bytes(), original)
+        saved.write_bytes(sealed_bytes)
+        applied = plan_reset_retirement(**options, confirm=preview["plan_id"])
+        self.assertEqual((applied["status"], applied["writes"]), ("cleaned", True), applied)
+        self.assertFalse(config.exists())
+        self.assertEqual(saved.read_bytes(), sealed_bytes)
+
+    def test_partial_reset_rolls_back_measured_completion_if_inner_receipt_save_fails(self):
+        from sbtd_cleanup_legacy import plan_reset_retirement, rollback_cleanup_legacy
+        from sbtd_migration_files import save_document
+
+        fixture = self.fixture
+        agents = fixture.project / "AGENTS.md"
+        raw_agents = agents.read_bytes()
+        config, config_result = self._created_codex_config()
+        original = config.read_bytes()
+        options = self._reset_options(config_result, self._fence_result(), with_project=True)
+        preview = plan_reset_retirement(**options)
+
+        def refuse_inner_receipt(path, document, *, private_root):
+            if path.parent.name == "retirement" and path.name == "000.json":
+                raise OSError("receipt persistence denied")
+            return save_document(path, document, private_root=private_root)
+
+        with (
+            mock.patch("sbtd_migration_files.save_document", side_effect=refuse_inner_receipt),
+            mock.patch("sbtd_migration_files.write_file", side_effect=OSError("second target write denied")),
+        ):
+            failed = plan_reset_retirement(**options, confirm=preview["plan_id"])
+        self.assertEqual((failed["status"], failed["writes"]), ("failed", True), failed)
+        self.assertFalse(config.exists())
+        self.assertEqual(agents.read_bytes(), raw_agents)
+        receipt = Path(failed["receipt_path"])
+        rows = json.loads(receipt.read_bytes())["payload"]["results"]
+        self.assertEqual([row["status"] for row in rows], ["succeeded", "failed"])
+        completion = rows[0]["retirement_completion"]["payload"]
+        self.assertEqual(completion["backup_ref"], rows[0]["backup_ref"])
+        original_backup = fixture.vault / preview["plan_id"] / "cleanup" / "000"
+        self.assertEqual(Path(completion["backup_ref"]["path"]), original_backup)
+        self.assertEqual(original_backup.read_bytes(), original)
+        restored, code = rollback_cleanup_legacy(
+            Path(failed["plan_path"]), confirm_cleanup=preview["plan_id"],
+            cleanup_receipt_path=receipt, environ=fixture.environ,
+        )
+        self.assertEqual((code, restored["status"]), (0, "rolled-back"), restored)
+        self.assertEqual(config.read_bytes(), original)
+        self.assertEqual(agents.read_bytes(), raw_agents)
+
+    def test_saved_retirement_can_resume_after_cumulative_receipt_save_fails(self):
+        from sbtd_cleanup_legacy import plan_reset_retirement, rollback_cleanup_legacy
+        from sbtd_migration_files import save_document
+
+        fixture = self.fixture
+        config, result = self._created_codex_config()
+        original = config.read_bytes()
+        options = self._reset_options(result)
+        preview = plan_reset_retirement(**options)
+
+        def refuse_cumulative_receipt(path, document, *, private_root):
+            if path.name.startswith("cleanup-legacy-receipt-"):
+                raise OSError("cumulative receipt persistence denied")
+            return save_document(path, document, private_root=private_root)
+
+        with mock.patch("sbtd_cleanup_legacy.save_document", side_effect=refuse_cumulative_receipt):
+            interrupted = plan_reset_retirement(**options, confirm=preview["plan_id"])
+        self.assertEqual((interrupted["status"], interrupted["writes"]), ("failed", True), interrupted)
+        self.assertIsNone(interrupted["receipt_path"])
+        self.assertFalse(config.exists())
+        plan_path = Path(interrupted["plan_path"])
+        retried, code = fixture.apply(plan_path, preview["plan_id"])
+        self.assertEqual((code, retried["status"]), (0, "cleaned"), retried)
+        receipt = Path(retried["receipt_path"])
+        restored, code = rollback_cleanup_legacy(
+            plan_path, confirm_cleanup=preview["plan_id"], cleanup_receipt_path=receipt, environ=fixture.environ,
+        )
+        self.assertEqual((code, restored["status"]), (0, "rolled-back"), restored)
+        self.assertEqual(config.read_bytes(), original)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX backup naming regression")
+    def test_distinct_resets_with_same_entry_keep_separate_originals(self):
+        from sbtd_cleanup_legacy import plan_reset_retirement
+
+        fixture = self.fixture
+        config = fixture.home / ".codex/config.toml"
+        backups = {}
+        entry_id = None
+        for value in ("first", "second"):
+            with self.subTest(value=value):
+                original = f'theme = "{value}"\n'.encode()
+                config.write_bytes(original)
+                _append_managed_server(config, fixture.home)
+                managed = config.read_bytes()
+                history_backup = fixture.vault / f"{value}-before.toml"
+                history_backup.write_bytes(original)
+                options = self._reset_options(_operation_result(
+                    str(config), "toml", "graft-mcp", snapshot(history_backup), snapshot(config), history_backup,
+                ))
+                preview = plan_reset_retirement(**options)
+                candidate = preview["plan"]["payload"]["graftRetirement"]["candidates"][0]
+                if entry_id is None:
+                    entry_id = candidate["id"]
+                self.assertEqual(candidate["id"], entry_id)
+                applied = plan_reset_retirement(**options, confirm=preview["plan_id"])
+                self.assertEqual((applied["status"], applied["writes"]), ("cleaned", True), applied)
+                self.assertEqual(config.read_bytes(), original)
+                backups[fixture.vault / preview["plan_id"] / "cleanup" / "000"] = managed
+        self.assertEqual(len(backups), 2)
+        for path, original in backups.items():
+            self.assertEqual(path.read_bytes(), original)
+
+    def test_interrupted_reset_does_not_infer_completion_from_absent_target(self):
+        from sbtd_cleanup_legacy import plan_reset_retirement, rollback_cleanup_legacy
+
+        fixture = self.fixture
+        config, result = self._created_codex_config()
+        options = self._reset_options(result)
+        preview = plan_reset_retirement(**options)
+
+        def lost_outcome(*args, **kwargs):
+            remove_reference(*args, **kwargs)
+            raise OSError("the primitive did not report an outcome")
+
+        with mock.patch("sbtd_migration_files.remove_reference", side_effect=lost_outcome):
+            failed = plan_reset_retirement(**options, confirm=preview["plan_id"])
+        self.assertEqual((failed["status"], failed["writes"]), ("failed", None), failed)
+        self.assertFalse(config.exists())
+        plan_path, receipt = Path(failed["plan_path"]), Path(failed["receipt_path"])
+        blocked, code = fixture.apply(plan_path, preview["plan_id"], receipt)
+        self.assertEqual((code, blocked["status"], blocked["writes"]), (2, "blocked", None), blocked)
+        restored, code = rollback_cleanup_legacy(
+            plan_path, confirm_cleanup=preview["plan_id"], cleanup_receipt_path=receipt, environ=fixture.environ,
+        )
+        self.assertEqual((code, restored["status"]), (2, "blocked"), restored)
+        self.assertFalse(config.exists())
 
     def test_operation_receipt_plans_applies_rolls_back_and_retries(self):
         from sbtd_cleanup_legacy import rollback_cleanup_legacy

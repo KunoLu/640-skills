@@ -12,8 +12,6 @@ from typing import Any, Mapping
 
 from onboard_contracts import ContractError, canonical_json_bytes
 from sbtd_migration_files import require_private_directory
-from sbtd_omp_sources import active_omp_paths
-from sbtd_retirement import inspect_retirement, render_candidates
 from sbtd_retirement_paths import LEGACY_LAUNCHER_RELATIVE
 
 
@@ -26,30 +24,18 @@ def _private_path(value: str | None) -> Path | None:
     return path
 
 
-def _domain_paths(host: str | None, home: Path, environ: Mapping[str, str]) -> list[dict[str, str]]:
-    if host == "codex":
-        domain = Path(environ.get("CODEX_HOME") or home / ".codex")
-        return [{"role": role, "path": str(domain / name)} for role, name in (
-            ("codex-mcp", "config.toml"), ("codex-hooks", "hooks.json"),
-        )]
-    if host == "omp":
-        active = active_omp_paths(home=home, environ=environ)
-        override = environ.get("PI_CODING_AGENT_DIR")
-        if not active["profile"] and override:
-            lexical = Path(override).expanduser().absolute()
-            if lexical.resolve() != lexical:
-                raise ValueError("retirement cannot follow a linked OMP agent directory")
-        return [{"role": "omp-mcp", "path": str(active["target"])}]
-    return []
-
-
 def preview(
     args, *, action, operations, skills_root: Path, home: Path, environ, plan_entries,
     other_directory_targets=(),
 ):
     """Return public disclosure and private in-process execution data. No writes."""
     try:
-        roots = [Path(x.strip()).expanduser() for x in (getattr(args, "projects_root", None) or "").split(",") if x.strip()]
+        from sbtd_cleanup_legacy import _domain_paths, _retirement_view, _safe_path
+
+        roots = list(dict.fromkeys(
+            _safe_path(Path(value.strip()).expanduser())
+            for value in (getattr(args, "projects_root", None) or "").split(",") if value.strip()
+        ))
         platform = (getattr(args, "platform", None) or "").strip().lower().replace("_", "-")
         host = {"codex": "codex", "oh-my-pi": "omp", "omp": "omp"}.get(platform)
         vault = _private_path(getattr(args, "retirement_backup_root", None))
@@ -79,13 +65,19 @@ def preview(
         selections = {"host": host, "configs": configs, "projects": [str(p) for p in roots],
                       "vault": str(vault) if vault else None, "retiring_launchers": replaced}
         evidence = [{"kind": "descriptor", "path": str(descriptor)}] if descriptor else []
-        report = inspect_retirement(selections=selections, evidence=evidence)
-        render = render_candidates(report, purpose=action if action in ("check", "reset") else "plan")
+        report, render = _retirement_view(
+            selections, evidence, purpose=action if action in ("check", "reset") else "plan",
+        )
         candidates = render["candidates"] if action == "reset" else []
         # A proven project fence is a selective write. Installing a whole
         # template afterwards would destroy both the user's rules and rollback.
         project_rules = {root / "AGENTS.md" for root in roots}
         config_paths = {Path(item["path"]) for item in configs if os.path.lexists(item["path"])}
+        if host == "omp":
+            config_paths.update(
+                path for config in configs
+                if os.path.lexists(path := Path(config["path"]).with_name(".mcp.json"))
+            )
         watched = config_paths | {Path(item["path"]) for item in report["items"]}
         overlaps = {str(path) for path in watched if path.resolve() in targets}
         watched_files = watched | {path for path in project_rules if os.path.lexists(path)}
@@ -114,7 +106,7 @@ def preview(
         if candidates and not stop:
             from sbtd_cleanup_legacy import plan_reset_retirement
 
-            inputs = dict(selections=selections, evidence=evidence, vault=vault, report=report)
+            inputs = dict(selections=selections, evidence=evidence, vault=vault, report=report, environ=environ)
             preview_plan = plan_reset_retirement(**inputs)
             if preview_plan["status"] == "blocked":
                 stop, reason = True, "The retirement-only plan is blocked. No reset writes are authorized."
@@ -139,14 +131,15 @@ def preview(
 def apply_reset(public, execution, confirmation):
     """Recompute the sealed retirement-only plan before ordinary writes."""
     if public["blocked"] or execution is None or confirmation != public["confirmationId"]:
-        return {"status": "blocked", "reason": "Supply the exact displayed --confirm-retirement with --yes."}, 2
+        return {"status": "blocked", "writes": False,
+                "reason": "Supply the exact displayed --confirm-retirement with --yes."}, 2
     from sbtd_cleanup_legacy import plan_reset_retirement
 
     inputs, retirement_id = execution
     try:
         result = plan_reset_retirement(**inputs, confirm=retirement_id)
     except (ContractError, ValueError, OSError, RuntimeError) as error:
-        return {"status": "failed", "reason": getattr(error, "code", "retirement-failed"),
+        return {"status": "failed", "writes": None, "reason": getattr(error, "code", "retirement-failed"),
                 "nextStep": "Preserve the private vault. Ordinary reset writes have not started."}, 3
     if result["status"] not in ("cleaned", "retired", "nothing-to-clean"):
         return result, 2 if result["status"] == "blocked" else 3

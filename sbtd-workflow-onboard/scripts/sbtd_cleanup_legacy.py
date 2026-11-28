@@ -29,6 +29,7 @@ from sbtd_cleanup_targets import (
     strict_json_object,
 )
 from sbtd_migration_files import (
+    assert_private_file,
     backup_reference,
     install_reference,
     preflight_windows_permissions,
@@ -53,6 +54,7 @@ _EVIDENCE_KEYS = {
     "upgrade-plan-apply": frozenset({"kind", "plan", "receipt"}),
 }
 _COMPARE_SKIP = {"before", "trellis", "graft", "vendor_modes_before"}
+_LEGACY_ONLY_NOTICE = "Graft retirement inspection is blocked; only the displayed legacy cleanup is in scope."
 _WINDOWS_VENDOR_OVERLAP = (
     "Windows vendor cleanup would write a retirement file without preserving its ACL. "
     "Retire the Graft entry separately, then generate a fresh cleanup plan."
@@ -91,10 +93,7 @@ def _owned_path(value: object) -> Path:
     path = Path(value).expanduser()
     if not path.is_absolute():
         _fail("invalid-path", "retirement paths must be absolute")
-    for part in (path, *path.parents):
-        if part.exists() and part.is_symlink():
-            _fail("invalid-path", "retirement paths must not follow symlinks")
-    return path.resolve()
+    return _safe_path(path)
 
 
 
@@ -195,10 +194,65 @@ def _inspect_selections(
     return {
         "host": host,
         "configs": copied_configs,
-        "projects": [str(_owned_path(item)) for item in projects],
+        "projects": list(map(str, dict.fromkeys(_owned_path(item) for item in projects))),
         "vault": None if vault is None else str(vault),
         "retiring_launchers": [str(_owned_path(item)) for item in launchers],
     }
+
+
+def _inspect_graft(
+    selections: Mapping[str, Any],
+    evidence: Sequence[Mapping[str, Any]],
+    *,
+    inspect_omp_alternate: bool = False,
+) -> dict[str, Any]:
+    module = _retirement()
+    configs = selections["configs"]
+    projects = [Path(root) for root in selections["projects"]]
+    reports = []
+    if configs and projects:
+        # An absent config has no footprint to overlap a project. Keep the
+        # selected path sealed so a newly present overlap still blocks apply.
+        for config in configs:
+            path = Path(config["path"])
+            if any(path.is_relative_to(root) or root.is_relative_to(path) for root in projects):
+                try:
+                    _safe_path(path).lstat()
+                except FileNotFoundError:
+                    continue
+                _fail("scope-conflict", "a selected retirement config overlaps a project")
+        reports.extend([
+            module.inspect_retirement(selections={**selections, "projects": []}, evidence=list(evidence)),
+            module.inspect_retirement(selections={**selections, "configs": []}, evidence=list(evidence)),
+        ])
+    else:
+        reports.append(module.inspect_retirement(selections=dict(selections), evidence=list(evidence)))
+    if inspect_omp_alternate and selections["host"] == "omp":
+        alternate = [
+            {"role": "omp-mcp", "path": str(Path(config["path"]).with_name(".mcp.json"))}
+            for config in configs if config["role"] == "omp-mcp"
+        ]
+        if alternate:
+            # OMP also loads this file, but historical writes to mcp.json
+            # never confer ownership of the alternate name.
+            watched = module.inspect_retirement(
+                selections={**selections, "configs": alternate, "projects": []},
+                evidence=[],
+            )
+            if watched.get("items") or watched.get("errors"):
+                reports.append(watched)
+    if len(reports) == 1:
+        return reports[0]
+    merged = module.merge_reports(reports)
+    # Each scope uses the same descriptor. Splitting an inspection does not
+    # turn it into multiple evidence sources.
+    descriptors = merged.pop("evidence_descriptors", [])
+    if descriptors:
+        if any(descriptor != descriptors[0] for descriptor in descriptors[1:]):
+            _fail("state-conflict", "retirement evidence changed during inspection")
+        merged["evidence_descriptor"] = descriptors[0]
+    merged["retiring_launchers"] = selections["retiring_launchers"]
+    return merged
 
 
 def _retirement_view(
@@ -208,9 +262,7 @@ def _retirement_view(
     purpose: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     module = _retirement()
-    report = module.inspect_retirement(
-        selections=dict(selections), evidence=list(evidence)
-    )
+    report = _inspect_graft(selections, evidence, inspect_omp_alternate=purpose != "cleanup")
     view = module.render_candidates(report, purpose=purpose)
     if not isinstance(report, dict) or not isinstance(view, dict):
         _fail("invalid-document", "retirement discovery did not return an object")
@@ -290,37 +342,39 @@ def _descriptor_evidence(value: str | None, vault: Path) -> list[dict[str, str]]
     return [{"kind": "descriptor", "path": str(path)}]
 
 
-def _host_domains(environ: Mapping[str, str]) -> list[tuple[str, list[dict[str, str]]]]:
-    home = Path(
-        environ.get("HOME") or environ.get("USERPROFILE") or str(Path.home())
-    ).resolve()
-    codex = Path(environ.get("CODEX_HOME") or (home / ".codex"))
-    from sbtd_omp_sources import active_omp_paths
+def _domain_paths(
+    host: str | None, home: Path, environ: Mapping[str, str],
+) -> list[dict[str, str]]:
+    if host == "codex":
+        domain = Path(environ.get("CODEX_HOME") or home / ".codex")
+        return [{"role": role, "path": str(domain / name)} for role, name in (
+            ("codex-mcp", "config.toml"), ("codex-hooks", "hooks.json"),
+        )]
+    if host == "omp":
+        from sbtd_omp_sources import active_omp_paths
 
-    active = active_omp_paths(home=home, environ=environ)
-    return [
-        (
-            "codex",
-            [
-                {"role": "codex-mcp", "path": str(codex / "config.toml")},
-                {"role": "codex-hooks", "path": str(codex / "hooks.json")},
-            ],
-        ),
-        ("omp", [{"role": "omp-mcp", "path": str(active["target"])}]),
-    ]
+        active = active_omp_paths(home=home, environ=environ)
+        override = environ.get("PI_CODING_AGENT_DIR", "")
+        if not active["profile"] and override.strip():
+            lexical = Path(override).expanduser().absolute()
+            physical = lexical.resolve()
+            if physical == active["agent_dir"] and physical != lexical:
+                _fail("invalid-path", "retirement cannot follow a linked OMP agent directory")
+        return [{"role": "omp-mcp", "path": str(active["target"])}]
+    return []
 
 
 def _cleanup_selections(
     roots: Sequence[Path], vault: Path, environ: Mapping[str, str]
 ) -> list[dict[str, Any]]:
     projects = [str(root) for root in roots]
+    home = _home(environ)
     selections = []
-    for host, configs in _host_domains(environ):
-        bound = []
-        for item in configs:
-            bound.append(
-                {"role": item["role"], "path": str(_safe_path(Path(item["path"])))}
-            )
+    for host in ("codex", "omp"):
+        bound = [
+            {"role": item["role"], "path": str(_safe_path(Path(item["path"])))}
+            for item in _domain_paths(host, home, environ)
+        ]
         selections.append(
             {
                 "host": host,
@@ -334,32 +388,24 @@ def _cleanup_selections(
 
 
 def _merged_graft(
-    roots: Sequence[Path],
-    environ: Mapping[str, str],
-    vault: Path,
+    selections: Sequence[Mapping[str, Any]],
     evidence: Sequence[Mapping[str, Any]],
 ) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
-    """Inspect the active host domain. Do not embed a non-document merge."""
+    """Use the same merged inspection and stop rules for plan and apply."""
     module = _retirement()
-    selections = _cleanup_selections(roots, vault, environ)
     reports = []
     for item in selections:
-        report, _view = _retirement_view(item, evidence, purpose="cleanup")
-        copied = _contract_object(report)
+        copied = _contract_object(_inspect_graft(item, evidence))
         if copied is None:
             _fail("invalid-document", "retirement inspection is not canonical contract JSON")
         reports.append(copied)
     merged = _contract_object(module.merge_reports(reports))
-    # A non-document merge result is not authority. Render from the canonical
-    # per-host report instead of embedding or following that object.
-    view = _contract_object(
-        module.render_candidates(merged if merged is not None else reports[-1], purpose="cleanup")
-    )
+    if merged is None:
+        _fail("invalid-document", "merged retirement inspection is not canonical contract JSON")
+    view = _contract_object(module.render_candidates(merged, purpose="cleanup"))
     if view is None:
         _fail("invalid-document", "retirement candidate view is not canonical contract JSON")
-    sealed = {"reports": reports, "selections": selections}
-    if merged is not None:
-        sealed["merged"] = merged
+    sealed = {"reports": reports, "selections": selections, "merged": merged}
     return sealed, view, _actionable_graft(view)
 
 
@@ -389,6 +435,8 @@ def _roots(roots: Sequence[Path], vault: Path, home: Path) -> list[Path]:
             _fail(
                 "scope-conflict", "backup directory must be outside selected projects"
             )
+        if root in result:
+            continue
         if any(
             root.is_relative_to(other) or other.is_relative_to(root) for other in result
         ):
@@ -409,8 +457,14 @@ def _all_candidates(plan: Mapping[str, Any]) -> list[dict[str, Any]]:
     ]
     for kind in ("skills", "mcp"):
         candidates.extend(payload["shared"][kind]["candidates"])
-    graft = payload.get("graftRetirement") or {}
-    candidates.extend(graft.get("candidates") or [])
+    graft = payload.get("graftRetirement")
+    if graft is not None:
+        if not isinstance(graft, Mapping) or not isinstance(graft.get("candidates"), list):
+            _fail("invalid-document", "retirement candidates are not a list")
+        for item in graft["candidates"]:
+            if not isinstance(item, Mapping) or item.get("kind") != "graft-retire":
+                _fail("scope-conflict", "a retirement candidate contains another cleanup kind")
+            candidates.append(item)
     return candidates
 
 def _graft_candidate(candidate: Mapping[str, Any]) -> Mapping[str, Any] | None:
@@ -446,6 +500,52 @@ def _unbound_vendor_overlap(plan: Mapping[str, Any]) -> bool:
         ):
             return True
     return False
+
+
+def _blocked_graft_paths(view: Mapping[str, Any]) -> set[Path] | None:
+    paths = [item.get("path") for item in view.get("blocked", [])]
+    if not paths or any(not isinstance(path, str) or not Path(path).is_absolute() for path in paths):
+        return None
+    return {Path(path) for path in paths}
+
+
+def _cleanup_retirement_block(plan: Mapping[str, Any], view: Mapping[str, Any]) -> str | None:
+    if not view.get("stop"):
+        return None
+    reason = view.get("stop_reason") or "Retirement inspection is blocked."
+    candidates = _all_candidates(plan)
+    blocked = _blocked_graft_paths(view)
+    if (
+        os.name == "nt" or plan["payload"]["graftRetirement"].get("evidence")
+        or not candidates or blocked is None
+        or any(_graft_candidate(item) is not None for item in candidates)
+    ):
+        return reason
+    # A case-insensitive spelling alias is not proof of a disjoint effect.
+    blocked_spellings = {path: Path(str(path).casefold()) for path in blocked}
+    for item in candidates:
+        path = Path(item["path"])
+        footprint = [path]
+        if item["kind"] == "trellis-uninstall":
+            footprint.extend(Path(target) for target in _vendor_resources(item))
+        for target in footprint:
+            spelling = Path(str(target).casefold())
+            for unsafe, blocked_spelling in blocked_spellings.items():
+                if not (spelling.is_relative_to(blocked_spelling) or blocked_spelling.is_relative_to(spelling)):
+                    continue
+                # A regular hardlink cannot establish Graft ownership. The
+                # existing legacy parser can still authorize an exact named
+                # GitNexus key edit; atomic replacement preserves other keys
+                # and does not change bytes at other linked names.
+                if (
+                    unsafe == path == target and item["kind"] == "mcp-server-remove"
+                    and item["keys"] and set(item["keys"]) <= {"gitnexus", "gitnexus-mcp"}
+                ):
+                    info = path.lstat()
+                    if stat.S_ISREG(info.st_mode) and info.st_nlink > 1:
+                        continue
+                return reason
+    return None
 
 
 def _check_candidate_paths(plan: Mapping[str, Any], vault: Path) -> None:
@@ -540,7 +640,7 @@ def plan_cleanup_legacy(
         "mcp": _seal_candidates(detect_mcp_targets(environ=environ)),
     }
     evidence = _descriptor_evidence(retirement_evidence, vault)
-    _report, view, grafts = _merged_graft(selected, environ, vault, evidence)
+    _report, view, grafts = _merged_graft(_cleanup_selections(selected, vault, environ), evidence)
     standalone = _attach_graft(
         [project["candidates"] for project in projects]
         + [shared["skills"]["candidates"], shared["mcp"]["candidates"]],
@@ -564,7 +664,7 @@ def plan_cleanup_legacy(
             ],
         },
     }
-    plan = {"schema_version": 1, "payload": payload, "plan_id": _digest(payload)}
+    plan = {"schema_version": 1, "payload": payload}
     _check_candidate_paths(plan, vault)
     retirement_block = None
     if _windows_vendor_overlap(plan):
@@ -573,29 +673,42 @@ def plan_cleanup_legacy(
         retirement_block = _VENDOR_OVERLAP_UNPROVEN
     elif any(item["reason"] == "vendor-mode-unproven" for item in _blocked(payload)):
         retirement_block = _VENDOR_MODE_UNPROVEN
-    elif os.name == "nt" and view.get("stop"):
-        retirement_block = view.get("stop_reason") or "Windows retirement inspection is blocked."
+    else:
+        retirement_block = _cleanup_retirement_block(plan, view)
+        if retirement_block is not None:
+            payload["graftRetirement"]["blocked"] = True
     status = (
         "blocked"
         if _blocked(payload) or retirement_block is not None
         else ("planned" if _all_candidates(plan) else "nothing-to-clean")
     )
+    plan["plan_id"] = _digest(payload)
+    notice = retirement_block or (_LEGACY_ONLY_NOTICE if view.get("stop") and status == "planned" else None)
     destination = vault / f"cleanup-legacy-plan-{plan['plan_id']}.json"
     save_document(destination, plan, private_root=vault)
     return {
         "mode": "cleanup-legacy",
         "phase": "plan",
         "status": status,
-        **({"reason": retirement_block} if retirement_block else {}),
+        **({"reason": notice} if notice else {}),
         "plan_id": plan["plan_id"],
         "projects": [{"root": str(root), "status": status} for root in selected],
         "cleanup_legacy": {"plan": plan, "plan_path": str(destination)},
     }, 2 if status == "blocked" else 0
 
 
-def _read_document(path: Path, id_key: str) -> dict[str, Any]:
+def _read_document(
+    path: Path, id_key: str, *, vault: Path | None = None,
+) -> dict[str, Any]:
     _safe_path(path)
     require_private_directory(path.parent)
+    if os.name == "nt":
+        if vault is not None:
+            for parent in path.parents[1:]:
+                if not parent.is_relative_to(vault):
+                    break
+                require_private_directory(parent)
+        assert_private_file(path)
     document = strict_json_object(read_file(path))
     if (
         type(document.get("schema_version")) is not int
@@ -770,39 +883,6 @@ def _graft_index(plan: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     return index
 
 
-def _fresh_graft(
-    selections: Sequence[Mapping[str, Any]],
-    evidence: Sequence[Mapping[str, Any]],
-    *,
-    purpose: str,
-) -> dict[str, dict[str, Any]]:
-    found: dict[str, dict[str, Any]] = {}
-    for item in selections:
-        _report, view = _retirement_view(item, evidence, purpose=purpose)
-        if view.get("stop") and (purpose == "reset" or os.name == "nt"):
-            _fail("blocked-target", "retirement inspection is blocked")
-        for candidate in _actionable_graft(view):
-            path = str(candidate["path"])
-            identity = _graft_identity(candidate)
-            if path in found and found[path] != identity:
-                _fail("scope-conflict", "retirement domains disagree on one path")
-            found[path] = identity
-    return found
-
-
-_HOST_CONFIG_ROLES = {
-    None: frozenset(),
-    "codex": frozenset({"codex-mcp", "codex-hooks"}),
-    "omp": frozenset({"omp-mcp"}),
-}
-
-
-def _active_config_paths(environ: Mapping[str, str]) -> dict[str, str]:
-    found = {}
-    for _host, configs in _host_domains(environ):
-        for item in configs:
-            found[item["role"]] = str(_safe_path(Path(item["path"])))
-    return found
 
 
 def _bound_launchers(launchers: Any, vault: Path, config_paths: set[str]) -> list[str]:
@@ -848,9 +928,11 @@ def _bound_reset_selections(
     if stored.get("vault") != str(vault):
         _fail("scope-conflict", "retirement vault is not the active private vault")
     host = stored.get("host")
-    if host not in _HOST_CONFIG_ROLES:
+    if host not in (None, "codex", "omp"):
         _fail("scope-conflict", "retirement host is not the active domain")
-    active = _active_config_paths(environ)
+    active = {
+        item["role"]: item["path"] for item in _domain_paths(host, _home(environ), environ)
+    }
     configs = stored.get("configs")
     if not isinstance(configs, list):
         _fail("invalid-document", "retirement configs are not a list")
@@ -859,17 +941,18 @@ def _bound_reset_selections(
         if not isinstance(item, Mapping) or set(item) != {"role", "path"}:
             _fail("invalid-document", "retirement config is not a current domain")
         role = item["role"]
-        if role not in _HOST_CONFIG_ROLES[host] or role not in active or role in seen:
+        if role not in active or role in seen:
             _fail("scope-conflict", "retirement config is outside the active host domain")
         seen.add(role)
-        if item["path"] != active[role]:
+        if item["path"] != str(_safe_path(Path(active[role]))):
             _fail("scope-conflict", "retirement config path is not the active domain target")
     projects = _bound_projects(stored.get("projects"), vault, _home(environ))
     if projects != stored.get("projects"):
         _fail("scope-conflict", "retirement project selection is not the active domain")
-    launchers = _bound_launchers(
-        stored.get("retiring_launchers"), vault, set(active.values())
-    )
+    reserved = set(active.values())
+    if "omp-mcp" in active:
+        reserved.add(str(Path(active["omp-mcp"]).with_name(".mcp.json")))
+    launchers = _bound_launchers(stored.get("retiring_launchers"), vault, reserved)
     if launchers != stored.get("retiring_launchers"):
         _fail("scope-conflict", "retirement launcher selection is not canonical")
     return stored
@@ -939,6 +1022,11 @@ def _recheck_graft(
         return
     if not isinstance(sealed, dict):
         _fail("invalid-document", "retirement block is not an object")
+    sealed_view = sealed.get("view") or {}
+    if purpose == "cleanup" and (
+        sealed.get("blocked") or (os.name == "nt" and sealed_view.get("stop"))
+    ):
+        _fail("blocked-target", "the sealed retirement inspection is blocked")
     vault = require_private_directory(Path(payload["backup_root"]))
     if purpose == "reset":
         selections = [_bound_reset_selections(plan, environ, vault)]
@@ -952,16 +1040,34 @@ def _recheck_graft(
     evidence = _evidence_bindings(evidence, vault)
     _assert_graft_domain(plan, allowed)
     _assert_graft_backups(plan, vault)
-    if purpose == "reset" or os.name == "nt":
-        for item in _all_candidates(plan):
-            path = item["path"]
-            if _graft_candidate(item) is not None and path in done:
-                _preflight_restore_row(done[path], item, vault, allowed, rehearse_permissions=False)
+    for item in _all_candidates(plan):
+        path = item["path"]
+        if _graft_candidate(item) is not None and path in done:
+            _preflight_restore_row(done[path], item, vault, allowed, rehearse_permissions=False)
+    if purpose == "reset":
+        _report, view = _retirement_view(selections[0], evidence, purpose="reset")
+        candidates = _actionable_graft(view)
+        if view.get("stop"):
+            _fail("blocked-target", "retirement inspection is blocked")
+    else:
+        _report, view, candidates = _merged_graft(selections, evidence)
+        reason = _cleanup_retirement_block(plan, view)
+        if reason is not None:
+            _fail("blocked-target", reason)
+        original_blocked = _blocked_graft_paths(sealed_view)
+        if view.get("stop"):
+            live_blocked = _blocked_graft_paths(view)
+            if original_blocked is None or live_blocked is None or not (
+                live_blocked <= original_blocked if done else live_blocked == original_blocked
+            ):
+                _fail("scope-conflict", "the blocked retirement scope changed after confirmation")
+        elif sealed_view.get("stop") and not done:
+            _fail("scope-conflict", "the blocked retirement scope changed after confirmation")
     skip = done.keys() | (progressed or {}).keys()
     fresh = {
-        path: identity
-        for path, identity in _fresh_graft(selections, evidence, purpose=purpose).items()
-        if path not in skip
+        str(candidate["path"]): _graft_identity(candidate)
+        for candidate in candidates
+        if candidate["path"] not in skip
     }
     sealed_index = {
         path: identity
@@ -985,8 +1091,6 @@ def _validate_retirement(
     _check_candidate_paths(plan, vault)
     _recheck_graft(plan, purpose="reset", done=done, environ=environ)
     for candidate in _all_candidates(plan):
-        if candidate.get("kind") != "graft-retire":
-            _fail("scope-conflict", "a retirement-only plan contains another cleanup kind")
         if candidate["path"] not in done and snapshot(Path(candidate["path"])) != candidate["before"]:
             _fail("state-conflict", "retirement target changed after the plan")
 
@@ -1157,37 +1261,117 @@ def _vendor_transitions(
     return {path: transitions[path] for path in resources}
 
 
-def _previous_receipt(path: Path | None, plan: Mapping[str, Any], vault: Path, *, legacy_retry: bool = False):
-    if path is None:
-        return None, {}, {}, {}
-    if not _safe_path(path).is_relative_to(vault):
-        _fail("scope-conflict", "cleanup receipt is outside the plan vault")
-    previous = _read_document(path, "receipt_id")
-    if previous["payload"]["plan_id"] != plan["plan_id"]:
-        _fail("binding-violation", "cleanup receipt belongs to a different plan")
-    candidates = {item["path"]: item for item in _all_candidates(plan)}
+def _retirement_options(
+    item: Mapping[str, Any], plan_id: str, index: int, vault: Path,
+) -> dict[str, Any]:
+    path = Path(item["path"])
+    return {
+        "scope": path.parent,
+        "vault": vault,
+        "expected": {
+            **item["before"], "mode": item["mode"],
+            **({"windows_acl_digest": item["windows_acl_digest"]} if os.name == "nt" else {}),
+        },
+        "receipt_path": vault / plan_id / "retirement" / f"{index:03d}.json",
+        "backup_path": vault / plan_id / "cleanup" / f"{index:03d}",
+        "plan_id": plan_id,
+    }
+
+
+def _completed_retirement(
+    item: Mapping[str, Any], outcome: Mapping[str, Any], options: Mapping[str, Any], index: int,
+) -> dict[str, Any]:
+    return {
+        "resource_id": f"cleanup-{index:03d}",
+        "kind": item["kind"],
+        "path": item["path"],
+        "status": "succeeded",
+        "writes": True,
+        "retirement_plan_id": options["plan_id"],
+        "retirement_receipt": str(options["receipt_path"]),
+        **{key: outcome[key] for key in ("before", "after", "mode_before", "mode_after", "backup_ref")},
+        **{key: outcome[key] for key in (
+            "retirement_completion", "windows_acl_digest", "windows_acl_digest_after",
+        ) if key in outcome},
+    }
+
+
+def _retirement_writes(results: Mapping[str, Mapping[str, Any]]) -> bool | None:
+    effects = {
+        row.get("writes", True if row["status"] == "succeeded" else None)
+        for row in results.values()
+    }
+    return True if True in effects else None if None in effects else False
+
+
+def _previous_receipt(
+    path: Path | None, plan: Mapping[str, Any], vault: Path, environ: Mapping[str, str],
+    *, legacy_retry: bool = False,
+):
+    candidates = _all_candidates(plan)
+    by_path = {item["path"]: item for item in candidates}
+    results = {}
+    if path is not None:
+        if not _safe_path(path).is_relative_to(vault):
+            _fail("scope-conflict", "cleanup receipt is outside the plan vault")
+        previous = _read_document(path, "receipt_id", vault=vault)
+        if previous["payload"]["plan_id"] != plan["plan_id"]:
+            _fail("binding-violation", "cleanup receipt belongs to a different plan")
+        for row in previous["payload"]["results"]:
+            candidate = by_path.get(row["path"])
+            if (
+                candidate is None or row["kind"] != candidate["kind"]
+                or row["before"] != candidate["before"] or row["path"] in results
+            ):
+                _fail("binding-violation", "receipt contains an unbound cleanup result")
+            results[row["path"]] = row
+    if any(item["kind"] == "graft-retire" for item in candidates):
+        _assert_graft_domain(plan, _bound_graft_paths(plan, environ, vault))
     done = {}
     progressed: dict[str, dict[str, Any]] = {}
     vendor_rows = {}
-    seen = set()
-    for row in previous["payload"]["results"]:
-        candidate = candidates.get(row["path"])
-        if (
-            candidate is None
-            or row["kind"] != candidate["kind"]
-            or row["before"] != candidate["before"]
-            or row["path"] in seen
+    for index, candidate in enumerate(candidates):
+        target = candidate["path"]
+        row = results.get(target)
+        if candidate["kind"] == "graft-retire" and not (
+            row is not None and row["status"] == "succeeded" and "retirement_plan_id" not in row
         ):
-            _fail("binding-violation", "receipt contains an unbound cleanup result")
-        seen.add(row["path"])
+            options = _retirement_options(candidate, plan["plan_id"], index, vault)
+            try:
+                outcome = _retirement().reconcile_candidate(
+                    candidate, **options,
+                    retirement_completion=row.get("retirement_completion") if row else None,
+                )
+            except contracts.ContractError as error:
+                if error.code == "retirement-interrupted" and any(
+                    "retirement_plan_id" in completed for completed in done.values()
+                ):
+                    error.details = {**(error.details or {}), "writes": 1}
+                raise
+            if outcome is not None and outcome["result"] == "skipped-complete":
+                measured = _completed_retirement(candidate, outcome, options, index)
+                if row is not None and row.get("retirement_completion") is not None:
+                    # Reconciliation already matched the embedded copy to any
+                    # durable receipt. Preserve the original receipt row.
+                    measured["retirement_completion"] = row["retirement_completion"]
+                if row is not None and row["status"] == "succeeded" and row != measured:
+                    _fail("binding-violation", "cleanup receipt does not match the measured retirement")
+                row = results[target] = measured
+            elif row is not None and row["status"] == "succeeded":
+                _fail("binding-violation", "cleanup receipt has no measured retirement")
+            elif row is not None and (
+                row.get("writes") is True
+                or ("writes" in row and row["writes"] is None and outcome is None)
+            ):
+                _fail("retirement-interrupted", "cleanup requires a measured retirement outcome")
+        if row is None:
+            continue
         backup = row["backup_ref"]
         if backup:
-            backup_path = _safe_path(Path(backup["path"]))
-            if (
-                not backup_path.is_relative_to(vault)
-                or snapshot(backup_path) != candidate["before"]
-            ):
-                _fail("backup-conflict", "receipt backup is unavailable or changed")
+            _preflight_backup(
+                row, vault, Path(target),
+                check_mode=not legacy_retry or row.get("mode_before") is not None,
+            )
         if row["status"] == "succeeded":
             if not backup or row["after"] != _goal(candidate, backup, vault=vault):
                 _fail(
@@ -1209,7 +1393,7 @@ def _previous_receipt(path: Path | None, plan: Mapping[str, Any], vault: Path, *
                         continue
                     if resource_path in done or resource_path in progressed:
                         _fail("binding-violation", "another cleanup result already covers this vendor target")
-                    other = candidates.get(resource_path)
+                    other = by_path.get(resource_path)
                     if other is not None and transition["before"] != other["before"]:
                         _fail("binding-violation", "vendor transition does not match the sealed candidate")
                     progressed[resource_path] = transition
@@ -1241,7 +1425,7 @@ def _previous_receipt(path: Path | None, plan: Mapping[str, Any], vault: Path, *
             )
     for transition in progressed.values():
         _retired_matches(transition, check_mode="mode_after" in transition)
-    return previous, done, progressed, vendor_rows
+    return results, done, progressed, vendor_rows
 
 
 def _rejection(phase: str, reason: str, code: int = 2):
@@ -1278,8 +1462,8 @@ def apply_cleanup_legacy(
         # rc.2 cleanup had byte/state receipts, with no modes and no Graft
         # retirement scope. Resume only that already-sealed, non-Graft work.
         legacy_retry = cleanup_receipt_path is not None and "graftRetirement" not in plan["payload"]
-        previous, done, progressed, _vendor_rows = _previous_receipt(
-            cleanup_receipt_path, plan, vault, legacy_retry=legacy_retry,
+        results, done, progressed, _vendor_rows = _previous_receipt(
+            cleanup_receipt_path, plan, vault, environ, legacy_retry=legacy_retry,
         )
         _validate_scope(plan, done, progressed, environ, legacy_retry=legacy_retry)
     except (
@@ -1290,15 +1474,20 @@ def apply_cleanup_legacy(
         KeyError,
         TypeError,
     ) as error:
+        if getattr(error, "code", None) == "retirement-interrupted":
+            envelope, code = _rejection("apply", "retirement outcome is unproven; preserve the private vault")
+            details = getattr(error, "details", None) or {}
+            envelope["writes"] = True if details.get("writes") == 1 else None
+            if details.get("retirement_intent"):
+                envelope["cleanup_legacy"]["retirement_intent"] = details["retirement_intent"]
+            return envelope, code
         return _rejection("apply", _VENDOR_REFUSALS.get(
             getattr(error, "code", None), "cleanup confirmation, scope, identity or evidence validation failed",
         ))
     from sbtd_migration import _prepare_backup_parent
 
     candidates = _all_candidates(plan)
-    results = (
-        {row["path"]: row for row in previous["payload"]["results"]} if previous else {}
-    )
+    reset = plan["payload"].get("purpose") == "retirement-reset"
     started = _now()
     status = "cleaned"
     backups: dict[str, dict[str, Any]] = {}
@@ -1340,9 +1529,12 @@ def apply_cleanup_legacy(
                 "before": item["before"], "mode_before": mode, "backup_ref": backup,
             }, vault, Path(item["path"]))
     except (contracts.ContractError, TaskDataError, OSError):
-        return _rejection(
+        envelope, code = _rejection(
             "apply", "backup preservation failed; no cleanup execution started", 3
         )
+        if reset:
+            envelope["writes"] = _retirement_writes(results)
+        return envelope, code
     current_states = {
         item["path"]: (
             progressed[item["path"]]["after"]
@@ -1375,30 +1567,23 @@ def apply_cleanup_legacy(
         }
         if native:
             row["windows_acl_digest"] = graft["windows_acl_digest"]
+        standalone = item["kind"] == "graft-retire"
+        if standalone:
+            row["writes"] = False
         try:
             if snapshot(path) != current_states[str(path)] or (
                 str(path) in current_modes and _mode_text(path) != current_modes[str(path)]
             ):
                 _fail("state-conflict", "target bytes or mode changed during cleanup")
-            if item["kind"] == "graft-retire":
-                # Sealed plan item only. Fresh inspection compares; it does not supply bytes.
-                receipt_path = vault / plan["plan_id"] / "retirement" / f"{index:03d}.json"
-                _prepare_backup_parent(receipt_path, vault)
-                _retirement().apply_candidate(
-                    item,
-                    scope=path.parent,
-                    vault=vault,
-                    expected={
-                        "type": item["before"]["type"],
-                        "checksum": item["before"]["checksum"],
-                        "mode": item["mode"],
-                        **({"windows_acl_digest": row["windows_acl_digest"]} if native else {}),
-                    },
-                    receipt_path=receipt_path,
-                    **({"backup_path": Path(backups[str(path)]["path"])} if native else {}),
-                )
-                row["retirement_receipt"] = str(receipt_path)
-            elif item["kind"] == "trellis-uninstall":
+            if standalone:
+                # The intent and receipt use the same verified per-plan backup on both systems.
+                options = _retirement_options(item, plan["plan_id"], index, vault)
+                _prepare_backup_parent(options["receipt_path"], vault)
+                row["writes"] = None
+                outcome = _retirement().apply_candidate(item, **options)
+                results[str(path)] = _completed_retirement(item, outcome, options, index)
+                continue
+            if item["kind"] == "trellis-uninstall":
                 from sbtd_trellis_uninstall import execute_trellis_uninstall
 
                 outcome = execute_trellis_uninstall(
@@ -1470,6 +1655,14 @@ def apply_cleanup_legacy(
                 row["after"] = snapshot(path)
             except (contracts.ContractError, OSError):
                 row["after"] = None
+            if standalone and row["writes"] is None:
+                details = getattr(error, "details", None) or {}
+                if details.get("retirement_intent"):
+                    row["retirement_intent"] = details["retirement_intent"]
+                if "writes" in details:
+                    row["writes"] = None if details["writes"] is None else bool(details["writes"])
+                elif row["after"] == row["before"] and _mode_text(path) == row["mode_before"]:
+                    row["writes"] = False
             status = "failed"
         results[str(path)] = row
         if status == "failed":
@@ -1486,11 +1679,15 @@ def apply_cleanup_legacy(
     try:
         save_document(destination, receipt, private_root=vault)
     except (contracts.ContractError, TaskDataError, OSError):
-        return _rejection(
+        envelope, code = _rejection(
             "apply",
             "cleanup may have written targets; receipt persistence failed; preserve the private backup directory",
             3,
         )
+        envelope["plan_id"] = plan["plan_id"]
+        if reset:
+            envelope["writes"] = _retirement_writes(results)
+        return envelope, code
     envelope = {
         "mode": "cleanup-legacy",
         "phase": "apply",
@@ -1501,11 +1698,15 @@ def apply_cleanup_legacy(
         ],
         "cleanup_legacy": {"receipt": receipt, "receipt_path": str(destination)},
     }
-    if plan["payload"].get("purpose") == "retirement-reset":
+    if reset:
         # Not the composed confirmation digest shown beside ordinary template writes.
         envelope["purpose"] = "retirement-reset"
         envelope["retirement_plan_id"] = plan["plan_id"]
         envelope["receipt_path"] = str(destination)
+        envelope["writes"] = _retirement_writes(results)
+    elif ((plan["payload"].get("graftRetirement") or {}).get("view") or {}).get("stop"):
+        envelope["graftRetirement"] = {"status": "blocked", "scope": "legacy-only"}
+        envelope["reason"] = _LEGACY_ONLY_NOTICE
     return envelope, 0 if status == "cleaned" else 3
 
 
@@ -1553,6 +1754,7 @@ def plan_reset_retirement(
     vault: Path | None = None,
     report: Mapping[str, Any] | None = None,
     confirm: str | None = None,
+    environ: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Read-only preview, or recompute, persist, and apply a retirement-only plan."""
     vault_path = None if vault is None else require_private_directory(_safe_path(Path(vault)))
@@ -1600,7 +1802,10 @@ def plan_reset_retirement(
             "receipt_id": None,
         }
     destination = vault_path / f"cleanup-legacy-plan-{plan_id}.json"
-    save_document(destination, plan, private_root=vault_path)
+    if not os.path.lexists(destination):
+        save_document(destination, plan, private_root=vault_path)
+    elif read_file(destination) != _canonical_report(plan):
+        _fail("binding-violation", "the saved retirement plan differs from the confirmed plan")
     if not sealed:
         return {
             **preview,
@@ -1610,7 +1815,7 @@ def plan_reset_retirement(
             "receipt_path": None,
             "receipt_id": None,
         }
-    applied, _code = apply_cleanup_legacy(destination, confirm_cleanup=plan_id)
+    applied, _code = apply_cleanup_legacy(destination, confirm_cleanup=plan_id, environ=environ)
     receipt = applied.get("cleanup_legacy", {}).get("receipt") or {}
     return {
         "mode": "cleanup-legacy",
@@ -1623,7 +1828,8 @@ def plan_reset_retirement(
         "receipt_path": applied.get("cleanup_legacy", {}).get("receipt_path"),
         "receipt_id": receipt.get("receipt_id"),
         "graftRetirement": view,
-        "writes": applied["status"] == "cleaned",
+        "writes": applied.get("writes", False),
+        **({"reason": applied["reason"]} if "reason" in applied else {}),
     }
 
 
@@ -1678,21 +1884,14 @@ def _preflight_retirement_receipt(
     receipt_path = _safe_path(Path(row["retirement_receipt"]))
     if not receipt_path.is_relative_to(vault) or not receipt_path.is_file():
         _fail("scope-conflict", "retirement receipt is outside the private vault")
-    document = strict_json_object(read_file(receipt_path))
-    payload = document.get("payload")
-    if (
-        set(document) != {"schema_version", "payload", "receipt_id"}
-        or document.get("schema_version") != 1
-        or type(document.get("schema_version")) is not int
-        or not isinstance(payload, dict)
-        or document.get("receipt_id") != _digest(payload)
-    ):
-        _fail("binding-violation", "retirement receipt is not a sealed document")
+    payload = _read_document(receipt_path, "receipt_id", vault=vault)["payload"]
     schema = getattr(_retirement(), "RECEIPT_SCHEMA", None)
     if (
         payload.get("schema") != schema
         or payload.get("target") != str(target)
         or payload.get("candidate_id") != candidate.get("id")
+        or "plan_id" in payload
+        or "intent_id" in payload
         or payload.get("action") != candidate.get("action")
     ):
         _fail("binding-violation", "retirement receipt target is not the restore path")
@@ -1719,7 +1918,7 @@ def _preflight_retirement_receipt(
         _fail("state-conflict", "retirement receipt backup mode does not match the recorded mode")
 
 
-def _rollback_allowed(
+def _bound_graft_paths(
     plan: Mapping[str, Any], environ: Mapping[str, str], vault: Path
 ) -> set[str]:
     payload = plan["payload"]
@@ -1750,7 +1949,8 @@ def _preflight_restore_row(
                 "binding-violation",
                 "only a retirement-owned target inside the active domain can be restored from a retirement receipt",
             )
-        _preflight_retirement_receipt(row, candidate, vault, path)
+        if "retirement_plan_id" not in row:
+            _preflight_retirement_receipt(row, candidate, vault, path)
         if row.get("mode_before") != candidate.get("mode") or row.get("mode_after") != (
             None if row["after"]["type"] == "absent" else candidate.get("mode")
         ):
@@ -1788,6 +1988,13 @@ def _restore_retired(row: Mapping[str, Any], vault: Path, target: Path, *, nativ
     _retired_matches(row, native=native)
     if row.get("retirement_receipt"):
         receipt_path = _safe_path(Path(row["retirement_receipt"]))
+        intent_options = {}
+        if "retirement_plan_id" in row:
+            intent_options = {
+                "plan_id": row["retirement_plan_id"],
+                "backup_path": Path(row["backup_ref"]["path"]),
+                "retirement_completion": row.get("retirement_completion"),
+            }
         _retirement().restore_candidate(
             receipt_path,
             scope=path.parent,
@@ -1799,6 +2006,7 @@ def _restore_retired(row: Mapping[str, Any], vault: Path, target: Path, *, nativ
                 **({"windows_acl_digest": row["windows_acl_digest_after"]} if native else {}),
             },
             target=path,
+            **intent_options,
         )
         return
     elif row["before"]["type"] == "directory":
@@ -1870,9 +2078,9 @@ def rollback_cleanup_legacy(
         receipt_path = _safe_path(cleanup_receipt_path)
         if not receipt_path.is_relative_to(vault) or receipt_path == plan_path:
             _fail("scope-conflict", "cleanup receipt is outside the plan vault")
-        _receipt, done, progressed, vendor_rows = _previous_receipt(receipt_path, plan, vault)
+        _results, done, progressed, vendor_rows = _previous_receipt(receipt_path, plan, vault, environ)
         _validate_scope(plan, done, progressed, environ)
-        allowed = _rollback_allowed(plan, environ, vault)
+        allowed = _bound_graft_paths(plan, environ, vault)
         rows = []
         for candidate in _all_candidates(plan):
             row = done.get(candidate["path"])
@@ -1919,6 +2127,8 @@ def rollback_cleanup_legacy(
         KeyError,
         TypeError,
     ) as error:
+        if getattr(error, "code", None) == "retirement-interrupted":
+            return _rejection("rollback", "retirement outcome is unproven; preserve the private vault")
         return _rejection("rollback", _VENDOR_REFUSALS.get(
             getattr(error, "code", None), "rollback confirmation, scope, identity or evidence validation failed",
         ))

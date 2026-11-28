@@ -74,11 +74,10 @@ def validate_archived_graft_declarations(payload: Mapping[str, Any]) -> None:
 
     The private deploy set is exactly ``root/graft`` ``build-graft``
     ``whole-resource``, plus ``root/AGENTS.md`` ``configure-graft``
-    ``graft-agents`` unless ``agents_no_touch``. Every Graft operation
-    ``source_ref`` must equal ``contracts.archived_graft_policy()`` by
-    identity. Does not read ``assets/graft-build-policy.json``.
+    ``graft-agents`` unless ``agents_no_touch``. Graft operations bind a
+    single frozen archive identity without reading or executing the source.
     """
-    policy = contracts.archived_graft_policy()
+    policy = contracts.archived_graft_policy_for(payload)
     operations = legacy_graft_operations(payload)
     if not operations:
         _fail(
@@ -396,7 +395,7 @@ def attach_deployment(
         user_home,
     )
     from onboard import omp_agents_target as resolve_omp_agents_target
-    from sbtd_migration_plan import _ignore_operation
+    from sbtd_migration_plan import _ignore_operation, _requires_local_protection
 
     if platform not in {"codex", "omp"}:
         _fail(
@@ -431,14 +430,14 @@ def attach_deployment(
         "inputs": list(discovery["inputs"]) if discovery is not None else [],
     }
     for project in payload["projects"]:
-        if not any(
-            operation["owner_kind"] == "gitignore"
-            for operation in project["private_operations"]
+        operations = project["private_operations"]
+        operations.extend(private[project["root"]])
+        if _requires_local_protection(operations) and not any(
+            operation["owner_kind"] == "gitignore" for operation in operations
         ):
             protection = _ignore_operation(Path(project["root"]))
             if protection is not None:
-                project["private_operations"].insert(0, protection)
-        project["private_operations"].extend(private[project["root"]])
+                operations.insert(0, protection)
     if codex_home is not None:
         if not any(
             record["path"] == str(codex_home) for record in payload["shared_roots"]
@@ -1137,6 +1136,15 @@ def _deployment_protected_paths(
         Path(reference["path"])
         for reference in contracts._manifest_input_references(payload)
     }
+    protected.update(Path(project["root"]) for project in payload["projects"])
+    routing = payload["routing_approvals"]
+    if routing is not None:
+        protected.add(Path(routing["path"]))
+    if previous is not None and (reconciliation := previous["payload"].get("reconciliation")):
+        protected.update(
+            Path(reconciliation[key]["path"])
+            for key in ("manifest_ref", "apply_receipt_ref", "missing_deployment_evidence")
+        )
     protected.update(_source_backup_paths(manifest).values())
     stage_root = Path(payload["backup_root"]) / manifest["manifest_id"]
     for operation in contracts._manifest_operations(payload):
@@ -1159,6 +1167,12 @@ def _require_disjoint_evidence_path(path: Path, reserved: Iterable[Path]) -> Non
         _fail("private-scope", "a deployment evidence path overlaps a declared or reserved object")
 
 
+def _check_smoke_directories(paths: Iterable[Path]) -> None:
+    for path in paths:
+        if _lstat(_canonical(path)) is not None:
+            require_private_directory(path)
+
+
 def _preflight_smoke_evidence_paths(
     private_root: Path, roots: Iterable[str], *, reserved: Iterable[Path]
 ) -> dict[str, Path]:
@@ -1169,11 +1183,9 @@ def _preflight_smoke_evidence_paths(
         for root in roots
     }
     reserved_paths = tuple(reserved)
-    for path in paths.values():
-        _require_disjoint_evidence_path(path, reserved_paths)
     for path in (parent, *paths.values()):
-        if _lstat(_canonical(path)) is not None:
-            require_private_directory(path)
+        _require_disjoint_evidence_path(path, reserved_paths)
+    _check_smoke_directories((parent, *paths.values()))
     return paths
 
 
@@ -1280,27 +1292,20 @@ def load_deployment_context(
     evidence_inputs = {manifest_path, apply_path}
     if previous_path is not None:
         evidence_inputs.add(previous_path)
-    if previous is not None and previous["payload"].get("reconciliation") is not None:
-        missing = previous["payload"]["reconciliation"]["missing_deployment_evidence"]
-        evidence_inputs.add(Path(missing["path"]))
     stage_outputs = (
         {Path(ref["path"]) for ref in contracts._immutable_stage_references(previous["payload"])}
         if previous is not None
         else set()
     )
+    reserved = managed | evidence_inputs | {path for path, _ in protected}
     _require_disjoint_evidence_path(
         output_path,
-        managed | evidence_inputs | stage_outputs | {path for path, _ in protected},
+        reserved | stage_outputs,
     )
     smoke_dirs = _preflight_smoke_evidence_paths(
         private,
         declared_roots,
-        reserved=(
-            managed
-            | evidence_inputs
-            | {output_path}
-            | {path for path, directory in protected if directory}
-        ),
+        reserved=reserved | {output_path},
     )
     require_private_directory(output_path.parent)
     if snapshot(output_path) != _ABSENT:
@@ -1630,8 +1635,6 @@ def _completed_roots(
     projects: Sequence[Mapping[str, Any]],
     operations: Sequence[Mapping[str, Any]],
     results: Mapping[str, Mapping[str, Any]],
-    *,
-    include_unwritten: bool = False,
 ) -> list[str]:
     completed: list[str] = []
     for project in projects:
@@ -1649,7 +1652,7 @@ def _completed_roots(
                 )
             )
         ]
-        if (required or include_unwritten) and all(
+        if all(
             results.get(resource_id, {}).get("status") == "succeeded"
             for resource_id in required
         ):
@@ -1685,7 +1688,6 @@ def run_completed_smokes(
     evidence_dirs: Mapping[str, Path],
     context_paths: tuple[Path, Path],
     previous_reports: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
-    include_unwritten: bool = False,
 ) -> tuple[dict[str, list[dict[str, Any]]], set[str]]:
     """Fresh smoke for completed roots only. Successful fresh refs replace prior refs.
 
@@ -1696,9 +1698,7 @@ def run_completed_smokes(
         for root, refs in (previous_reports or {}).items()
     }
     failed: set[str] = set()
-    for root in _completed_roots(
-        projects, operations, results, include_unwritten=include_unwritten
-    ):
+    for root in _completed_roots(projects, operations, results):
         evidence_dir = evidence_dirs[root]
         try:
             require_private_directory(evidence_dir.parent, create=True)
@@ -1755,6 +1755,9 @@ def execute_migration_deployment(
     ):
         _fail("state-conflict", "the bound deployment inputs changed before execution")
     _require_disjoint_evidence_path(context.output_path, context.smoke_dirs.values())
+    _check_smoke_directories((
+        context.manifest_path.parent / "deployment-smoke", *context.smoke_dirs.values()
+    ))
     require_private_directory(context.output_path.parent)
     if snapshot(context.output_path) != _ABSENT:
         _fail("state-conflict", "the deployment evidence target already exists")
@@ -1824,7 +1827,6 @@ def execute_migration_deployment(
             results,
             evidence_dirs=context.smoke_dirs,
             previous_reports=previous_reports,
-            include_unwritten=contracts._is_zero_write_project_successor(manifest["payload"]),
             context_paths=context.context_paths,
         )
     try:
@@ -1953,5 +1955,3 @@ def run_migration_init(mode: str, args: Any) -> int:
             "Detailed artifacts remain private; use --json only with authorized private storage."
         )
     return code
-
-

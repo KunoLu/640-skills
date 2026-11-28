@@ -96,6 +96,52 @@ class ScopeValidationTests(unittest.TestCase):
                 self.assertEqual(caught.exception.code, "scope-conflict")
                 self.assertIn("config_home/config.toml", caught.exception.message)
 
+    def test_existing_codex_case_alias_seals_the_effective_config(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            host = _codex_host(base, _runtime(base))
+            canonical = Path(host["config"])
+            canonical.parent.mkdir(parents=True)
+            canonical.write_bytes(b"# selected config\n")
+            alias = canonical.with_name("CONFIG.TOML")
+            if not alias.is_file():
+                self.skipTest("fixture directory is case-sensitive")
+            self.assertTrue(alias.samefile(canonical))
+            host["config"] = str(alias)
+            scope = {"hosts": [host], "decisions": {str(alias): "preserve"}}
+            effective = hosts._canonical_host_scope(scope)
+            self.assertEqual(effective["hosts"][0]["config"], str(canonical))
+            self.assertEqual(effective["decisions"], {str(canonical): "preserve"})
+            self.assertEqual(hosts.build_host_resources(effective), [])
+            canonical.unlink()
+            self.assertEqual(hosts.build_host_resources(effective), [])
+            with self.assertRaises(ContractError) as caught:
+                hosts.build_host_resources(scope)
+            self.assertEqual(caught.exception.code, "scope-conflict")
+
+    def test_distinct_codex_case_entries_are_not_aliases_even_if_hardlinked(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            host = _codex_host(base, _runtime(base))
+            canonical = Path(host["config"])
+            canonical.parent.mkdir(parents=True)
+            canonical.write_bytes(b"# effective config\n")
+            alias = canonical.with_name("CONFIG.TOML")
+            if alias.exists():
+                self.skipTest("fixture directory is case-insensitive")
+            alias.write_bytes(b"# other config\n")
+            host["config"] = str(alias)
+            for hardlinked in (False, True):
+                with self.subTest(hardlinked=hardlinked):
+                    if hardlinked:
+                        alias.unlink()
+                        os.link(canonical, alias)
+                        self.assertTrue(alias.samefile(canonical))
+                    with self.assertRaises(ContractError) as caught:
+                        hosts.build_host_resources({"hosts": [host]})
+                    self.assertEqual(caught.exception.code, "scope-conflict")
+
+
     def test_host_skills_root_must_be_selected_top_level(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
@@ -283,6 +329,31 @@ class HostPlatformNormalizationTests(unittest.TestCase):
             self.assertEqual(load["reason"], "unsafe-registered-server")
             self.assertNotIn("sbtd-graft", json.dumps(result["hosts"][0]["host"]["checks"]))
 
+    @unittest.skipIf(os.name == "nt", "fixture uses a POSIX directory symlink")
+    def test_probe_does_not_read_through_selected_project_config_parent_link(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            host = _codex_host(base, _runtime(base))
+            project = base / "project"
+            project.mkdir()
+            host["project_roots"] = [str(project)]
+            outside = base / "unselected"
+            outside.mkdir()
+            config = outside / "config.toml"
+            config.write_bytes(b'model = "outside-project"\n')
+            (project / ".codex").symlink_to(outside, target_is_directory=True)
+            with (
+                mock.patch.object(hosts, "read_file", wraps=hosts.read_file) as read,
+                mock.patch.object(hosts, "_spawn") as spawn,
+            ):
+                result = hosts.verify_hosts({"hosts": [host]}, probe=True)
+            read.assert_not_called()
+            spawn.assert_not_called()
+            load = result["hosts"][0]["host"]["checks"]["host_load"]
+            self.assertEqual((load["status"], load["reason"]), ("failed", "unsafe-registered-server"))
+            self.assertEqual(config.read_bytes(), b'model = "outside-project"\n')
+
+
 class ShellResourceTests(unittest.TestCase):
     def _profile(self, base: Path, content: bytes) -> tuple[Path, dict]:
         profile = base / "selected-profile"
@@ -294,17 +365,25 @@ class ShellResourceTests(unittest.TestCase):
         }
         return profile, scope
 
-    @unittest.skipUnless(os.name == "nt", "Windows profile retention")
-    def test_windows_unicode_profile_is_not_executed_by_probe(self):
-        """Unicode profile bytes stay intact. Graft command resolution is gone."""
+    def test_selected_profile_is_neither_read_nor_executed_in_probe(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
-            original = "profile \u2603\n".encode("utf-8")
+            original = "# Unicode profile \u2603\nthrow 'profile executed'\n".encode("utf-8")
             profile, scope = self._profile(base, original)
-            result = hosts.verify_hosts(scope, package_root=_package(base), probe=True)
-            self.assertEqual(profile.read_bytes(), original)
-            self.assertEqual(result["shell_profiles"][0]["host"]["status"], "not-applicable")
-            self.assertNotIn("graft", json.dumps(result))
+            with (
+                mock.patch.object(hosts.subprocess, "Popen") as spawn,
+                mock.patch.object(hosts, "read_file", wraps=hosts.read_file) as read,
+            ):
+                (present,) = hosts.verify_hosts(scope, probe=True)["shell_profiles"]
+                self.assertEqual(profile.read_bytes(), original)
+                profile.unlink()
+                (absent,) = hosts.verify_hosts(scope, probe=True)["shell_profiles"]
+            spawn.assert_not_called()
+            read.assert_not_called()
+            self.assertEqual(present["host"]["status"], "not-applicable")
+            self.assertEqual(present["legacy"]["status"], "unverified")
+            self.assertEqual(absent["legacy"]["status"], "absent")
+
 
     @unittest.skipUnless(os.name == "nt", "Windows profile retention")
     def test_windows_profile_is_not_rewritten_by_upgrade(self):

@@ -15,12 +15,18 @@ from unittest import mock
 SCRIPTS = Path(__file__).resolve().parents[1] / "sbtd-workflow-onboard" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+from onboard import native_git_argv
 from onboard_contracts import ContractError, canonical_json_bytes
 from sbtd_deployment_smoke import run_project_smoke
 from sbtd_migration import apply_migration, runtime_versions
 from sbtd_migration_files import snapshot
 from sbtd_migration_plan import plan_migration
-from sbtd_migration_verify import ONBOARD_CLI_SMOKE_SCHEMA, onboard_cli_smoke_command
+from sbtd_migration_verify import (
+    ONBOARD_CLI_BOOTSTRAP,
+    ONBOARD_CLI_SMOKE_BOUND_SCHEMA,
+    ONBOARD_CLI_SMOKE_SCHEMA,
+    onboard_cli_smoke_command,
+)
 from tests.test_sbtd_migration_apply import legacy_project
 
 
@@ -108,6 +114,91 @@ class DeploymentSmokeTests(unittest.TestCase):
             self.assertEqual(unrelated.read_text(encoding="utf-8"), "SYMLINK-SECRET-not-inspected\n")
             self.assertFalse(any(path.suffix == ".err" for path in evidence.iterdir()))
             self.assertEqual(sorted(path.suffix for path in evidence.iterdir()), [".json", ".md"])
+
+    def test_native_git_ignores_checkout_path_and_cli_uses_private_scratch(self):
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw).resolve()
+            project = base / "project"
+            project.mkdir()
+            evidence = _private(base / "evidence")
+            git = Path(native_git_argv(project)[0])
+            project_bin = project / "bin"
+            project_bin.mkdir()
+            path = os.pathsep.join((str(project_bin), "bin", "", str(git.parent)))
+            real_run = subprocess.run
+            git_calls = []
+            scratch_dirs = []
+
+            def observe_call(argv, **kwargs):
+                if argv[4:5] == [ONBOARD_CLI_BOOTSTRAP]:
+                    scratch = Path(kwargs["env"]["HOME"])
+                    scratch_dirs.append(scratch)
+                    self.assertEqual(scratch.parent, evidence)
+                    self.assertEqual(kwargs["cwd"], scratch)
+                    self.assertEqual(kwargs["env"]["PATH"], str(git.parent))
+                    for key in ("TMPDIR", "TMP", "TEMP"):
+                        self.assertEqual(kwargs["env"][key], str(scratch))
+                else:
+                    git_calls.append(Path(argv[0]))
+                    self.assertEqual(Path(argv[0]), git)
+                    self.assertEqual(kwargs["cwd"], git.parent)
+                    self.assertFalse(kwargs.get("shell", False))
+                return real_run(argv, **kwargs)
+
+            with (
+                mock.patch.dict(os.environ, {"PATH": path}),
+                mock.patch.object(subprocess, "run", side_effect=observe_call),
+            ):
+                reports = run_project_smoke(project, evidence)
+            self.assertEqual(len(reports), 2)
+            self.assertGreaterEqual(len(git_calls), 2)
+            self.assertEqual(len(scratch_dirs), 1)
+            self.assertFalse(scratch_dirs[0].exists())
+
+    def test_ref_or_head_change_after_real_check_prevents_publication(self):
+        for change in ("ref", "head"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as raw:
+                base = Path(raw).resolve()
+                project = base / "project"
+                project.mkdir()
+                evidence = _private(base / "evidence")
+                real_run = subprocess.run
+
+                def git(*args):
+                    return real_run(
+                        native_git_argv(project, *args), check=True, capture_output=True,
+                    )
+
+                def commit(message):
+                    git(
+                        "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                        "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", message,
+                    )
+
+                git("init", "-b", "main")
+                commit("before check")
+                checked = []
+
+                def change_after_check(argv, **kwargs):
+                    result = real_run(argv, **kwargs)
+                    if argv[4:5] == [ONBOARD_CLI_BOOTSTRAP]:
+                        self.assertEqual(result.returncode, 0)
+                        checked.append(True)
+                        if change == "ref":
+                            git("symbolic-ref", "HEAD", "refs/heads/other")
+                            git("update-ref", "HEAD", "refs/heads/main")
+                        else:
+                            commit("after check")
+                    return result
+
+                with (
+                    mock.patch.object(subprocess, "run", side_effect=change_after_check),
+                    self.assertRaises(ContractError) as failure,
+                ):
+                    run_project_smoke(project, evidence)
+                self.assertEqual(failure.exception.code, "revision-conflict")
+                self.assertEqual(checked, [True])
+                self.assertEqual(list(evidence.iterdir()), [])
 
     def test_unsafe_root_and_unsuccessful_child_write_nothing(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -250,11 +341,18 @@ class BoundMigrationSmokeTests(unittest.TestCase):
             self.assertTrue(checked["sbtd"]["legacyPresent"])
             self.assertEqual(snapshot(root), before)
 
-            refs = run_project_smoke(
-                root, evidence, context_paths=(manifest_path, apply_path)
-            )
+            retained = str(root / ".trellis")
+            with (
+                mock.patch.dict(os.environ, {key: retained for key in ("TMPDIR", "TMP", "TEMP")}),
+                mock.patch.object(tempfile, "tempdir", retained),
+            ):
+                refs = run_project_smoke(
+                    root, evidence, context_paths=(manifest_path, apply_path)
+                )
             self.assertEqual(len(refs), 2)
             document = json.loads(Path(refs[0]["path"]).read_bytes())
+            self.assertEqual(document["schema"], ONBOARD_CLI_SMOKE_BOUND_SCHEMA)
+            self.assertEqual(set(document["producer"]), {"imageSha256", "invocationSha256"})
             self.assertEqual(document["projectRoot"], str(root))
             self.assertEqual(document["status"], "passed")
             self.assertEqual(document["exitCode"], 0)

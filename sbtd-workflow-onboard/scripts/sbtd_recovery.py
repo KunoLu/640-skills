@@ -194,6 +194,9 @@ def plan_recovery(
         documents[kind] = document
         raw_documents[kind] = raw
     contracts.validate_declared_bindings(manifest, documents, raw_documents)
+    from sbtd_deployment import reject_legacy_execution
+
+    reject_legacy_execution(manifest["payload"])
     projects = _selected_roots(manifest, projects_root)
     context_conflicts: list[str] = []
     try:
@@ -283,17 +286,6 @@ def plan_recovery(
     if conflicts:
         return _blocked_plan(manifest, projects, input_evidence, conflicts)
 
-    from sbtd_deployment import legacy_graft_operations
-
-    legacy_ids = {
-        operation["resource_id"]
-        for operation in legacy_graft_operations(manifest["payload"])
-    }
-    if any(rid in legacy_ids for _phase, rid in required_steps):
-        _fail(
-            "unsupported-in-rc.3",
-            "a sealed plan still contains Graft operations; regenerate the plan",
-        )
     steps: list[dict[str, Any]] = []
     previous_by_resource: dict[str, str] = {}
     shared_ids: set[str] = set()
@@ -589,6 +581,9 @@ def apply_recovery(
                 "a previous receipt is later than the current operation",
             )
     contracts.validate_declared_bindings(manifest, documents, raw_documents)
+    from sbtd_deployment import reject_legacy_execution
+
+    reject_legacy_execution(manifest["payload"])
     manifest_dir = Path(evidence["manifest"]["path"]).parent
     if plan_path.parent != manifest_dir:
         _fail(
@@ -661,21 +656,6 @@ def apply_recovery(
     _require_reconciliation_provenance(
         manifest, stage_documents.get("deployment_evidence")
     )
-    from sbtd_deployment import legacy_graft_operations
-
-    legacy_ids = {
-        operation["resource_id"]
-        for operation in legacy_graft_operations(manifest["payload"])
-    }
-    if any(
-        step["resource_id"] in legacy_ids
-        and previous_results.get(step["step_id"], {}).get("status") != "succeeded"
-        for step in plan["payload"]["steps"]
-    ):
-        _fail(
-            "unsupported-in-rc.3",
-            "a sealed plan still contains Graft operations; regenerate the plan",
-        )
     started = _now()
     global_error = None
     try:

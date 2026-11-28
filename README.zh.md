@@ -103,6 +103,8 @@ rc.3 从工作流移除 Graft。没有 `install-graft`，也没有 `--graft-*`�
 
 根安装器不会自行同意退役。需要退役时，安装器停止并指向上述 plan/confirm 序列。`--no-mcp` 只跳过安装器的通用 MCP 菜单，不转发给 Onboard，也不是宿主接线。
 
+Windows 文件带有命名数据流时不作为退役候选：普通字节备份无法恢复该数据流。安装源版本过旧、不支持显式退役确认时，安装器在初始化之前拒绝执行。
+
 在已安装的 Onboard 目录执行 plan 并检查 JSON。确认目标后，才将 `PLAN_PATH` 设为 `cleanup_legacy.plan_path`、`PLAN_ID` 设为顶层 `plan_id`。
 
 ```bash
@@ -133,7 +135,7 @@ python scripts/onboard.py cleanup-legacy --phase rollback --plan "${PLAN_PATH:?}
 
 仍含 `build-graft` 或 `configure-graft` 的密封迁移计划以 `unsupported-in-rc.3` fail-closed。重新生成计划。历史 `migration verify` 只在已安装签名把该精确前驱绑定到当前执行后继时读取旧回执。签名缺失或错误为 `version-conflict`。verify 保持只读，不重跑 smoke，也不启动 Graft。它比对记录的字节和已签名的写后模式。字节或可信模式不一致为 `drifted`；两者都匹配为 `verified`；字节匹配但没有可信写后权限证据为 `not-verified`。其他资源继续核验。这些结果都不授予写入权。曾经成功的 rc.2 部署，不能仅凭当时成功就视为可核验。新的迁移 deploy 和 reconcile 不运行 Graft CLI。执行代码实际做本地部署检查时，那是可信的只读 `check-projects`，外加对密封目标的复核。它不是业务 API、宿主或模型验收。本节不宣称该检查已通过。
 
-历史权限证据只通过 `migration --phase verify --post-write-attestation <private-file>` 提供。该参数只属于 verify。分离的已签名记录必须绑定精确的历史部署 ID、资源 ID、记录的 after 状态和权限。它不改写旧 manifest 或回执，也不授予写入权。不要事后补签，也不要使用发布私钥。已发布 rc.2 仅有字节的证据不能证明权限未变。
+`migration --phase verify --post-write-attestation <private-file>` 只接受可信签发方针对该部署及资源的既有附证。签名绑定的写后模式、after 状态与 `observed_at` 必须对应原执行窗口；运行时沿革另行验签。操作人不得事后补签或传入自选信任公钥。rc.2 仅含字节的回执不能证明权限；字节匹配但缺可信权限证据时仍为 `not-verified`。任何核验结果都不授权写入。
 
 新迁移的部署检查只核对一个选定项目、原 manifest 和成功的 apply 回执。单独确认清理之前，现场与记录匹配的 `.trellis` 是应保留的原件；普通 onboarding 仍会被该目录阻断，其他项目状态异常仍会阻断迁移检查。
 

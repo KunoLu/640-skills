@@ -76,8 +76,11 @@ class CommonModeGrammarTests(ParseErrorAssertions):
         self.assertIsNone(args.projects_root)
 
     def test_plan_and_reset_parse_common_options(self) -> None:
-        plan = parse_workflow_args(["plan", "--platform", "omp", "--developer", "a1"])
+        plan = parse_workflow_args(["plan", "--action", "reset", "--platform", "omp", "--developer", "a1"])
         self.assertEqual(plan.mode, "plan")
+        self.assertEqual(plan.action, "reset")
+        self.assert_parse_error(["plan", "--action", "upgrade"])
+        self.assert_parse_error(["plan", "--action", "init", "--action", "reset"])
         reset = parse_workflow_args(["reset", "--yes", "--json"])
         self.assertEqual(reset.mode, "reset")
         self.assertTrue(reset.yes)

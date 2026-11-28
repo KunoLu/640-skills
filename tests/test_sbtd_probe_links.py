@@ -267,36 +267,6 @@ class _Proc:
         self.wait()
 
 
-class _StalledProc(_Proc):
-    def __init__(self, *, stall_write: bool) -> None:
-        super().__init__(lambda _: None)
-        self.stall_write = stall_write
-        self.released = threading.Event()
-        self.killed = False
-
-    def _feed(self, request: dict) -> None:
-        super()._feed(request)
-        if self.stall_write:
-            if not self.released.wait(timeout=3):
-                raise AssertionError("forced shutdown did not release the blocked write")
-            raise BrokenPipeError
-
-    def wait(self, timeout: float | None = None) -> int:
-        if self.returncode is None:
-            raise subprocess.TimeoutExpired("fixture host", timeout)
-        return super().wait(timeout)
-
-    def terminate(self) -> None:
-        pass  # The bad child ignores graceful termination.
-
-    def kill(self) -> None:
-        with self._condition:
-            self.killed = True
-            self.returncode = -9
-            self._condition.notify_all()
-        self.released.set()
-
-
 class _Rig:
     """Monkeypatches the hosts module probe seams with scripted doubles."""
 
@@ -512,6 +482,69 @@ class IsolatedProbeProtocolTests(_LinksCase):
                 if expected == "fail":
                     self.assertEqual(entry["host"]["checks"]["protocol"]["reason"], "host-response-timeout")
 
+    def test_codex_result_with_even_null_error_cannot_supply_evidence(self) -> None:
+        scope = self._scope()
+        rig = _Rig(self, ["alpha"]).install()
+        original = rig._codex_handler
+        for error in (None, {"code": -32601, "message": "method not found"}):
+            with self.subTest(error=error):
+                def reply(request):
+                    result = original(request)
+                    if request["method"] == "initialize":
+                        result["error"] = error
+                    return result
+
+                with mock.patch.object(rig, "_codex_handler", side_effect=reply):
+                    (entry,) = hosts.verify_hosts(scope, probe=True)["hosts"]
+                self.assertEqual(entry["status"], "fail")
+                self.assertEqual(entry["host"]["checks"]["protocol"], {
+                    "status": "failed", "reason": "protocol-evidence-invalid",
+                })
+
+
+    def test_only_parsed_selected_registrations_block_host_probe(self) -> None:
+        scope = self._scope()
+        host = scope["hosts"][0]
+        config = Path(host["config"])
+        config.parent.mkdir(parents=True)
+        harmless = b'# sbtd-graft used to be registered here\nmodel = "mention sbtd_graft_entry.py"\n'
+        config.write_bytes(harmless)
+        unselected = self.base / "unselected" / ".codex" / "config.toml"
+        unselected.parent.mkdir(parents=True)
+        retired = b'[mcp_servers.other]\ncommand = "python"\nargs = ["/old/sbtd_graft_entry.py"]\n'
+        unselected.write_bytes(retired)
+        rig = _Rig(self, ["alpha"]).install()
+        with mock.patch.object(hosts, "read_file", wraps=hosts.read_file) as read:
+            (entry,) = hosts.verify_hosts(scope, probe=True)["hosts"]
+        self.assertEqual(entry["status"], "pass")
+        self.assertEqual(len(rig.host_spawns()), 1)
+        self.assertEqual([call.args[0] for call in read.call_args_list], [config])
+        self.assertEqual(config.read_bytes(), harmless)
+        self.assertEqual(unselected.read_bytes(), retired)
+
+        config.write_bytes(retired)
+        (entry,) = hosts.verify_hosts(scope, probe=True)["hosts"]
+        self.assertEqual(entry["host"]["checks"]["host_load"]["reason"], "unsafe-registered-server")
+        self.assertEqual(len(rig.host_spawns()), 1)
+        self.assertEqual(config.read_bytes(), retired)
+
+
+    def test_omp_probe_refuses_a_selected_project_alternate_registration(self) -> None:
+        root = self.base / "skills"
+        _write_skill(root, "alpha")
+        project = self.base / "project"
+        config = project / ".omp" / ".mcp.json"
+        config.parent.mkdir(parents=True)
+        document = {"mcpServers": {"sbtd-graft": {"command": "graft"}}}
+        config.write_text(json.dumps(document), encoding="utf-8")
+        host = _omp_host(self.base, _runtime(self.base), root, project)
+        rig = _Rig(self, ["alpha"]).install()
+        (entry,) = hosts.verify_hosts({"hosts": [host], "skills_roots": [str(root)]}, probe=True)["hosts"]
+        self.assertEqual(entry["host"]["checks"]["host_load"]["reason"], "unsafe-registered-server")
+        self.assertEqual(rig.host_spawns(), [])
+        self.assertEqual(json.loads(config.read_text(encoding="utf-8")), document)
+
+
     def test_codex_failure_envelope_cannot_supply_result_evidence(self) -> None:
         scope = self._scope()
         rig = _Rig(self, ["alpha"]).install()
@@ -554,24 +587,30 @@ class IsolatedProbeProtocolTests(_LinksCase):
                 if selected:
                     self.assertEqual(checks["host_load"]["reason"], "skills-evidence-mismatch")
 
-    def test_stalled_host_probe_reaps_child_and_closes_both_pipes(self) -> None:
-        scope = self._scope()
-        _Rig(self, ["alpha"]).install()
+    def test_stalled_real_host_pipes_time_out_and_are_reaped(self) -> None:
         for stall_write in (False, True):
-            with self.subTest(stall_write=stall_write):
-                proc = _StalledProc(stall_write=stall_write)
-                self.addCleanup(proc.released.set)
-                with (
-                    mock.patch.object(hosts, "_spawn", return_value=proc),
-                    mock.patch.object(hosts, "_HOST_TIMEOUT", 0.2),
-                    mock.patch.object(hosts, "_HOST_SHUTDOWN", 1.0),
-                ):
-                    (entry,) = hosts.verify_hosts(scope, probe=True)["hosts"]
-                self.assertEqual(entry["host"]["checks"]["host_load"]["reason"], "host-response-timeout")
-                self.assertEqual([row["method"] for row in proc.requests], ["initialize"])
-                self.assertTrue(proc.killed and proc.reaped)
-                self.assertTrue(proc.stdin.closed)
-                self.assertTrue(proc.stdout.closed)
+            with self.subTest(stall_write=stall_write), mock.patch.object(hosts, "_HOST_SHUTDOWN", 0.5):
+                command = (
+                    "import sys, time\n"
+                    + ("" if stall_write else "sys.stdin.buffer.readline()\n")
+                    + "time.sleep(2)\n"
+                )
+                with subprocess.Popen(
+                    [sys.executable, "-I", "-B", "-c", command],
+                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                    cwd=self.base,
+                ) as proc:
+                    rpc = hosts._JsonLines(proc, 0.15)
+                    try:
+                        params = {"payload": "x" * (2 * 1024 * 1024)} if stall_write else {}
+                        with self.assertRaises(hosts._ProbeError) as caught:
+                            rpc.call("initialize", params)
+                        self.assertEqual(caught.exception.reason, "host-response-timeout")
+                    finally:
+                        rpc.close()
+                    self.assertIsNotNone(proc.poll())
+                    self.assertTrue(proc.stdin.closed)
+                    self.assertTrue(proc.stdout.closed)
 
 
 # ---------------------------------------------------------------------------
@@ -1453,6 +1492,31 @@ class VerifyHostsProbeLinkTests(_LinksCase):
         self.assertEqual(load["status"], "failed", load)
         self.assertEqual(load["reason"], "link-mismatch")
         self.assertEqual(rig.host_spawns(), [])
+
+    def test_same_named_skill_cannot_replace_an_unmaterialized_authorized_link(self) -> None:
+        scope, package, root, link, physical, host = self._aligned_scope()
+        document = self.prepare("1" * 64, root, link, physical)
+        alternate = self.base / "alternate" / "skills"
+        _write_skill(alternate, "linked-skill")
+        host["skills_roots"].append(str(alternate))
+        scope["skills_roots"].append(str(alternate))
+        rig = _Rig(self, ["alpha", "linked-skill"]).install()
+        list_entries = hosts._root_entries
+
+        def link_disappears(path: Path):
+            if path == root:
+                link.unlink(missing_ok=True)
+            return list_entries(path)
+
+        with mock.patch.object(hosts, "_root_entries", side_effect=link_disappears):
+            result = hosts.verify_hosts(
+                scope, package_root=package, probe=True, link_authorizations=[_entry(document)],
+            )
+        (entry,) = result["hosts"]
+        self.assertEqual(entry["host"]["checks"]["host_load"]["reason"], "skill-identity-unproven")
+        self.assertEqual(rig.host_spawns(), [])
+        self.assertTrue((alternate / "linked-skill" / "SKILL.md").is_file())
+
 
 
 # ---------------------------------------------------------------------------

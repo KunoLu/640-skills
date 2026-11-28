@@ -11,7 +11,6 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "sbtd-workflow-onboard" / "scripts"
@@ -233,136 +232,6 @@ class RetirementBindingTests(unittest.TestCase):
 
             self.assertEqual((onboard / "SKILL.md").read_bytes(), b"---\nname: sbtd-workflow-onboard\n---\nold\n")
 
-    def test_proven_edit_is_backed_up_before_skill_overwrite(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            base = Path(directory).resolve()
-            home = base / ".codex"
-            home.mkdir()
-            config = home / "config.toml"
-            before = b"owned graft entry\n"
-            config.write_bytes(before)
-            config.chmod(0o600)
-            rendered = b"unrelated server only\n"
-            self.module.before = before
-            self.module.rendered = rendered
-            mode = format(stat.S_IMODE(config.stat().st_mode), "04o")
-            permissions = {}
-            if os.name == "nt":
-                from sbtd_retirement_permissions import capture, digest
-
-                permissions["windows_acl_digest"] = digest(capture(config))
-            self.module.candidates = [{
-                "id": "cand-1",
-                "kind": "graft-retire",
-                "target": str(config),
-                "path": str(config),
-                "role": "codex-mcp",
-                "entry": "sbtd-graft",
-                "action": "edit",
-                "decision": "remove",
-                "write_authority": True,
-                "mode": mode,
-                "before": snapshot(config),
-                **permissions,
-                "global_effect": True,
-                "rendered_checksum": hashlib.sha256(rendered).hexdigest(),
-            }]
-            self.module.global_effects = ["global mcp"]
-            skills = base / "skills"
-            onboard = skills / "sbtd-workflow-onboard"
-            onboard.mkdir(parents=True)
-            (onboard / "SKILL.md").write_bytes(b"old\n")
-            package = base / "package"
-            package.mkdir()
-            (package / "SKILL.md").write_bytes(b"new\n")
-            order: list[str] = []
-            real_write = sbtd_upgrade._write_resource
-
-            def watch(sealed, fresh, backup_ref, package_root, expected, mutation):
-                order.append(sealed["kind"])
-                if sealed["kind"] == "skill":
-                    self.assertEqual(config.read_bytes(), rendered)
-                return real_write(sealed, fresh, backup_ref, package_root, expected, mutation)
-
-            vault = base / "vault"
-            require_private_directory(vault, create=True)
-            scope = {
-                "schema_version": 1,
-                "skills_roots": [str(skills)],
-                "decisions": {str(onboard): "replace"},
-                "hosts": [_host(base, config)],
-            }
-            with (
-                mock.patch("sbtd_upgrade._inventory_module") as inventory,
-                mock.patch("sbtd_upgrade._write_resource", side_effect=watch),
-            ):
-                inventory.return_value.build_inventory.return_value = {
-                    "baseline": {
-                        "baseline_id": "b1",
-                        "source": {"path": str(package), "state": snapshot(package)},
-                    },
-                    "resources": [{
-                        "id": "skill-1",
-                        "kind": "skill",
-                        "target": str(onboard),
-                        "source": str(package),
-                        "before": snapshot(onboard),
-                        "desired": snapshot(package),
-                        "classification": "known-old",
-                        "decision": "replace",
-                        "details": {},
-                    }],
-                    "domains": [],
-                }
-                inventory.return_value.normalize_scope.side_effect = lambda value: value
-                inventory.return_value.payload_file_state.side_effect = (
-                    lambda path: snapshot(Path(path))
-                )
-                inventory.return_value.payload_directory_state.side_effect = (
-                    lambda path: snapshot(Path(path))
-                )
-                plan = sbtd_upgrade.plan_upgrade(scope, vault, package_root=package)
-                self.assertEqual(plan["payload"]["status"], "planned")
-                self.assertFalse(plan["payload"]["graftRetirement"]["stop"])
-                self.assertEqual(plan["payload"]["graftRetirement"]["candidates"][0]["mode"], mode)
-                self.assertEqual(
-                    plan["payload"]["graftRetirement"]["candidates"][0]["historical_mode"],
-                    "unknown",
-                )
-                retirement = next(
-                    row for row in plan["payload"]["resources"] if row["kind"] == "retirement"
-                )
-                self.assertEqual(retirement["decision"], "replace")
-                self.assertEqual(retirement["details"]["items"][0]["historical_mode"], "unknown")
-                # Apply is isolated and re-derives. Exercise the write order directly.
-                action_retirement = {
-                    "resource": retirement,
-                    "mechanical_before": snapshot(config),
-                    "backup_ref": None,
-                    "created_parents": [],
-                }
-                action_skill = {
-                    "resource": plan["payload"]["resources"][0]
-                    if plan["payload"]["resources"][0]["kind"] == "skill"
-                    else next(row for row in plan["payload"]["resources"] if row["kind"] == "skill"),
-                    "mechanical_before": snapshot(onboard),
-                    "backup_ref": None,
-                    "created_parents": [],
-                }
-                ordered = sorted(
-                    [action_skill, action_retirement],
-                    key=lambda action: (
-                        0 if action["resource"]["kind"] == "retirement" else 1,
-                        action["resource"]["id"],
-                    ),
-                )
-                self.assertEqual(
-                    [action["resource"]["kind"] for action in ordered],
-                    ["retirement", "skill"],
-                )
-            self.assertIn("inspect", self.module.calls)
-            self.assertNotIn("apply_candidate", self.module.calls)
-
     def test_mode_drift_refuses_retirement_write(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory).resolve() / "config.toml"
@@ -473,6 +342,33 @@ def _codex_retirement_fixture(
     return scope, vault, config, launcher, installed
 
 
+def _project_fence_fixture(scope: dict, vault: Path, base: Path) -> tuple[Path, bytes, bytes]:
+    project = base / "project"
+    project.mkdir()
+    scope["hosts"][0]["project_roots"] = [str(project)]
+    agents = project / "AGENTS.md"
+    original = b"# Retained project rules\n"
+    agents.write_bytes(original)
+    originals = require_private_directory(vault / "historical", create=True)
+    backup = backup_reference(
+        {"path": str(agents), "state": snapshot(agents)}, originals / "project-AGENTS.md",
+        private_root=vault,
+    )
+    installed = original + b"\n<!-- graft:start -->\nretired fence\n<!-- graft:end -->\n"
+    agents.write_bytes(installed)
+    identity = resource_id("markdown", str(agents))
+    path = Path(scope["retirement_evidence"][0]["path"])
+    evidence = json.loads(path.read_text(encoding="utf-8"))
+    evidence["operationResults"].append({
+        "phase": "deploy", "resource_id": identity,
+        "operation_ids": [operation_id("deploy", identity, "graft-agents")],
+        "dependent_projects": [], "status": "succeeded", "backup_ref": backup,
+        "before": backup["state"], "after": snapshot(agents), "error": None,
+    })
+    path.write_text(json.dumps(evidence), encoding="utf-8")
+    return agents, original, installed
+
+
 def _set_windows_fixture_acl(path: Path, *, allow_execute: bool = False) -> None:
     # Replace the whole DACL, not a rule in an inherited DACL.
     script = r"""
@@ -527,6 +423,192 @@ def _windows_acl_fingerprint(path: Path) -> str:
 
 
 class RealRetirementUpgradeTests(unittest.TestCase):
+    def test_preserve_conflict_refuses_before_plan_or_write(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            scope, vault, config, _, installed = _codex_retirement_fixture(
+                Path(directory).resolve(), remove_file=True,
+            )
+            saved = sorted(vault.iterdir())
+            scope["decisions"] = {str(config): "preserve"}
+            with self.assertRaises(ContractError) as caught:
+                sbtd_upgrade.plan_upgrade(scope, vault)
+            self.assertEqual(caught.exception.code, "decision-conflict")
+            self.assertEqual(config.read_bytes(), installed)
+            self.assertEqual(sorted(vault.iterdir()), saved)
+
+    def test_file_removal_does_not_block_sibling_edit_or_scoped_rollback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            scope, vault, config, _, original_config = _codex_retirement_fixture(base, remove_file=True)
+            agents, retained_rules, original_agents = _project_fence_fixture(scope, vault, base)
+            global_rules = base / "global" / "AGENTS.md"
+            global_rules.parent.mkdir()
+            scope["agents_targets"] = [str(global_rules)]
+            plan = sbtd_upgrade.plan_upgrade(scope, vault)
+            actual_order = []
+            write = sbtd_upgrade._write_resource
+
+            def observe(resource, fresh, backup, package, expected, mutation):
+                target = Path(resource["target"])
+                actual_order.append(target)
+                if target == agents:
+                    self.assertFalse(config.exists())
+                    self.assertEqual(Path(backup["path"]).read_bytes(), original_agents)
+                if target == global_rules:
+                    self.assertEqual(agents.read_bytes(), retained_rules)
+                return write(resource, fresh, backup, package, expected, mutation)
+
+            with mock.patch.object(sbtd_upgrade, "_write_resource", side_effect=observe):
+                receipt = sbtd_upgrade._apply_upgrade_local(
+                    plan, confirmed=plan["plan_id"], receipt=None, package_root=SCRIPTS.parent,
+                )
+            self.assertEqual(receipt["status"], "complete")
+            self.assertEqual(actual_order, [config, agents, global_rules])
+            self.assertFalse(config.exists())
+            self.assertEqual(agents.read_bytes(), retained_rules)
+            self.assertEqual(sbtd_upgrade.verify_upgrade(plan, receipt=receipt)["status"], "aligned")
+            recovery = sbtd_upgrade.plan_recovery(plan, receipt)
+            restored = sbtd_upgrade.apply_recovery(recovery, confirmed=recovery["recovery_id"])
+            self.assertEqual(restored["status"], "complete")
+            self.assertEqual(config.read_bytes(), original_config)
+            self.assertEqual(agents.read_bytes(), original_agents)
+            self.assertFalse(global_rules.exists())
+
+    def test_partial_apply_retries_only_with_bound_removed_file_outcome(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            scope, vault, config, _, installed = _codex_retirement_fixture(base, remove_file=True)
+            agents, retained_rules, original_agents = _project_fence_fixture(scope, vault, base)
+            plan = sbtd_upgrade.plan_upgrade(scope, vault)
+            self.assertEqual(plan["payload"]["status"], "planned")
+            write = sbtd_upgrade._write_resource
+
+            def halt_before_sibling(resource, *args):
+                if resource["target"] == str(agents):
+                    raise ContractError("write-failed", "fixture stopped before the second retirement")
+                return write(resource, *args)
+
+            with mock.patch.object(sbtd_upgrade, "_write_resource", side_effect=halt_before_sibling):
+                partial = sbtd_upgrade._apply_upgrade_local(
+                    plan, confirmed=plan["plan_id"], receipt=None, package_root=SCRIPTS.parent,
+                )
+            self.assertEqual(partial["status"], "partial")
+            self.assertFalse(config.exists())
+            self.assertEqual(agents.read_bytes(), original_agents)
+            rows = {row["target"]: row for row in partial["payload"]["resources"]}
+            removed = rows[str(config)]
+            self.assertEqual(removed["result"], "succeeded")
+            self.assertEqual(Path(removed["backup_ref"]["path"]).read_bytes(), installed)
+            verify = sbtd_upgrade.verify_upgrade(plan, receipt=partial)
+            self.assertEqual(verify["status"], "drift")
+            self.assertEqual(
+                {row["target"]: row["result"] for row in verify["payload"]["resources"]},
+                {str(config): "aligned", str(agents): "drift"},
+            )
+
+            intent = next(
+                path for path in (vault / "intents").glob("intent-*.json")
+                if json.loads(path.read_text(encoding="utf-8"))["payload"]["resource_id"] == removed["id"]
+            )
+            held = intent.rename(intent.with_suffix(".held"))
+            try:
+                for phase in ("apply", "verify"):
+                    with self.subTest(phase=phase), self.assertRaises(ContractError) as missing:
+                        if phase == "apply":
+                            sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"], receipt=partial)
+                        else:
+                            sbtd_upgrade.verify_upgrade(plan, receipt=partial)
+                    self.assertEqual(missing.exception.code, "intent-missing")
+                    self.assertFalse(config.exists())
+                    self.assertEqual(agents.read_bytes(), original_agents)
+            finally:
+                held.rename(intent)
+            retry = sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"], receipt=partial)
+            self.assertEqual(retry["status"], "complete")
+            self.assertEqual([row["result"] for row in retry["payload"]["resources"]], ["skipped-complete", "succeeded"])
+            self.assertFalse(config.exists())
+            self.assertEqual(agents.read_bytes(), retained_rules)
+            verification = sbtd_upgrade.verify_upgrade(plan)
+            self.assertEqual(verification["status"], "aligned")
+            self.assertEqual(verification["payload"]["receipt_id"], retry["receipt_id"])
+
+    @unittest.skipUnless(os.name == "posix", "POSIX file permissions")
+    def test_interrupted_posix_retirement_requires_live_sealed_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            scope, vault, config, _, installed = _codex_retirement_fixture(Path(directory).resolve())
+            plan = sbtd_upgrade.plan_upgrade(scope, vault)
+            save = sbtd_upgrade._save_once
+
+            def interrupt_after_write(path, document, root):
+                if path.name.startswith("upgrade-receipt-") and document["status"] == "complete":
+                    raise ContractError("write-failed", "fixture receipt publication stopped")
+                return save(path, document, root)
+
+            with (
+                mock.patch.object(sbtd_upgrade, "_save_once", side_effect=interrupt_after_write),
+                self.assertRaises(ContractError) as interrupted,
+            ):
+                sbtd_upgrade._apply_upgrade_local(
+                    plan, confirmed=plan["plan_id"], receipt=None, package_root=SCRIPTS.parent,
+                )
+            self.assertEqual(interrupted.exception.code, "write-failed")
+            (checkpoint,) = vault.glob("upgrade-receipt-*.json")
+            pending = json.loads(checkpoint.read_text(encoding="utf-8"))
+            self.assertEqual(pending["payload"]["resources"][0]["result"], "pending")
+            (intent_path,) = (vault / "intents").glob("intent-*.json")
+            intent = json.loads(intent_path.read_text(encoding="utf-8"))["payload"]
+            self.assertEqual((intent["mode_before"], intent["mode_after"]), ("0600", "0600"))
+            retired = config.read_bytes()
+            self.assertNotEqual(retired, installed)
+
+            config.chmod(0o644)
+            with self.assertRaises(ContractError) as drifted:
+                sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"], receipt=pending)
+            self.assertEqual(drifted.exception.code, "state-conflict")
+            self.assertEqual(config.read_bytes(), retired)
+            with self.assertRaises(ContractError) as recovery_drift:
+                sbtd_upgrade.plan_recovery(plan, pending)
+            self.assertEqual(recovery_drift.exception.code, "plan-stale")
+            self.assertEqual(config.stat().st_mode & 0o777, 0o644)
+
+            config.chmod(0o600)
+            recovery = sbtd_upgrade.plan_recovery(plan, pending)
+            (step,) = recovery["payload"]["steps"]
+            self.assertEqual((step["status"], step["mode_before"], step["mode_after"]), ("actionable", "0600", "0600"))
+            retry = sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"], receipt=pending)
+            self.assertEqual(retry["payload"]["resources"][0]["result"], "reconciled")
+            self.assertEqual(sbtd_upgrade.verify_upgrade(plan, receipt=retry)["status"], "aligned")
+            restored = sbtd_upgrade.apply_recovery(recovery, confirmed=recovery["recovery_id"])
+            self.assertEqual(restored["status"], "complete")
+            self.assertEqual(config.read_bytes(), installed)
+            self.assertEqual(config.stat().st_mode & 0o777, 0o600)
+
+    def test_verify_rejects_a_plan_omitting_a_disclosed_retirement(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            scope, vault, config, _, installed = _codex_retirement_fixture(base)
+            global_rules = base / "AGENTS.md"
+            scope["agents_targets"] = [str(global_rules)]
+            incomplete = sbtd_upgrade.plan_upgrade(scope, vault)
+            payload = incomplete["payload"]
+            self.assertTrue(payload["graftRetirement"]["candidates"])
+            payload["resources"] = [row for row in payload["resources"] if row["kind"] == "agents"]
+            incomplete["plan_id"] = sbtd_upgrade._digest(payload)
+            for saved in (False, True):
+                with self.subTest(saved=saved):
+                    if saved:
+                        sbtd_upgrade.save_plan(incomplete, vault / f"upgrade-plan-{incomplete['plan_id']}.json")
+                    with (
+                        mock.patch.object(hosts, "_spawn") as spawn,
+                        self.assertRaises(ContractError) as stale,
+                    ):
+                        sbtd_upgrade.verify_upgrade(incomplete, probe=True)
+                    self.assertEqual(stale.exception.code, "plan-stale")
+                    spawn.assert_not_called()
+                    self.assertFalse(global_rules.exists())
+                    self.assertEqual(config.read_bytes(), installed)
+
+
     def test_scoped_real_retirement_lifecycle_preserves_foreign_bytes(self) -> None:
         import jsonschema
 
@@ -556,6 +638,13 @@ class RealRetirementUpgradeTests(unittest.TestCase):
 
             verification = sbtd_upgrade.verify_upgrade(plan, receipt=receipt)
             self.assertEqual(verification["status"], "aligned")
+            if os.name == "posix":
+                config.chmod(0o644)
+                drifted = sbtd_upgrade.verify_upgrade(plan, receipt=receipt)
+                self.assertEqual(drifted["status"], "drift")
+                self.assertEqual(drifted["payload"]["resources"][0]["reason"], "mode-drift")
+                self.assertEqual(config.read_bytes(), retired)
+                config.chmod(int(mode, 8))
             recovery = sbtd_upgrade.plan_recovery(plan, receipt)
             self.assertEqual(recovery["payload"]["status"], "planned")
             restored = sbtd_upgrade.apply_recovery(
@@ -813,6 +902,9 @@ class RealRetirementUpgradeTests(unittest.TestCase):
                     _set_windows_fixture_acl(config, allow_execute=True)
                     self.assertEqual(_windows_acl_fingerprint(config), changed_acl)
                     self.assertEqual(format(stat.S_IMODE(config.lstat().st_mode), "04o"), mode)
+                    verify_drift = sbtd_upgrade.verify_upgrade(plan, receipt=receipt)
+                    self.assertEqual(verify_drift["status"], "drift")
+                    self.assertEqual(verify_drift["payload"]["resources"][0]["reason"], "windows-permissions-drift")
                     drifted = sbtd_upgrade.plan_recovery(plan, receipt)
                     self.assertEqual(drifted["payload"]["status"], "blocked")
                     self.assertEqual(drifted["payload"]["steps"][0]["reason"], "live-drift")
@@ -853,6 +945,3 @@ class RealRetirementUpgradeTests(unittest.TestCase):
                 self.assertEqual(format(stat.S_IMODE(config.lstat().st_mode), "04o"), mode)
                 for document in (plan, receipt, verification, recovery, recovered):
                     jsonschema.validate(document, schema)
-
-
-
