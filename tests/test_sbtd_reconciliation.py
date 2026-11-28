@@ -1,8 +1,9 @@
 """Current-state reconciliation lifecycle; native graph/report boundaries are fixtures."""
 from __future__ import annotations
 
-# ruff: noqa: I001 -- approved fixture imports bootstrap the local script path.
+# ruff: noqa: I001 -- test helpers insert the installed script path before imports.
 
+import base64
 import contextlib
 import dataclasses
 import hashlib
@@ -15,35 +16,150 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tests import test_sbtd_approved_agents_deployment as approved
 from tests.test_sbtd_followup_batch import (
     _failed_copy,
     _focused_installation_templates,
-    _synthetic_smoke,
 )
+from tests.test_sbtd_migration_apply import legacy_project
 from tests.test_sbtd_migration_cleanup import _fake_vendor_adapter
 from tests.test_sbtd_migration_verify import _tree_bytes
 
 import onboard_contracts as contracts
-from sbtd_graft_deployment import load_deployment_context, save_deployment_evidence
+from sbtd_deployment import (
+    execute_migration_deployment,
+    load_deployment_context,
+    save_deployment_evidence,
+)
+from sbtd_migration import apply_migration, runtime_versions
 from sbtd_migration_files import save_document, snapshot
+from sbtd_migration_plan import plan_migration
 from sbtd_reconciliation import reconcile_deployment
 from sbtd_recovery import apply_recovery, plan_recovery
 from sbtd_migration_verify import verify_migration
 
+_PAUSE_ASSET = (
+    Path(__file__).resolve().parents[1]
+    / "sbtd-workflow-onboard/assets/migration-paused-agents.txt"
+)
+_APPROVAL_KEY = None
+_APPROVAL_PATCH = None
+
 
 def setUpModule():
-    approved.setUpModule()
+    global _APPROVAL_KEY, _APPROVAL_PATCH
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    _APPROVAL_KEY = Ed25519PrivateKey.generate()
+    _APPROVAL_PATCH = mock.patch(
+        "sbtd_migration_plan._routing_approval_public_key",
+        return_value=_APPROVAL_KEY.public_key(),
+    )
+    _APPROVAL_PATCH.start()
 
 
 def tearDownModule():
-    approved.tearDownModule()
+    if _APPROVAL_PATCH is not None:
+        _APPROVAL_PATCH.stop()
+
+
+def _sign_approval(path):
+    document = json.loads(path.read_bytes())
+    payload = contracts.canonical_json_bytes(
+        {"schema_version": document["schema_version"], "items": document["items"]}
+    )
+    document["signature"] = base64.b64encode(_APPROVAL_KEY.sign(payload)).decode("ascii")
+    path.write_bytes(json.dumps(document).encode("utf-8"))
+    return path
+
+
+class _SignedBatch:
+    """Isolated signed routing batch. No Graft launcher and no native doubles."""
+
+    def __init__(self, base, *, body=b"unique-user-rule-bytes-5f3c9a71\n"):
+        self.base = base
+        self.root = legacy_project(base, "project")
+        self.home = base / "home"
+        self.vault = base / "vault"
+        self.evidence = base / "evidence"
+        for path in (self.home, self.vault, self.evidence):
+            path.mkdir(mode=0o700)
+        self.environment = {
+            "HOME": str(self.home),
+            "USERPROFILE": str(self.home),
+            "CODEX_HOME": str(self.home / ".codex"),
+            "AGENT_SKILLS_DIR": str(self.home / ".agent/skills"),
+        }
+        self.agents = self.root / "AGENTS.md"
+        self.foreign = self.agents.read_bytes()
+        self.body = body
+        self.paused = _PAUSE_ASSET.read_bytes() + b"\n" + body
+        self.candidate = self.vault / "routing-candidate.md"
+        self.candidate.write_bytes(self.paused)
+        self.approval = self.vault / "routing-approvals.json"
+        self.approval.write_bytes(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "items": [
+                        {
+                            "role": "demo-project",
+                            "target_path": str(self.agents),
+                            "before": snapshot(self.agents),
+                            "candidate_ref": {
+                                "path": str(self.candidate),
+                                "state": snapshot(self.candidate),
+                            },
+                            "basis": "fixture custodian approval",
+                        }
+                    ],
+                }
+            ).encode("utf-8")
+        )
+        _sign_approval(self.approval)
+
+    def plan(self, **kwargs):
+        with mock.patch.dict(os.environ, self.environment):
+            return plan_migration(
+                [self.root],
+                self.vault,
+                "fixture",
+                None,
+                tool_versions=runtime_versions(),
+                routing_approvals=self.approval,
+                **kwargs,
+            )
+
+    def write_manifest(self, manifest, name):
+        path = self.evidence / name
+        path.write_bytes(contracts.canonical_json_bytes(manifest))
+        return path
+
+    def apply(self, manifest_path, **kwargs):
+        with mock.patch.dict(os.environ, self.environment):
+            applied, code = apply_migration(manifest_path, confirmed=True, **kwargs)
+        if code != 0:
+            raise AssertionError(f"fixture apply failed: {applied}")
+        receipt = applied["migration"]["apply_receipt"]
+        return receipt, self.evidence / ("apply-" + receipt["apply_id"] + ".json")
+
+    def execute(self, manifest_path, apply_path, output_path, *, previous_path=None):
+        with mock.patch.dict(os.environ, self.environment):
+            context = load_deployment_context(
+                manifest_path,
+                apply_path,
+                output_path,
+                previous_path=previous_path,
+                mode="init",
+                roots=[self.root],
+                hooks_authorized=False,
+            )
+            return execute_migration_deployment(context)
 
 
 class CurrentStateReconciliationTests(unittest.TestCase):
     def test_missing_receipt_current_state_is_verified_without_redeployment(self):
         with tempfile.TemporaryDirectory() as directory:
-            batch = approved._SignedBatch(Path(directory).resolve())
+            batch = _SignedBatch(Path(directory).resolve())
             manifest = batch.plan(deployment_mode="init")
             manifest_path = batch.write_manifest(manifest, "manifest.json")
             _applied, apply_path = batch.apply(
@@ -66,31 +182,14 @@ class CurrentStateReconciliationTests(unittest.TestCase):
 
                 from sbtd_reconciliation import reconcile_deployment
 
-                with (
-                    mock.patch(
-                        "sbtd_graft_deployment.verified_runtime",
-                        return_value=dict(approved._RUNTIME),
-                    ),
-                    mock.patch(
-                        "sbtd_graft_deployment.run_project_smoke",
-                        side_effect=_synthetic_smoke(manifest),
-                    ),
-                    mock.patch(
-                        "sbtd_graft_deployment.build_project_graph",
-                        side_effect=AssertionError("reconciliation must not rebuild"),
-                    ),
-                    mock.patch(
-                        "sbtd_graft_deployment.execute_resource",
-                        side_effect=AssertionError("reconciliation must not deploy"),
-                    ),
-                ):
-                    result = reconcile_deployment(
-                        manifest_path,
-                        apply_path,
-                        missing_path,
-                        output_path,
-                        confirmed=True,
-                    )
+                result = reconcile_deployment(
+                    manifest_path,
+                    apply_path,
+                    missing_path,
+                    output_path,
+                    confirmed=True,
+                )
+
 
                 self.assertEqual(result["path"], str(output_path))
                 evidence = json.loads(output_path.read_bytes())
@@ -120,38 +219,17 @@ class CurrentStateReconciliationTests(unittest.TestCase):
 
 
 def _native_doubles(manifest, *, smoke=None):
-    """Contract-backed doubles for the native external boundaries only.
-
-    Deployment writers stay hard-blocked: reconciliation must never rebuild a
-    graph or execute a resource while observing current state.
-    """
-    return (
-        mock.patch(
-            "sbtd_graft_deployment.verified_runtime",
-            return_value=dict(approved._RUNTIME),
-        ),
-        mock.patch(
-            "sbtd_graft_deployment.run_project_smoke",
-            side_effect=(
-                _synthetic_smoke(manifest) if smoke is None else smoke
-            ),
-        ),
-        mock.patch(
-            "sbtd_graft_deployment.build_project_graph",
-            side_effect=AssertionError("reconciliation must not rebuild"),
-        ),
-        mock.patch(
-            "sbtd_graft_deployment.execute_resource",
-            side_effect=AssertionError("reconciliation must not deploy"),
-        ),
-    )
+    """rc.3 reconciliation has no Graft launcher boundary to double."""
+    del manifest, smoke
+    empty = contextlib.nullcontext()
+    return (empty, empty, empty, empty)
 
 
 def _interrupted_deployment(case):
     """One genuinely deployed batch whose historical receipt is then lost."""
     directory = tempfile.TemporaryDirectory()
     case.addCleanup(directory.cleanup)
-    batch = approved._SignedBatch(Path(directory.name).resolve())
+    batch = _SignedBatch(Path(directory.name).resolve())
     manifest = batch.plan(deployment_mode="init")
     manifest_path = batch.write_manifest(manifest, "manifest.json")
     _receipt, apply_path = batch.apply(
@@ -182,31 +260,6 @@ def _reconcile(batch, manifest, manifest_path, apply_path, missing_path, output_
         )
 
 
-def _failed_run_smoke(manifest):
-    """Smoke double whose native check genuinely fails (exit 1), truthfully reported."""
-    passing = _synthetic_smoke(manifest)
-
-    def smoke(project, runtime, evidence_dir):
-        refs = passing(project, runtime, evidence_dir)
-        raw_path, envelope_path, summary_path = (
-            Path(reference["path"]) for reference in refs
-        )
-        raw = json.loads(raw_path.read_bytes())
-        raw["exitCode"] = 1
-        raw["processExitCode"] = 1
-        raw_path.write_text(json.dumps(raw), encoding="utf-8")
-        envelope = json.loads(envelope_path.read_bytes())
-        envelope["reports"][0]["status"] = "failed"
-        envelope["reports"][0]["sha256"] = hashlib.sha256(
-            raw_path.read_bytes()
-        ).hexdigest()
-        envelope_path.write_text(json.dumps(envelope), encoding="utf-8")
-        return [
-            {"path": str(path), "state": snapshot(path)}
-            for path in (raw_path, envelope_path, summary_path)
-        ]
-
-    return smoke
 
 
 def _stage_results(document_path):
@@ -358,7 +411,6 @@ class CurrentStateReconciliationLifecycleTests(unittest.TestCase):
             apply_path,
             retry_path,
             previous_path=output_path,
-            rebuild_graph=False,
         )
         self.assertEqual(retry_code, 0, retried)
         retry_evidence = json.loads(retry_path.read_bytes())
@@ -510,8 +562,8 @@ class CurrentStateReconciliationLifecycleTests(unittest.TestCase):
             },
         )
         self.assertEqual(
-            evidence["payload"]["reconciliation"]["runtime_versions"]["graft"],
-            manifest["payload"]["tool_versions"]["graft"],
+            evidence["payload"]["reconciliation"]["runtime_versions"],
+            manifest["payload"]["tool_versions"],
         )
         self.assertEqual(evidence, json.loads(output_path.read_bytes()))
 
@@ -589,7 +641,7 @@ class CurrentStateReconciliationRefusalTests(unittest.TestCase):
     def test_existing_historical_receipt_stays_authoritative(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
-        batch = approved._SignedBatch(Path(directory.name).resolve())
+        batch = _SignedBatch(Path(directory.name).resolve())
         manifest = batch.plan(deployment_mode="init")
         manifest_path = batch.write_manifest(manifest, "manifest.json")
         _receipt, apply_path = batch.apply(
@@ -780,7 +832,7 @@ class CurrentStateReconciliationRefusalTests(unittest.TestCase):
         output_path = batch.evidence / "current-state-evidence.json"
         projected = batch.agents.read_bytes()
         batch.candidate.write_bytes(
-            approved._PAUSE_ASSET.read_bytes() + b"\ntampered after approval\n"
+            _PAUSE_ASSET.read_bytes() + b"\ntampered after approval\n"
         )
 
         with self.assertRaises(contracts.ContractError):
@@ -796,12 +848,13 @@ class CurrentStateReconciliationRefusalTests(unittest.TestCase):
         self.assertFalse(missing_path.exists())
         self.assertEqual(batch.agents.read_bytes(), projected)
 
-    def test_failed_fresh_smoke_leaves_artifacts_but_no_evidence(self):
+    def test_drifted_target_leaves_no_accepted_evidence(self):
         batch, manifest, manifest_path, apply_path, missing_path = (
             _interrupted_deployment(self)
         )
         output_path = batch.evidence / "current-state-evidence.json"
         evidence_before = set(os.listdir(batch.evidence))
+        batch.agents.write_bytes(batch.agents.read_bytes() + b"\ndrift\n")
 
         with self.assertRaises(contracts.ContractError) as failure:
             _reconcile(
@@ -811,97 +864,64 @@ class CurrentStateReconciliationRefusalTests(unittest.TestCase):
                 apply_path,
                 missing_path,
                 output_path,
-                smoke=_failed_run_smoke(manifest),
             )
-        self.assertEqual(failure.exception.code, "report-acceptance")
+        self.assertEqual(failure.exception.code, "state-conflict")
         self.assertFalse(output_path.exists())
         self.assertFalse(missing_path.exists())
-        # Truthful fresh smoke artifacts may remain; accepted evidence may not.
         created = set(os.listdir(batch.evidence)) - evidence_before
-        self.assertTrue(
-            any(name.startswith("api-report-graft-smoke-") for name in created)
-        )
+        self.assertFalse(any(name.startswith("api-report-graft-smoke-") for name in created))
 
-    def test_uncompleted_fresh_smoke_records_no_evidence(self):
+    def test_missing_install_target_records_no_evidence(self):
         batch, manifest, manifest_path, apply_path, missing_path = (
             _interrupted_deployment(self)
         )
         output_path = batch.evidence / "current-state-evidence.json"
         evidence_before = _tree_bytes(batch.evidence)
-
-        def raising_smoke(project, runtime, evidence_dir):
-            raise RuntimeError("synthetic native check crash")
-
-        with self.assertRaises(contracts.ContractError) as failure:
-            _reconcile(
-                batch,
-                manifest,
-                manifest_path,
-                apply_path,
-                missing_path,
-                output_path,
-                smoke=raising_smoke,
-            )
-        self.assertEqual(failure.exception.code, "report-unavailable")
-        self.assertFalse(output_path.exists())
-        self.assertFalse(missing_path.exists())
-        self.assertEqual(_tree_bytes(batch.evidence), evidence_before)
-
-    def test_smoke_that_mutates_a_target_fails_closed(self):
-        batch, manifest, manifest_path, apply_path, missing_path = (
-            _interrupted_deployment(self)
+        target = next(
+            Path(operation["target"])
+            for operation in manifest["payload"]["shared_operations"]
+            if operation["phase"] == "deploy" and operation["change"]["kind"] == "copy-file"
         )
-        output_path = batch.evidence / "current-state-evidence.json"
-        passing = _synthetic_smoke(manifest)
-        projected = batch.agents.read_bytes()
-
-        def mutating_smoke(project, runtime, evidence_dir):
-            refs = passing(project, runtime, evidence_dir)
-            with open(batch.agents, "ab") as handle:
-                handle.write(b"\nsmoke mutation\n")
-            return refs
+        target.unlink()
 
         with self.assertRaises(contracts.ContractError) as failure:
             _reconcile(
-                batch,
-                manifest,
-                manifest_path,
-                apply_path,
-                missing_path,
-                output_path,
-                smoke=mutating_smoke,
+                batch, manifest, manifest_path, apply_path, missing_path, output_path
             )
         self.assertEqual(failure.exception.code, "state-conflict")
         self.assertFalse(output_path.exists())
         self.assertFalse(missing_path.exists())
-        # The mutation is preserved as evidence of the unsafe check; nothing
-        # is silently repaired.
-        self.assertEqual(
-            batch.agents.read_bytes(), projected + b"\nsmoke mutation\n"
+        self.assertEqual(_tree_bytes(batch.evidence), evidence_before)
+
+    def test_mutated_target_fails_closed(self):
+        batch, manifest, manifest_path, apply_path, missing_path = (
+            _interrupted_deployment(self)
         )
+        output_path = batch.evidence / "current-state-evidence.json"
+        projected = batch.agents.read_bytes()
+        mutated = projected + b"\noperator mutation\n"
+        batch.agents.write_bytes(mutated)
+
+        with self.assertRaises(contracts.ContractError) as failure:
+            _reconcile(
+                batch, manifest, manifest_path, apply_path, missing_path, output_path
+            )
+        self.assertEqual(failure.exception.code, "state-conflict")
+        self.assertFalse(output_path.exists())
+        self.assertFalse(missing_path.exists())
+        self.assertEqual(batch.agents.read_bytes(), mutated)
 
     def test_output_race_is_rejected_without_overwriting(self):
         batch, manifest, manifest_path, apply_path, missing_path = (
             _interrupted_deployment(self)
         )
         output_path = batch.evidence / "current-state-evidence.json"
-        passing = _synthetic_smoke(manifest)
         raced = b"raced private content\n"
-
-        def racing_smoke(project, runtime, evidence_dir):
-            refs = passing(project, runtime, evidence_dir)
-            output_path.write_bytes(raced)
-            return refs
+        output_path.write_bytes(raced)
 
         with self.assertRaises(contracts.ContractError) as failure:
             _reconcile(
-                batch,
-                manifest,
-                manifest_path,
-                apply_path,
-                missing_path,
-                output_path,
-                smoke=racing_smoke,
+                batch, manifest, manifest_path, apply_path, missing_path, output_path
             )
         self.assertEqual(failure.exception.code, "state-conflict")
         self.assertEqual(output_path.read_bytes(), raced)
@@ -956,10 +976,7 @@ class CurrentStateReconciliationRefusalTests(unittest.TestCase):
         self.assertEqual(_tree_bytes(batch.evidence), evidence_before)
         self.assertEqual(snapshot(target), drifted)
 
-    def test_smoke_mutating_apply_only_target_fails_closed(self):
-        # The same receipt-outcome gate runs again after the native check
-        # window, so a smoke that mutates an apply-only target invalidates the
-        # observation instead of being published.
+    def test_apply_only_target_drift_after_receipt_fails_closed(self):
         batch, manifest, manifest_path, apply_path, missing_path = (
             _interrupted_deployment(self)
         )
@@ -967,27 +984,15 @@ class CurrentStateReconciliationRefusalTests(unittest.TestCase):
         operation = _apply_only_operation(manifest)
         target = Path(operation["target"])
         after = _stage_results(apply_path)[operation["resource_id"]]["after"]
-        passing = _synthetic_smoke(manifest)
-
-        def mutating_smoke(project, runtime, evidence_dir):
-            refs = passing(project, runtime, evidence_dir)
-            _drift_target(target, after)
-            return refs
+        _drift_target(target, after)
 
         with self.assertRaises(contracts.ContractError) as failure:
             _reconcile(
-                batch,
-                manifest,
-                manifest_path,
-                apply_path,
-                missing_path,
-                output_path,
-                smoke=mutating_smoke,
+                batch, manifest, manifest_path, apply_path, missing_path, output_path
             )
         self.assertEqual(failure.exception.code, "state-conflict")
         self.assertFalse(output_path.exists())
         self.assertFalse(missing_path.exists())
-        # The mutation is preserved as evidence of the unsafe check.
         self.assertNotEqual(snapshot(target), after)
 
     def test_retry_output_cannot_claim_reconciled_missing_path(self):
@@ -1037,70 +1042,54 @@ class CurrentStateReconciliationRefusalTests(unittest.TestCase):
         self.assertFalse(missing_path.exists())
         self.assertFalse(retry_path.exists())
 
-    def test_smoke_cannot_create_an_absent_original_slot(self):
+    def test_invented_original_slot_fails_closed(self):
         batch, manifest, manifest_path, apply_path, missing_path = (
             _interrupted_deployment(self)
         )
         output_path = batch.evidence / "current-state-evidence.json"
-        graph = next(
-            op for project in manifest["payload"]["projects"]
-            for op in project["private_operations"]
-            if op["change"]["kind"] == "build-graft"
+        operation = next(
+            op
+            for op in manifest["payload"]["shared_operations"]
+            if op["phase"] == "deploy"
+            and op["before_requirement"]["kind"] == "state"
+            and op["before_requirement"]["state"]["type"] == "absent"
         )
         backup = (
-            Path(manifest["payload"]["backup_root"]) / manifest["manifest_id"]
-            / "deploy" / graph["resource_id"]
+            Path(manifest["payload"]["backup_root"])
+            / manifest["manifest_id"]
+            / "deploy"
+            / operation["resource_id"]
         )
         self.assertFalse(backup.exists())
-        passing = _synthetic_smoke(manifest)
-
-        def mutating_smoke(project, runtime, evidence_dir):
-            refs = passing(project, runtime, evidence_dir)
-            backup.parent.mkdir(parents=True, exist_ok=True)
-            backup.write_bytes(b"unexpected original")
-            return refs
+        backup.parent.mkdir(parents=True, exist_ok=True)
+        backup.write_bytes(b"unexpected original")
 
         with self.assertRaises(contracts.ContractError) as failure:
             _reconcile(
-                batch, manifest, manifest_path, apply_path, missing_path,
-                output_path, smoke=mutating_smoke,
+                batch, manifest, manifest_path, apply_path, missing_path, output_path
             )
         self.assertEqual(failure.exception.code, "state-conflict")
         self.assertEqual(backup.read_bytes(), b"unexpected original")
         self.assertFalse(output_path.exists())
         self.assertFalse(missing_path.exists())
 
-    def test_retry_smoke_cannot_recreate_the_missing_historical_receipt(self):
-        from sbtd_graft_deployment import execute_migration_deployment
-
+    def test_retry_does_not_recreate_the_missing_historical_receipt(self):
         batch, manifest, manifest_path, apply_path, missing_path = (
             _interrupted_deployment(self)
         )
         output_path = batch.evidence / "current-state-evidence.json"
         _reconcile(batch, manifest, manifest_path, apply_path, missing_path, output_path)
         retry_path = batch.evidence / "deployment-retry.json"
-        passing = _synthetic_smoke(manifest)
-
-        def late_receipt(project, runtime, evidence_dir):
-            refs = passing(project, runtime, evidence_dir)
-            missing_path.write_bytes(b"late historical receipt")
-            return refs
-
         with mock.patch.dict(os.environ, batch.environment):
             context = load_deployment_context(
                 manifest_path, apply_path, retry_path, previous_path=output_path,
                 mode="init", roots=[batch.root], hooks_authorized=False,
             )
-            with (
-                mock.patch("sbtd_graft_deployment.verified_runtime",
-                           return_value=dict(approved._RUNTIME)),
-                mock.patch("sbtd_graft_deployment.run_project_smoke",
-                           side_effect=late_receipt),
-            ):
-                result, code = execute_migration_deployment(context)
-        self.assertNotEqual(code, 0, result)
-        self.assertFalse(retry_path.exists())
-        self.assertEqual(missing_path.read_bytes(), b"late historical receipt")
+            result, code = execute_migration_deployment(context)
+        self.assertEqual(code, 0, result)
+        self.assertEqual(result["status"], "succeeded")
+        self.assertTrue(result["projects"][0]["report_refs"])
+        self.assertFalse(missing_path.exists())
 
     def test_deployment_drift_after_context_validation_prevents_publication(self):
         import sbtd_migration
@@ -1152,8 +1141,12 @@ class CurrentStateReconciliationRefusalTests(unittest.TestCase):
                     changed=changed_report, **kwargs
                 ):
                     result = validate(*args, **kwargs)
-                    reference = kwargs["deployment"]["payload"]["projects"][0]["report_refs"][0]
-                    report = Path(reference["path"])
+                    operation = next(
+                        item
+                        for item in manifest["payload"]["shared_operations"]
+                        if item["phase"] == "deploy" and item["change"]["kind"] == "copy-file"
+                    )
+                    report = Path(operation["target"])
                     if change == "modify":
                         report.write_bytes(damaged_bytes)
                     else:
@@ -1226,37 +1219,6 @@ class CurrentStateProvenanceBindingTests(unittest.TestCase):
             "current-state",
         )
         self.assertFalse(missing_path.exists())
-
-    def test_signed_successor_can_reconcile_and_verify_predecessor(self):
-        import sbtd_migration as migration
-        from tests.test_sbtd_reconciliation_followup import _signed_lineage
-
-        batch, manifest, manifest_path, apply_path, missing_path = (
-            _interrupted_deployment(self)
-        )
-        sealed = manifest["payload"]["tool_versions"]
-        observer = {**sealed, "onboard": "runtime-sha256:" + "a" * 64}
-        self.assertNotEqual(observer, sealed)
-        public_path, pair_path = _signed_lineage(
-            batch.evidence, sealed["onboard"], observer["onboard"]
-        )
-        output_path = batch.evidence / "successor-observation.json"
-        with (
-            mock.patch.object(migration, "_LINEAGE_PUBLIC_KEY", public_path),
-            mock.patch.object(migration, "_LINEAGE_DOCUMENT", pair_path),
-            mock.patch.object(migration, "runtime_versions", return_value=observer),
-            mock.patch.dict(os.environ, batch.environment),
-        ):
-            _reconcile(batch, manifest, manifest_path, apply_path, missing_path, output_path)
-            verified, code = verify_migration(manifest_path, apply_path, output_path)
-        self.assertEqual(code, 0, verified)
-        self.assertEqual(verified["status"], "verified")
-        evidence = json.loads(output_path.read_bytes())
-        self.assertEqual(evidence["payload"]["reconciliation"]["runtime_versions"], observer)
-        self.assertEqual(
-            verified["migration"]["verification"]["payload"]["acceptance_basis"],
-            "current-state",
-        )
 
     def test_forged_manifest_ref_path_fails_verification(self):
         self._assert_forged_ref_path_rejected("manifest_ref")
@@ -2076,7 +2038,12 @@ class CurrentStateFinalSnapshotTests(unittest.TestCase):
                     )
                     path = Path(reference["path"])
                 else:
-                    path = Path(deployment_document["payload"]["projects"][0]["report_refs"][0]["path"])
+                    path = next(
+                        Path(operation["target"])
+                        for operation in manifest["payload"]["shared_operations"]
+                        if operation["phase"] == "deploy"
+                        and operation["change"]["kind"] == "copy-file"
+                    )
                 damaged = path.read_bytes() + b"\nconcurrent artifact drift\n"
                 path.write_bytes(damaged)
                 changed = path, damaged
@@ -2113,7 +2080,7 @@ class CurrentStateRetrySnapshotTests(unittest.TestCase):
         _focused_installation_templates(self)
 
     def test_retry_rechecks_artifacts_after_provenance_validation(self):
-        import sbtd_graft_deployment as deployment
+        import sbtd_deployment as deployment
         import sbtd_migration as migration
 
         for artifact in ("target", "original", "report"):
@@ -2152,7 +2119,12 @@ class CurrentStateRetrySnapshotTests(unittest.TestCase):
                                 and row["backup_ref"]["state"]["type"] == "file"
                             ))
                         else:
-                            path = Path(evidence["payload"]["projects"][0]["report_refs"][0]["path"])
+                            path = next(
+                                Path(operation["target"])
+                                for operation in manifest["payload"]["shared_operations"]
+                                if operation["phase"] == "deploy"
+                                and operation["change"]["kind"] == "copy-file"
+                            )
                         damaged = path.read_bytes() + b"\nlate retry drift\n"
                         path.write_bytes(damaged)
                         changed.append((path, damaged))
@@ -2164,7 +2136,7 @@ class CurrentStateRetrySnapshotTests(unittest.TestCase):
                 ):
                     result, code = batch.execute(
                         manifest_path, apply_path, output_path,
-                        previous_path=previous_path, rebuild_graph=False,
+                        previous_path=previous_path,
                     )
                 self.assertEqual(code, 5, result)
                 self.assertEqual(result["status"], "failed")

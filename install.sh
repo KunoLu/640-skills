@@ -9,8 +9,6 @@ PROJECTS_ONLY=0
 PROJECT_ROOTS=()
 ACTION=""
 SKIP_PROJECT_AGENTS=0
-GRAFT_RETIRE_LEGACY=0
-GRAFT_LEGACY_BINDINGS=""
 NO_MCP=0
 DRY_RUN=0
 YES=0
@@ -55,13 +53,8 @@ Options:
       Override the global AGENTS.md target.
   --global-skills-dir <path>
       Override global skills directory.
-  --graft-retire-legacy
-      Explicitly retire exact owned fixed-project Graft MCP entries for the
-      selected roots after preview, preserving originals; not TEMP cleanup.
-  --graft-legacy-bindings <path>
-      Private old-runtime contract for an explicitly authorized MCP cutover.
   --no-mcp
-      Skip MCP configuration.
+      Skip the installer's generic MCP menu. Not forwarded to Onboard.
   --dry-run
       Print commands and MCP writes without making changes.
   --yes
@@ -309,6 +302,7 @@ find_python() {
   fi
 }
 
+# Probe the parser before collecting inputs; this does not authorize writes.
 assert_plan_action_support() {
   local probe='
 import runpy
@@ -401,15 +395,6 @@ onboard_common_args() {
   fi
   if [[ -n "$GLOBAL_SKILLS_DIR" ]]; then
     args+=(--global-skills-dir "$GLOBAL_SKILLS_DIR")
-  fi
-  if [[ "$GRAFT_RETIRE_LEGACY" -eq 1 ]]; then
-    args+=(--graft-retire-legacy)
-  fi
-  if [[ -n "$GRAFT_LEGACY_BINDINGS" ]]; then
-    args+=(--graft-legacy-bindings "$GRAFT_LEGACY_BINDINGS")
-  fi
-  if [[ "$NO_MCP" -eq 1 ]]; then
-    args+=(--no-mcp)
   fi
   if (( ${#args[@]} > 0 )); then
     printf '%s\0' "${args[@]}"
@@ -787,19 +772,6 @@ parse_args() {
         GLOBAL_SKILLS_DIR="${1#*=}"
         shift
         ;;
-      --graft-retire-legacy)
-        GRAFT_RETIRE_LEGACY=1
-        shift
-        ;;
-      --graft-legacy-bindings)
-        [[ $# -ge 2 ]] || die "--graft-legacy-bindings requires a value"
-        GRAFT_LEGACY_BINDINGS="$2"
-        shift 2
-        ;;
-      --graft-legacy-bindings=*)
-        GRAFT_LEGACY_BINDINGS="${1#*=}"
-        shift
-        ;;
       --no-mcp)
         NO_MCP=1
         shift
@@ -830,12 +802,6 @@ parse_args() {
   fi
   if [[ "$PROJECTS_ONLY" -eq 1 && -n "$ACTION" ]]; then
     die "--init-projects is a standalone mode and cannot be combined with --action."
-  fi
-  if [[ "$PROJECTS_ONLY" -eq 1 && "$GRAFT_RETIRE_LEGACY" -eq 1 ]]; then
-    die "--init-projects cannot retire global Graft MCP entries."
-  fi
-  if [[ -n "$GRAFT_LEGACY_BINDINGS" && "$GRAFT_RETIRE_LEGACY" -ne 1 ]]; then
-    die "--graft-legacy-bindings requires --graft-retire-legacy."
   fi
 }
 
@@ -905,89 +871,6 @@ assert_ponytail_provider_clear() {
   fi
 }
 
-# Graft is optional: the read-only `install-graft --json` probe (no --yes,
-# zero writes) is the single source of the real plan — frozen package, actual
-# npm prefix, telemetry target/changes. Only needs-confirmation leads to a
-# prompt and the confirmed `install-graft --yes`; blocked/operational states
-# degrade to a warning and onboarding continues without Graft. A confirmed
-# install failure still aborts the installer with the handler's non-zero exit.
-ensure_graft_cli() {
-  printf '\n'
-  color '1;36' 'Graft CLI (optional)'
-  printf '\n'
-
-  local probe_file probe_rc=0 probe_out status installed reason prompt
-  probe_file="$(mktemp "${TMPDIR:-/tmp}/sbtd-onboard-graft-plan.XXXXXX")"
-  printf '+ %s\n' "$(command_string "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" install-graft --json)"
-  "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" install-graft --json >"$probe_file" || probe_rc=$?
-  probe_out="$("$PYTHON_BIN" - "$probe_file" <<'PY'
-import json
-import sys
-
-try:
-    data = json.load(open(sys.argv[1], encoding="utf-8"))
-except (OSError, ValueError):
-    print("unknown\tfalse\tprobe did not return valid JSON")
-    raise SystemExit(0)
-
-status = data.get("status") or "unknown"
-reason = str(data.get("reason") or "").replace("\t", " ").replace("\n", " ")
-installed = (data.get("before") or {}).get("installed") is True
-print(f"{status}\t{str(installed).lower()}\t{reason}")
-if status != "needs-confirmation":
-    raise SystemExit(0)
-plan = data.get("plan") or {}
-telemetry = plan.get("telemetry") or {}
-changes = telemetry.get("changes") or {}
-change_text = ", ".join(f"{key}={value}" for key, value in changes.items()) or "none"
-if installed:
-    print("  Existing CLI: verified; only persist telemetry opt-out (no package install)")
-else:
-    print(f"  Package: {plan.get('package') or '@nanonets/graft@0.29.0'} (frozen pin; never latest)")
-    print(f"  Target: npm global prefix {plan.get('prefix') or '<unresolved>'}")
-    print("  Requires: Node.js >= 20 and npm native lifecycle scripts for the pinned allow list")
-print(f"  Telemetry: set {change_text} in {telemetry.get('path') or '<unknown>'} (unknown keys preserved)")
-PY
-)"
-  rm -f "$probe_file"
-
-  IFS=$'\t' read -r status installed reason <<< "$probe_out"
-  case "$status" in
-    already-installed)
-      printf 'Graft CLI is already installed and usable; skipping.\n'
-      return 0
-      ;;
-    blocked)
-      warn "Graft CLI is blocked: ${reason:-unknown reason}. Skipping the optional Graft CLI; existing GitNexus/Graft configuration and data are left untouched."
-      return 0
-      ;;
-    needs-confirmation)
-      prompt="Install the optional Graft CLI now?"
-      if [[ "$installed" == "true" ]]; then
-        printf 'Graft telemetry opt-out plan:\n'
-        prompt="Persist telemetry opt-out for the existing Graft CLI now?"
-      else
-        printf 'Graft CLI install plan:\n'
-      fi
-      printf '%s\n' "$probe_out" | sed 1d
-      if ! prompt_yes_no "$prompt" "n"; then
-        printf 'Graft optional changes declined; continuing without changes.\n'
-        return 0
-      fi
-      if [[ "$installed" == "true" ]]; then
-        run_onboard install-graft --telemetry-only --yes
-      else
-        run_onboard install-graft --yes
-      fi
-      refresh_check_json
-      ;;
-    *)
-      warn "Graft CLI probe returned status '${status}' (exit $probe_rc): ${reason:-no reason given}. Skipping the optional Graft CLI."
-      return 0
-      ;;
-  esac
-}
-
 install_missing_runtime_and_skills() {
   printf '\n'
   color '1;36' 'Preflight check'
@@ -1013,8 +896,6 @@ install_missing_runtime_and_skills() {
     fi
     refresh_check_json
   fi
-
-  ensure_graft_cli
 
   if [[ "$(json_python skill-installed caveman)" != "true" ]]; then
     if prompt_yes_no "caveman skill is missing. Install it as a user-level global skill?" "n"; then

@@ -19,20 +19,23 @@ UPGRADE_MODULES = (
     "test_onboard_windows_platform",
 )
 MACOS_MODULES = UPGRADE_MODULES + (
-    "test_onboard_multi_projects", "test_sbtd_graft_entry", "test_sbtd_codex_wiring",
-    "test_sbtd_omp_wiring", "test_onboard_omp_wiring", "test_global_mcp_installation",
-    "test_sbtd_graft_isolation", "test_onboard_external_skills",
+    "test_onboard_multi_projects", "test_global_mcp_installation",
+    "test_onboard_external_skills",
 )
 WINDOWS_CASES = (
-    "test_sbtd_followup_section_gate.FollowupSectionGateTests.test_omp_global_receipt_rejects_relative_runtime_paths",
-    "test_sbtd_followup_section_gate.FollowupSectionGateTests.test_omp_historical_receipt_rejects_relative_runtime_paths",
-    "test_sbtd_codex_wiring.CodexCandidateTests.test_discontiguous_tables_retire_only_owned_server_and_preserve_comments",
-    "test_sbtd_codex_wiring.CodexCandidateTests.test_discontiguous_existing_global_server_is_byte_idempotent",
-    "test_sbtd_codex_wiring.CodexCandidateTests.test_discontiguous_tables_keep_retirement_ownership_checks",
+    "test_sbtd_omp_agents_target.BuildOperationsTargetTests.test_profile_targets_profile_agent_dir",
     "test_sbtd_migration_files.MigrationFileTests.test_windows_junction_is_rejected_before_snapshot_or_copy_reads_target",
     "test_sbtd_migration_files.MigrationFileTests.test_windows_private_directory_acl_gateway",
     "test_sbtd_migration_files.MigrationFileTests.test_windows_native_acl_proof_matches_the_powershell_oracle",
     "test_sbtd_migration_files.MigrationFileTests.test_windows_native_acl_distinguishes_empty_null_and_unreadable_dacls",
+    "test_sbtd_migration_files.WindowsRetirementPermissionTests.test_protected_file_permissions_survive_writes_removal_and_restore",
+    "test_sbtd_migration_files.WindowsRetirementPermissionTests.test_unprotected_inherited_dacl_survives_a_write",
+    "test_sbtd_migration_files.WindowsRetirementPermissionTests.test_null_and_empty_dacls_never_authorize_a_live_write",
+    "test_sbtd_migration_files.WindowsRetirementPermissionTests.test_unassignable_owner_cannot_publish_a_candidate",
+    "test_sbtd_upgrade_retirement.RealRetirementUpgradeTests.test_windows_native_retirement_edit_and_remove_restore_permissions",
+    "test_sbtd_retirement.RetirementProofTests.test_windows_remove_and_restore_preserves_native_descriptor",
+    "test_sbtd_cleanup_legacy.RetirementArtifactTests.test_windows_composed_cleanup_binds_acl_on_apply_retry_and_rollback",
+    "test_sbtd_cleanup_legacy.RetirementArtifactTests.test_windows_vendor_overlap_blocks_before_execution",
     "test_sbtd_migration_files.MigrationFileTests.test_directory_removal_keeps_later_user_edit_and_new_file",
     "test_sbtd_migration_files.MigrationFileTests.test_directory_removal_preserves_replaced_capture_directory",
     "test_sbtd_migration_files.MigrationFileTests.test_directory_removal_reports_disappearing_holder_without_deleting_files",
@@ -68,12 +71,13 @@ def select_cases(cases, target):
             )
         else:
             keep = module in UPGRADE_MODULES or identity in WINDOWS_CASES or (
-                identity.startswith("test_sbtd_graft_entry.SessionRootResolutionTests.")
-            ) or (installer and (
-                ".PowerShellInstallerAgentCliFlowTests." in identity or "powershell" in identity
-            ))
+                installer and (".PowerShellInstallerAgentCliFlowTests." in identity or "powershell" in identity)
+            )
         # Workflow contracts include native Git-ignore behavior, not only prose.
-        keep = keep or module in ("test_workflow_contracts", "test_sbtd_probe_links")
+        keep = keep or module in (
+            "test_workflow_contracts", "test_sbtd_probe_links",
+            "test_sbtd_omp_sources", "test_sbtd_retirement",
+        )
         if keep:
             selected.append(case)
     if target == "windows":
@@ -196,8 +200,8 @@ def required_native_cases(target, identities):
         required.update(WINDOWS_CASES)
         required.update((
             case_sensitive,
-            "test_sbtd_upgrade_hosts.ShellResourceTests.test_unicode_resolution_uses_utf8_even_with_legacy_console_encoding",
-            "test_sbtd_upgrade_hosts.ShellResourceTests.test_new_unicode_profile_loads_in_windows_powershell",
+            "test_sbtd_upgrade_hosts.ShellResourceTests.test_windows_unicode_profile_is_not_executed_by_probe",
+            "test_sbtd_upgrade_hosts.ShellResourceTests.test_windows_profile_is_not_rewritten_by_upgrade",
         ))
         required.update(identity for identity in identities
                         if identity.startswith("test_install_sh_agent_cli_flow.") and "powershell" in identity)

@@ -34,7 +34,8 @@ from unittest import mock
 SCRIPTS = Path(__file__).resolve().parents[1] / "sbtd-workflow-onboard" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import sbtd_graft_deployment
+import sbtd_deployment
+from onboard import GLOBAL_AGENTS_TEMPLATE
 from onboard_contracts import ContractError, canonical_json_bytes
 from sbtd_migration import apply_migration
 from sbtd_migration_files import save_document, snapshot
@@ -104,7 +105,7 @@ class FollowupAncestorOutputTests(unittest.TestCase):
             with mock.patch.dict(os.environ, fixture.environment):
                 existing = next(
                     item
-                    for item in sbtd_graft_deployment._installation_templates(
+                    for item in sbtd_deployment._installation_templates(
                         [str(fixture.root)]
                     )
                     if item.target.name == "sbtd-task"
@@ -145,6 +146,12 @@ class FollowupAncestorOutputTests(unittest.TestCase):
             fixture = FollowupMigration(Path(directory).resolve())
             fixture.build()
             followup = fixture.plan_followup()
+            target = fixture.home / ".omp/agent/AGENTS.md"
+            self.assertFalse(target.exists())
+            operation = next(
+                item for item in followup["payload"]["shared_operations"]
+                if item["phase"] == "deploy" and item["target"] == str(target)
+            )
             manifest_path, apply_path = self._apply_at_vault_root(fixture, followup)
             sibling = fixture.vault / "sibling-evidence"
             sibling.mkdir(mode=0o700)
@@ -157,7 +164,14 @@ class FollowupAncestorOutputTests(unittest.TestCase):
             )
             self.assertEqual(code, 0, result)
             self.assertTrue((sibling / "deployment.json").is_file())
-            self.assertTrue((fixture.home / ".omp/agent/mcp.json").is_file())
+            outcome = next(
+                item for item in result["operationResults"]
+                if item["resource_id"] == operation["resource_id"]
+            )
+            self.assertEqual(outcome["status"], "succeeded")
+            self.assertEqual(outcome["before"]["type"], "absent")
+            self.assertEqual(outcome["after"], snapshot(target))
+            self.assertEqual(target.read_bytes(), GLOBAL_AGENTS_TEMPLATE.read_bytes())
             for path, state in ancestor_bytes.items():
                 self.assertEqual(snapshot(Path(path)), state, path)
 
@@ -239,7 +253,7 @@ class FollowupDirectoryUpgradeTests(unittest.TestCase):
             fixture = FollowupMigration(base)
             skills_dir = Path(fixture.environment["AGENT_SKILLS_DIR"])
             with mock.patch.dict(os.environ, fixture.environment):
-                catalog = sbtd_graft_deployment._installation_templates(
+                catalog = sbtd_deployment._installation_templates(
                     [str(fixture.root)]
                 )
             operation = next(
@@ -254,7 +268,7 @@ class FollowupDirectoryUpgradeTests(unittest.TestCase):
             shutil.copytree(real_source, older_source)
             (older_source / "OLDER-RUNTIME.txt").write_bytes(b"older runtime\n")
             installed = operation.target
-            real_catalog = sbtd_graft_deployment._installation_templates
+            real_catalog = sbtd_deployment._installation_templates
 
             def older_catalog(roots, *, omp_agents_target=None):
                 return [
@@ -269,7 +283,7 @@ class FollowupDirectoryUpgradeTests(unittest.TestCase):
             # The whole predecessor chain resolves the isolated older copy;
             # the production template tree is never written.
             with mock.patch(
-                "sbtd_graft_deployment._installation_templates",
+                "sbtd_deployment._installation_templates",
                 new=older_catalog,
             ):
                 fixture.build()
@@ -372,7 +386,7 @@ class FollowupDirectoryUpgradeTests(unittest.TestCase):
     def test_older_launcher_package_upgrades_through_the_activation_gate(self):
         # The launcher package is a distinct gate: the installed
         # sbtd-workflow-onboard directory must byte-match the canonical
-        # package (sbtd_graft_deployment._PACKAGE) when the MCP wiring is
+        # package (sbtd_deployment._PACKAGE) when the MCP wiring is
         # activated. A real followup after P1-23 script changes necessarily
         # upgrades it; the predecessor is aged with an isolated, labeled
         # older template variant (marker file only, scripts byte-identical -
@@ -381,7 +395,7 @@ class FollowupDirectoryUpgradeTests(unittest.TestCase):
             base = Path(directory).resolve()
             fixture = FollowupMigration(base)
             with mock.patch.dict(os.environ, fixture.environment):
-                catalog = sbtd_graft_deployment._installation_templates(
+                catalog = sbtd_deployment._installation_templates(
                     [str(fixture.root)]
                 )
             operation = next(
@@ -397,7 +411,7 @@ class FollowupDirectoryUpgradeTests(unittest.TestCase):
                 b"isolated older launcher template variant\n"
             )
             installed = operation.target
-            real_catalog = sbtd_graft_deployment._installation_templates
+            real_catalog = sbtd_deployment._installation_templates
 
             def older_catalog(roots, *, omp_agents_target=None):
                 return [
@@ -413,10 +427,10 @@ class FollowupDirectoryUpgradeTests(unittest.TestCase):
             # package pin both resolve the isolated older copy.
             with (
                 mock.patch(
-                    "sbtd_graft_deployment._installation_templates",
+                    "sbtd_deployment._installation_templates",
                     new=older_catalog,
                 ),
-                mock.patch("sbtd_graft_deployment._PACKAGE", new=older_source),
+                mock.patch("sbtd_deployment._PACKAGE", new=older_source),
             ):
                 fixture.build()
             self.assertEqual(snapshot(installed), snapshot(older_source))
@@ -447,23 +461,14 @@ class FollowupDirectoryUpgradeTests(unittest.TestCase):
                 manifest_path, apply_path
             )
             self.assertEqual(code, 0, result)
-            # The new package installed and its checksum passed the MCP
-            # activation gate: the OMP wiring exists and launches the
-            # installed entry point.
+            # The installed package matches the canonical source. rc.3 does
+            # not activate a Graft launcher.
             self.assertEqual(snapshot(installed), snapshot(real_source))
-            servers = json.loads(
-                (fixture.home / ".omp/agent/mcp.json").read_text(
-                    encoding="utf-8"
-                )
-            )["mcpServers"]
-            self.assertEqual(len(servers), 1)
-            server = next(iter(servers.values()))
-            self.assertEqual(
-                server["args"][2],
-                str(
+            self.assertFalse(
+                (
                     fixture.home
                     / ".agent/skills/sbtd-workflow-onboard/scripts/sbtd_graft_entry.py"
-                ),
+                ).exists()
             )
             payload = result["deploymentEvidence"]["evidence"]["payload"]
             upgraded = next(

@@ -1,14 +1,12 @@
 """Followup lifecycle over a genuine reconciled predecessor chain.
 
-The fixture first builds a real original -> successor codex deployment ->
-verified cleanup predecessor (labeled smoke-only native doubles; 合成夹具，
-不证明真实 host 部署。), then reseals deployment evidence with typed
-current-state reconciliation provenance plus the verification/cleanup pair
-bound over it. That is the genuine reconciled+verified+cleaned predecessor a
-followup must consume: planning and every later consumer accept it while the
-cited missing historical receipt stays absent, fail closed the moment that
-path reappears, and never rewrite predecessor history. The centralized
-immutable-stage iterator also keeps the absent missing path protected
+Most tests reseal a completed Codex predecessor with typed current-state
+provenance to isolate specific ancestry failures. The signed-hop regressions
+run real deployment, reconciliation, verification and cleanup over an
+isolated runtime. Every predecessor proof stays private and immutable.
+The OMP followup consumes that predecessor while the cited missing historical
+receipt stays absent, fails closed if it reappears, and never rewrites history.
+The immutable-stage iterator also protects the absent missing path
 against descendant evidence output.
 """
 from __future__ import annotations
@@ -35,6 +33,7 @@ import sbtd_migration as migration
 from onboard_contracts import ContractError, canonical_json_bytes
 from sbtd_migration import _protected_followup_ancestry, apply_migration
 from sbtd_migration_files import save_document, snapshot
+from sbtd_reconciliation import reconcile_deployment
 
 from tests.test_sbtd_followup_batch import FollowupMigration, assert_proof_intact
 
@@ -46,10 +45,7 @@ def _digest(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def _reconciled_predecessor(
-    fixture: FollowupMigration, *, observer: str | None = None,
-    observer_lineage: dict | None = None,
-) -> Path:
+def _reconciled_predecessor(fixture: FollowupMigration, *, observer: str | None = None) -> Path:
     """Reseal the completed predecessor with current-state provenance.
 
     Manifest and apply receipt stay byte-identical; deployment evidence gains
@@ -80,8 +76,6 @@ def _reconciled_predecessor(
     }
     if observer is not None:
         metadata["runtime_versions"]["onboard"] = observer
-    if observer_lineage is not None:
-        metadata["observer_lineage"] = copy.deepcopy(observer_lineage)
     deployment_payload = copy.deepcopy(fixture.deployment["payload"])
     deployment_payload["reconciliation"] = metadata
     deployment = contracts.seal_document("deployment_evidence", deployment_payload)
@@ -105,6 +99,36 @@ def _reconciled_predecessor(
     fixture.deployment = deployment
     fixture.verification = verification
     fixture.cleanup_receipt = cleanup
+    return missing_path
+
+
+def _observe_predecessor(fixture, authority, *, legacy=False):
+    """Lose the genuine Codex receipt, then observe its actual outcomes under B."""
+    execute = fixture.execute_deployment
+    missing_path = fixture.evidence / "interrupted-deployment.json"
+
+    def deploy_and_observe(manifest_path, apply_path, output_path):
+        result, code = execute(manifest_path, apply_path, missing_path)
+        if code != 0:
+            return result, code
+        missing_path.unlink()
+        sealed = fixture.manifest["payload"]["tool_versions"]["onboard"]
+        observer = authority.use_runtime("observer")["onboard"]
+        authority.install(sealed, observer)
+        observed = reconcile_deployment(
+            manifest_path, apply_path, missing_path, output_path, confirmed=True
+        )
+        if legacy:
+            from tests.test_sbtd_reconciliation import _reseal_deployment_evidence
+
+            # Exercise the proof-less format without changing the real smoke.
+            observed["evidence"] = _reseal_deployment_evidence(
+                output_path, lambda payload: payload["reconciliation"].pop("observer_lineage")
+            )
+        return {"deploymentEvidence": observed}, 0
+
+    with mock.patch.object(fixture, "execute_deployment", side_effect=deploy_and_observe):
+        fixture.build()
     return missing_path
 
 
@@ -214,7 +238,7 @@ class ReconciledPredecessorFollowupTests(unittest.TestCase):
             self.assertEqual({path: snapshot(path) for path in before}, before)
 
     def test_followup_deploy_preserves_results_when_ancestor_provenance_drifts(self):
-        import sbtd_graft_deployment as deployment
+        import sbtd_deployment as deployment
 
         with tempfile.TemporaryDirectory() as directory:
             fixture = FollowupMigration(Path(directory).resolve())
@@ -317,54 +341,60 @@ class ReconciledPredecessorFollowupTests(unittest.TestCase):
             assert_proof_intact(self, proof)
 
     def test_signed_successor_observer_survives_historical_followup(self):
+        from tests.test_sbtd_reconciliation_lineage import _installed, _LineageAuthority, _smoke_path
+
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
-            fixture = FollowupMigration(base)
-            fixture.build()
-            predecessor = fixture.manifest["payload"]["tool_versions"]["onboard"]
-            observer = "runtime-sha256:" + "a" * 64
-            self.assertNotEqual(predecessor, observer)
-            _reconciled_predecessor(fixture, observer=observer)
-            public_path, pair_path = _signed_lineage(base, predecessor, observer)
-            proof = fixture.predecessor_proof()
-            with (
-                mock.patch.object(migration, "_LINEAGE_PUBLIC_KEY", public_path),
-                mock.patch.object(migration, "_LINEAGE_DOCUMENT", pair_path),
-            ):
-                # The old observer differs from this consumer; historical
-                # provenance must not be compared to its current runtime.
+            # A direct Codex batch has the successful apply outcomes required
+            # by the signed hop. A deploy-only successor has no apply work.
+            fixture = FollowupMigration(base, via_successor=False)
+            authority = _LineageAuthority(base)
+            with _installed(authority):
+                sealed = authority.use_runtime("predecessor")
+                missing = _observe_predecessor(fixture, authority, legacy=True)
+                provenance = fixture.deployment["payload"]["reconciliation"]
+                self.assertNotIn("observer_lineage", provenance)
+                observer = provenance["runtime_versions"]
+                self.assertNotEqual(observer, sealed)
+                report = json.loads(_smoke_path(fixture.deployment).read_bytes())
+                self.assertEqual(report["onboardVersion"], observer["onboard"])
+                proof = fixture.predecessor_proof()
+
+                # Read the completed predecessor at A, not its observer B.
+                self.assertEqual(authority.use_runtime("predecessor"), sealed)
                 followup = fixture.plan_followup()
                 artifacts = fixture.complete_followup(followup)
             self.assertEqual(artifacts["cleanup_receipt"]["payload"]["status"], "cleaned")
             assert_proof_intact(self, proof)
+            self.assertFalse(missing.exists())
 
     def test_rotated_lineage_preserves_historical_followup_chain(self):
-        from tests import test_sbtd_followup_batch as followup_tests
-        from tests.test_sbtd_reconciliation_lineage import _installed, _LineageAuthority
+        from tests.test_sbtd_reconciliation_lineage import _installed, _LineageAuthority, _smoke_path
 
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
-            fixture = FollowupMigration(base)
-            fixture.build()
-            sealed = fixture.manifest["payload"]["tool_versions"]
-            observer = "runtime-sha256:" + "a" * 64
-            current = {**sealed, "onboard": "runtime-sha256:" + "c" * 64}
+            fixture = FollowupMigration(base, via_successor=False)
             authority = _LineageAuthority(base)
-            original_pair = authority.install(sealed["onboard"], observer)
-            _reconciled_predecessor(
-                fixture, observer=observer, observer_lineage=original_pair
-            )
-            proof = fixture.predecessor_proof()
-            authority.install(observer, current["onboard"])
-            with (
-                _installed(authority),
-                mock.patch.object(followup_tests, "runtime_versions", return_value=current),
-                mock.patch.object(migration, "runtime_versions", return_value=current),
-            ):
+            with _installed(authority):
+                sealed = authority.use_runtime("predecessor")
+                missing = _observe_predecessor(fixture, authority)
+                provenance = fixture.deployment["payload"]["reconciliation"]
+                observer = provenance["runtime_versions"]["onboard"]
+                original_pair = provenance["observer_lineage"]
+                self.assertEqual(
+                    (original_pair["predecessor"], original_pair["successor"]),
+                    (sealed["onboard"], observer),
+                )
+                proof = fixture.predecessor_proof()
+                current = authority.use_runtime("successor")
+                authority.install(observer, current["onboard"])
                 followup = fixture.plan_followup()
                 artifacts = fixture.complete_followup(followup)
+                report = json.loads(_smoke_path(artifacts["deployment"]).read_bytes())
+                self.assertEqual(report["onboardVersion"], current["onboard"])
             self.assertEqual(artifacts["cleanup_receipt"]["payload"]["status"], "cleaned")
             assert_proof_intact(self, proof)
+            self.assertFalse(missing.exists())
 
     def test_historical_observer_requires_valid_forward_lineage(self):
         with tempfile.TemporaryDirectory() as directory:

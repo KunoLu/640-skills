@@ -35,7 +35,9 @@ from test_sbtd_migration_cleanup import (
 
 
 class CleanupUpgradeIntegrationTests(unittest.TestCase):
-    def _run_transition(self, *, reconciled: bool, late_drift: str | None = None) -> None:
+    def _run_transition(
+        self, *, reconciled: bool, late_drift: str | None = None, mixed_layout: bool = False
+    ) -> None:
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
         from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
@@ -48,13 +50,17 @@ class CleanupUpgradeIntegrationTests(unittest.TestCase):
                 PACKAGE, installed,
                 ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"),
             )
-            # A genuinely different previous package, not a mocked version result.
-            source = installed / "scripts" / "sbtd_graft_entry.py"
-            source.write_bytes(source.read_bytes() + b"\n# previous installation\n")
+            source = installed / "scripts" / "sbtd_migration.py"
             key = Ed25519PrivateKey.generate()
             public = installed / "assets" / "runtime-lineage.pub"
-            public.write_bytes(key.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo))
+            if not mixed_layout:
+                # Change a measured file, not just the package's upgrade payload.
+                source.write_bytes(source.read_bytes() + b"\n# previous installation\n")
+                public.write_bytes(
+                    key.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
+                )
             pair = installed / "assets" / "runtime-lineage.json"
+            pair.unlink()
             fixture = VerifiedMigration(base)
             upgrade_vault = base / "upgrade-vault"
             require_private_directory(upgrade_vault, create=True)
@@ -72,6 +78,7 @@ class CleanupUpgradeIntegrationTests(unittest.TestCase):
                     source.write_bytes(source.read_bytes() + b"\n# accepted observer successor\n")
                     observer_versions = migration.runtime_versions()
                     successor = observer_versions["onboard"]
+                    self.assertNotEqual(successor, predecessor)
                     proof = {
                         "schema_version": 1, "purpose": "runtime-lineage",
                         "predecessor": predecessor, "successor": successor,
@@ -98,6 +105,12 @@ class CleanupUpgradeIntegrationTests(unittest.TestCase):
                     fixture.verification = verified["migration"]["verification"]
                     fixture.verification_path.write_bytes(canonical_json_bytes(fixture.verification))
 
+                if mixed_layout:
+                    # This archive path contaminates the backup without restoring old code.
+                    archive_name = installed / "assets" / "graft-build-policy.json"
+                    archive_name.mkdir()
+                    (archive_name / "unexpected.txt").write_text("mixed layout\n", encoding="utf-8")
+
                 external_results, external_transaction = onboard.execute_external_skill_install(
                     argparse.Namespace(source="stable"),
                     list(onboard.EXTERNAL_SKILL_SOURCES),
@@ -118,14 +131,48 @@ class CleanupUpgradeIntegrationTests(unittest.TestCase):
                 plan = plan_upgrade(scope, upgrade_vault, package_root=PACKAGE)
                 receipt = apply_upgrade(plan, confirmed=plan["plan_id"])
                 self.assertEqual(receipt["payload"]["status"], "complete")
+                current_versions = migration.runtime_versions()
+                sealed_versions = fixture.manifest["payload"]["tool_versions"]
                 plan_path = upgrade_vault / f"upgrade-plan-{plan['plan_id']}.json"
                 receipt_path = upgrade_vault / f"upgrade-receipt-{receipt['receipt_id']}.json"
                 before = snapshot(fixture.root / ".trellis")
                 arguments = (fixture.manifest_path, fixture.apply_path, fixture.deployment_path, fixture.verification_path)
                 confirmation = fixture.verification["verification_id"]
-                with self.assertRaises(ContractError):
+                if mixed_layout:
+                    self.assertEqual(current_versions, sealed_versions)
+                    with self.assertRaises(ContractError) as mixed:
+                        migration.cleanup_migration(
+                            *arguments, confirm_cleanup=confirmation,
+                            upgrade_plan_path=plan_path, upgrade_receipt_path=receipt_path,
+                        )
+                    self.assertEqual(mixed.exception.code, "runtime-unavailable")
+                    self.assertIn("mixed", str(mixed.exception))
+                    self.assertEqual(snapshot(fixture.root / ".trellis"), before)
+                    self.assertEqual(list(fixture.evidence.glob("cleanup-*.json")), [])
+                    return
+
+                self.assertNotEqual(current_versions, sealed_versions)
+                with self.assertRaises(ContractError) as missing:
                     migration.cleanup_migration(*arguments, confirm_cleanup=confirmation)
+                self.assertEqual(missing.exception.code, "version-conflict")
                 self.assertEqual(snapshot(fixture.root / ".trellis"), before)
+
+                if not reconciled and late_drift is None:
+                    raw_receipt = receipt_path.read_bytes()
+                    tampered = json.loads(raw_receipt)
+                    tampered["payload"]["executor"]["isolated"] = False
+                    receipt_path.write_bytes(canonical_json_bytes(tampered))
+                    try:
+                        with self.assertRaises(ContractError) as invalid:
+                            migration.cleanup_migration(
+                                *arguments, confirm_cleanup=confirmation,
+                                upgrade_plan_path=plan_path, upgrade_receipt_path=receipt_path,
+                            )
+                        self.assertEqual(invalid.exception.code, "receipt-id-mismatch")
+                        self.assertEqual(snapshot(fixture.root / ".trellis"), before)
+                        self.assertEqual(list(fixture.evidence.glob("cleanup-*.json")), [])
+                    finally:
+                        receipt_path.write_bytes(raw_receipt)
 
                 if late_drift is not None:
                     if late_drift == "alias":
@@ -162,7 +209,8 @@ class CleanupUpgradeIntegrationTests(unittest.TestCase):
                     outcomes = recorded["payload"]["projects"][0]["private_results"]
                     self.assertEqual(outcomes[0]["status"], "succeeded")
                     self.assertEqual(outcomes[0]["after"]["type"], "absent")
-                    self.assertTrue((fixture.evidence / f"cleanup-{recorded['cleanup_id']}.json").is_file())
+                    blocked_path = fixture.evidence / f"cleanup-{recorded['cleanup_id']}.json"
+                    self.assertEqual(blocked_path.read_bytes(), canonical_json_bytes(recorded))
                     return
 
                 args = parse_workflow_args([
@@ -183,9 +231,10 @@ class CleanupUpgradeIntegrationTests(unittest.TestCase):
                 self.assertEqual(code, 0, result)
                 self.assertFalse((fixture.root / ".trellis").exists())
                 cleanup = result["migration"]["cleanup_receipt"]
-                self.assertIn("upgrade_context", cleanup["payload"])
+                self.assertEqual(cleanup["payload"]["upgrade_context"]["plan_id"], plan["plan_id"])
+                self.assertEqual(cleanup["payload"]["upgrade_context"]["receipt_id"], receipt["receipt_id"])
                 previous_path = fixture.evidence / f"cleanup-{cleanup['cleanup_id']}.json"
-                self.assertTrue(previous_path.is_file())
+                self.assertEqual(previous_path.read_bytes(), canonical_json_bytes(cleanup))
                 # A retry cannot silently drop the trust source it used before.
                 with self.assertRaises(ContractError):
                     migration.cleanup_migration(
@@ -202,6 +251,9 @@ class CleanupUpgradeIntegrationTests(unittest.TestCase):
 
     def test_completed_batch_exits_through_native_upgrade_without_new_signature(self) -> None:
         self._run_transition(reconciled=False)
+
+    def test_native_upgrade_cannot_authorize_mixed_previous_runtime_layout(self) -> None:
+        self._run_transition(reconciled=False, mixed_layout=True)
 
     def test_reconciled_observer_uses_bound_previous_key_after_native_upgrade(self) -> None:
         self._run_transition(reconciled=True)

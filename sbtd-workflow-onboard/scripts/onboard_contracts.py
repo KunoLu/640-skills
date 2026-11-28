@@ -44,6 +44,15 @@ GRAFT_BUILD_POLICY_PATH = SCHEMA_PATH.parent / "assets" / "graft-build-policy.js
 GRAFT_BUILD_POLICY_SHA256 = (
     "70e8ae90acf7c01b7a67baf5aa3b3971472f99a090e30a26a376cf3979cb34d4"
 )
+ARCHIVED_GRAFT_PIN = "0.29.0"
+
+
+def archived_graft_policy() -> dict[str, Any]:
+    """Historical policy identity. Does not read or require the live file."""
+    return {
+        "path": str(GRAFT_BUILD_POLICY_PATH),
+        "state": {"type": "file", "checksum": GRAFT_BUILD_POLICY_SHA256},
+    }
 
 # kind -> (schema $def name, payload digest key or None)
 _DOCUMENT_KINDS: dict[str, tuple[str, str | None]] = {
@@ -102,7 +111,7 @@ _ENVELOPE_PROJECT_STATUSES = {
         {"applied", "already-complete", "blocked", "failed"}
     ),
     ("migration", "reconcile"): frozenset({"reconciled", "blocked", "failed"}),
-    ("migration", "verify"): frozenset({"verified", "blocked", "failed"}),
+    ("migration", "verify"): frozenset({"verified", "not-verified", "blocked", "failed"}),
     ("migration", "cleanup"): frozenset(
         {"cleaned", "already-complete", "blocked", "failed"}
     ),
@@ -886,10 +895,23 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
             )
     else:
         if not deploy_operations:
-            _fail(
-                "semantic-violation",
-                "a deployment declaration requires declared deployment operations",
+            empty_no_touch_successor = (
+                payload.get("successor") is not None
+                and deployment["mode"] == "init-projects"
+                and all(
+                    project.get("agents_no_touch") is not None
+                    for project in projects
+                )
+                and not any(
+                    operation["phase"] == "deploy"
+                    for operation in payload["shared_operations"]
+                )
             )
+            if not empty_no_touch_successor:
+                _fail(
+                    "semantic-violation",
+                    "a deployment declaration requires declared deployment operations",
+                )
         if deployment["mode"] == "init-projects" and any(
             operation in payload["shared_operations"] for operation in deploy_operations
         ):
@@ -1513,12 +1535,52 @@ def _check_verification_payload(payload: Mapping[str, Any]) -> None:
                 )
             check_retention(candidate)
     statuses = [project["status"] for project in payload["projects"]]
-    expected = _aggregate(statuses, ("failed", "blocked"), "verified", None)
+    expected = _aggregate(
+        statuses, ("failed", "not-verified", "blocked"), "verified", None
+    )
     if payload["status"] != expected:
         _fail(
             "semantic-violation",
             "verification status does not match the priority aggregation of project statuses",
         )
+    if payload.get("legacy_resources") and payload["status"] == "verified":
+        _fail(
+            "semantic-violation",
+            "historical Graft verification does not authorize cleanup",
+        )
+    for row in payload.get("legacy_resources") or ():
+        if not isinstance(row.get("reason"), str) or not row["reason"].strip():
+            _fail(
+                "semantic-violation",
+                "a historical Graft resource needs a readable reason",
+            )
+        if row["status"] == "verified" and (
+            row["bytes"] != "match"
+            or row["mode"] != "match"
+            or row.get("mode_source") is None
+        ):
+            _fail(
+                "semantic-violation",
+                "historical verification requires matching bytes and a trusted mode",
+            )
+        if row["status"] == "drifted" and row["bytes"] == "unreadable":
+            _fail(
+                "semantic-violation",
+                "an unreadable historical resource is not drift",
+            )
+        if row["status"] == "not-verified" and row["mode"] == "differ":
+            _fail(
+                "semantic-violation",
+                "a differing historical mode is drift",
+            )
+    for project in payload["projects"]:
+        if project["status"] == "not-verified" and (
+            not project["reason"].strip() or not project["nextStep"].strip()
+        ):
+            _fail(
+                "semantic-violation",
+                "a not-verified project needs a readable reason and nextStep",
+            )
 
 
 def _check_recovery_plan_payload(payload: Mapping[str, Any]) -> None:
@@ -1965,7 +2027,7 @@ def _check_envelope(value: Mapping[str, Any], kind: str) -> None:
                     "semantic-violation", "project summary masks the artifact's outcome"
                 )
 
-    if value["status"] in ("blocked", "failed") and (
+    if value["status"] in ("blocked", "failed", "not-verified") and (
         not value["reason"].strip() or not value["nextStep"].strip()
     ):
         _fail(
@@ -2518,7 +2580,7 @@ def _bind_reconciliation(
     supply both cannot bind the record, and a digest mismatch rejects
     corrupted or substituted inputs.
     """
-    if metadata["runtime_versions"]["graft"] != manifest_payload["tool_versions"].get("graft"):
+    if metadata["runtime_versions"].get("graft") != manifest_payload["tool_versions"].get("graft"):
         _fail(
             "binding-violation",
             "reconciliation cannot change the manifest's pinned Graft version",

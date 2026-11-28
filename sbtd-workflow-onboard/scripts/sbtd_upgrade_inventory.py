@@ -88,7 +88,7 @@ _PARENT_SEGMENT = re.compile(r"(^|[\\/])\.\.([\\/]|$)")
 _ABSENT: dict[str, Any] = {"type": "absent", "checksum": None}
 
 _SCOPE_KEYS = frozenset(
-    {"schema_version", "skills_roots", "agents_targets", "hosts", "shell_profiles", "decisions"}
+    {"schema_version", "skills_roots", "agents_targets", "hosts", "shell_profiles", "decisions", "retirement_evidence"}
 )
 _HOST_KEYS = frozenset(
     {"id", "platform", "config_home", "config", "skills_roots", "runtime", "project_roots"}
@@ -935,7 +935,7 @@ def _validate_hosts(
         )
         if onboard_root is None and len(host_roots) == 1:
             onboard_root = host_roots[0] / _SELF_ENTRY_ID.removeprefix("skill:")
-        if onboard_root is None and platform in {"codex", "omp"}:
+        if onboard_root is None and len(host_roots) > 1 and platform in {"codex", "omp"}:
             _fail("scope-conflict", f"host {host_id} requires one unambiguous Onboard installation")
         if onboard_root is not None:
             onboard_root = _canonical_skill_child(
@@ -1009,6 +1009,47 @@ def _validate_shells(
         seen[key] = declaration
         profiles.append({"path": path, "shell": item["shell"], "bin": bin_dir})
     return profiles
+
+
+_EVIDENCE_KEYS = {
+    "operation-results": ("path",),
+    "manifest-deployment": ("manifest", "deployment"),
+    "upgrade-plan-apply": ("plan", "receipt"),
+}
+_EVIDENCE_LIMIT = 32
+
+
+def _validate_evidence(value: object) -> list[dict[str, str]]:
+    """Finite explicit receipt bindings. No directory scan and no extra fields."""
+    if value is None:
+        return []
+    if (
+        isinstance(value, (str, bytes))
+        or not isinstance(value, list)
+        or len(value) > _EVIDENCE_LIMIT
+    ):
+        _fail("invalid-config", "retirement evidence must be a finite explicit list")
+    seen: set[str] = set()
+    result: list[dict[str, str]] = []
+    for item in value:
+        if not isinstance(item, dict) or not isinstance(item.get("kind"), str):
+            _fail("invalid-config", "a retirement evidence binding is malformed")
+        fields = _EVIDENCE_KEYS.get(item["kind"])
+        if fields is None or set(item) != {"kind", *fields}:
+            _fail("invalid-config", "a retirement evidence binding has an unknown shape")
+        sealed = {"kind": item["kind"]}
+        for key in fields:
+            path = _resolved(item[key], f"retirement evidence {key}")
+            info = _lstat(path)
+            if info is None or not stat.S_ISREG(info.st_mode):
+                _fail("invalid-config", "retirement evidence must name an existing regular file")
+            text = str(path)
+            if text in seen:
+                _fail("invalid-config", "retirement evidence paths must be unique")
+            seen.add(text)
+            sealed[key] = text
+        result.append(sealed)
+    return result
 
 
 def _validate_scope(scope: object) -> dict[str, Any]:
@@ -1107,6 +1148,7 @@ def _validate_scope(scope: object) -> dict[str, Any]:
         "hosts": hosts,
         "shell_profiles": shell_profiles,
         "decisions": decisions,
+        "retirement_evidence": _validate_evidence(scope.get("retirement_evidence")),
     }
 
 
@@ -1140,6 +1182,7 @@ def _seal_scope(validated: Mapping[str, Any]) -> dict[str, Any]:
             for profile in validated["shell_profiles"]
         ],
         "decisions": dict(validated["decisions"]),
+        "retirement_evidence": [dict(item) for item in validated["retirement_evidence"]],
     }
 
 
@@ -1165,6 +1208,7 @@ def _scope_paths(sealed: Mapping[str, Any]) -> dict[str, Any]:
             for profile in sealed["shell_profiles"]
         ],
         "decisions": dict(sealed["decisions"]),
+        "retirement_evidence": [dict(item) for item in sealed.get("retirement_evidence", [])],
     }
 
 

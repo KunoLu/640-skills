@@ -32,9 +32,14 @@ Boundary (docs/prd/sbtd-workflow-v2-migration-runtime.md, main PRD 10.2/11):
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import importlib.util
 import json
+import os
+import re
+import stat
+import sys
 from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
@@ -45,7 +50,13 @@ import sbtd_migration as migration
 from sbtd_migration_files import read_file, snapshot
 from sbtd_project import _reject_json_duplicates
 
-__all__ = ["validate_deployment_reports", "verify_migration"]
+__all__ = [
+    "ONBOARD_CLI_BOOTSTRAP",
+    "ONBOARD_CLI_SMOKE_SCHEMA",
+    "onboard_cli_smoke_command",
+    "validate_deployment_reports",
+    "verify_migration",
+]
 
 _PACKAGE = Path(__file__).resolve().parents[1]
 _EVIDENCE_VALIDATOR = (
@@ -60,12 +71,69 @@ _EVIDENCE_VALIDATOR = (
 # Genuine, non-mock runner modes from the unchanged native evidence schema;
 # contract-backed/app-mocked/blocked/not-needed runs cannot prove acceptance.
 _GENUINE_MODES = frozenset({"full-stack", "smoke-only", "backend-only"})
+ONBOARD_CLI_SMOKE_SCHEMA = "sbtd-onboard-cli-smoke-1"
+ONBOARD_CLI_BOOTSTRAP = (
+    "import os,runpy,sys;sys.argv=sys.argv[1:];"
+    "sys.path.insert(0,os.path.dirname(sys.argv[0]));"
+    "runpy.run_path(sys.argv[0],run_name='__main__')"
+)
+_ONBOARD_CLI_SMOKE_KEYS = frozenset(
+    {
+        "schema",
+        "projectRoot",
+        "sourceRef",
+        "sourceCommit",
+        "startedAt",
+        "finishedAt",
+        "command",
+        "exitCode",
+        "status",
+        "mockStrategy",
+        "onboardVersion",
+        "projection",
+        "projectionSha256",
+    }
+)
+_ONBOARD_CLI_SMOKE_BOUND_KEYS = _ONBOARD_CLI_SMOKE_KEYS | {"manifestId", "applyId"}
+
+
+def onboard_cli_smoke_command(
+    root: Path, *, context_paths: tuple[Path, Path] | None = None
+) -> list[str]:
+    """Exact check-projects argv. Token membership is not acceptance."""
+    command = [
+        sys.executable,
+        "-I",
+        "-B",
+        "-c",
+        ONBOARD_CLI_BOOTSTRAP,
+        str((migration._PACKAGE / "scripts" / "onboard.py").resolve()),
+        "check-projects",
+        "--projects-root",
+        str(root),
+        "--json",
+    ]
+    if context_paths is not None:
+        manifest_path, apply_path = context_paths
+        command.extend(
+            [
+                "--migration-manifest",
+                str(manifest_path),
+                "--migration-apply-receipt",
+                str(apply_path),
+            ]
+        )
+    return command
 
 _PROJECT_OUTCOME = {
     "verified": ("", ""),
+    "not-verified": (
+        "historical Graft bytes match, but no trusted post-write permission evidence exists",
+        "Do not clean up or repair. Missing mode evidence does not authorize a write.",
+    ),
     "failed": (
         "actual resources or bound deployment reports differ from the proven migration state",
-        "Inspect the private evidence, reconcile or repeat deployment, then repeat verification; do not clean up.",
+        "Inspect the private evidence; do not clean up or patch historical bytes.",
     ),
     "blocked": (
         "not every required state could be observed",
@@ -77,6 +145,10 @@ _VERIFY_OUTCOME = {
         "",
         "Review the recorded cleanup candidates and confirm cleanup explicitly with this verification_id.",
     ),
+    "not-verified": (
+        "historical Graft evidence has no trusted post-write permission proof",
+        "Preserve originals. This result does not authorize cleanup, deployment, or repair.",
+    ),
     "failed": (
         "not every project passed migration acceptance",
         "Inspect the private per-project evidence; preserve originals and do not clean up.",
@@ -86,7 +158,7 @@ _VERIFY_OUTCOME = {
         "Resolve the observation gap and repeat verification before cleanup.",
     ),
 }
-_VERIFY_EXIT = {"verified": 0, "blocked": 2, "failed": 3}
+_VERIFY_EXIT = {"verified": 0, "not-verified": 2, "blocked": 2, "failed": 3}
 
 
 def _fail(code: str, message: str, exit_code: int = 2) -> NoReturn:
@@ -95,6 +167,150 @@ def _fail(code: str, message: str, exit_code: int = 2) -> NoReturn:
 
 def _now() -> str:
     return datetime.now().astimezone().isoformat(timespec="microseconds")
+
+_MODE_TEXT = re.compile(r"^0[0-7]{3}$")
+_NO_WRITE = "Do not clean up, deploy, or repair. This result does not authorize a write."
+
+
+def _mode_signed_bytes(
+    deployment_id: str, resource_id: str, mode: str, after: Mapping[str, Any]
+) -> bytes:
+    """Bytes covered by one attestation. Not the deployment document hash."""
+    return contracts.canonical_json_bytes(
+        {
+            "schema_version": 1,
+            "purpose": "post-write-mode",
+            "deployment_id": deployment_id,
+            "resource_id": resource_id,
+            "mode": mode,
+            "after": {"type": after.get("type"), "checksum": after.get("checksum")},
+        }
+    )
+
+
+def _installed_lineage_key() -> Any:
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+    from cryptography.hazmat.primitives.serialization import load_pem_public_key
+
+    key_path = migration._LINEAGE_PUBLIC_KEY
+    key = load_pem_public_key(read_file(key_path, snapshot(key_path)))
+    if not isinstance(key, Ed25519PublicKey):
+        raise ValueError
+    return key
+
+
+def _attested_mode(
+    proofs: list[Any],
+    deployment_id: str,
+    resource_id: str,
+    after: Mapping[str, Any],
+) -> tuple[str | None, dict[str, str] | None]:
+    """A signature over this deployment. A result field is not one."""
+    matches = [
+        proof
+        for proof in proofs
+        if isinstance(proof, Mapping) and proof.get("resource_id") == resource_id
+    ]
+    if len(matches) != 1:
+        return None, None
+    proof = matches[0]
+    mode = proof.get("mode")
+    signature = proof.get("signature")
+    recorded = {"type": after.get("type"), "checksum": after.get("checksum")}
+    if (
+        proof.get("kind") != "signed-attestation"
+        or not isinstance(mode, str)
+        or _MODE_TEXT.fullmatch(mode) is None
+        or proof.get("after") != recorded
+        or proof.get("deployment_id") != deployment_id
+        or not isinstance(signature, str)
+        or not signature
+    ):
+        return None, None
+    try:
+        from cryptography.exceptions import InvalidSignature
+
+        _installed_lineage_key().verify(
+            base64.b64decode(signature, validate=True),
+            _mode_signed_bytes(deployment_id, resource_id, mode, after),
+        )
+    except (InvalidSignature, ValueError, TypeError, OSError, contracts.ContractError):
+        return None, None
+    return mode, {"kind": "signed-attestation", "purpose": "post-write-mode"}
+
+
+def _posix_mode(path: Path) -> str | None:
+    """POSIX permission bits only. Windows DACL is not invented from chmod."""
+    if os.name != "posix":
+        return None
+    try:
+        info = path.lstat()
+    except OSError:
+        return None
+    if stat.S_ISLNK(info.st_mode) or not (
+        stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)
+    ):
+        return None
+    return f"{stat.S_IMODE(info.st_mode):04o}"
+
+
+def _classify_legacy_resource(
+    operation: Mapping[str, Any],
+    result: Mapping[str, Any] | None,
+    state: Mapping[str, Any] | None,
+    proofs: list[Any],
+    deployment_id: str,
+) -> dict[str, Any]:
+    """Compare recorded bytes and a signed post-write mode. No writes."""
+    record: dict[str, Any] = {
+        "resource_id": operation["resource_id"],
+        "target": operation["target"],
+        "bytes": "unreadable",
+        "mode": "absent",
+        "status": "not-verified",
+        "mode_source": None,
+        "reason": "the live resource could not be read; an absent or unreadable path is not drift",
+    }
+    if (
+        state is None
+        or result is None
+        or result.get("status") != "succeeded"
+        or not isinstance(result.get("after"), Mapping)
+    ):
+        return record
+    after = result["after"]
+    record["bytes"] = "match" if state == after else "differ"
+    # post_write_mode on the result is ignored. Resealing that field is not proof.
+    mode, source = _attested_mode(proofs, deployment_id, operation["resource_id"], after)
+    if mode is not None and os.name == "posix":
+        live = _posix_mode(Path(operation["target"]))
+        if live is None:
+            record["reason"] = (
+                "recorded bytes were observed, but the live POSIX mode could not be read; this is not drift"
+            )
+        else:
+            record["mode"] = "match" if live == mode else "differ"
+            record["mode_source"] = source
+    elif mode is not None:
+        record["reason"] = (
+            "recorded bytes were observed, but this platform has no POSIX mode and no DACL evidence"
+        )
+    if record["bytes"] == "differ" or record["mode"] == "differ":
+        record["status"] = "drifted"
+        record["reason"] = (
+            "recorded bytes differ from the live resource"
+            if record["bytes"] == "differ"
+            else "the trusted post-write mode differs from the live POSIX mode"
+        )
+    elif record["mode"] == "match":
+        record["status"] = "verified"
+        record["reason"] = "recorded bytes and the trusted post-write mode match"
+    elif record["bytes"] == "match" and mode is None:
+        record["reason"] = (
+            "recorded bytes match, but no trusted post-write permission evidence exists"
+        )
+    return record
+
 
 
 def _evidence_validator() -> Any:
@@ -492,11 +708,147 @@ def _accept_envelope(
     return api_smoke
 
 
+def _matches_onboard_cli_producer(
+    recorded: Any,
+    deployment_payload: Mapping[str, Any],
+    verified_manifest: Mapping[str, Any] | None,
+) -> bool:
+    reconciliation = deployment_payload.get("reconciliation")
+    if reconciliation is not None:
+        if not isinstance(reconciliation, Mapping):
+            return False
+        versions = reconciliation.get("runtime_versions")
+        if not isinstance(versions, Mapping) or recorded != versions.get("onboard"):
+            return False
+
+    if verified_manifest is None:
+        return recorded == migration.runtime_versions()["onboard"]
+
+    sealed = verified_manifest["payload"]["tool_versions"]
+    if "graft" in sealed:
+        # The archived runtime produced native reports, not Onboard CLI captures.
+        return False
+    # Context validation has already authenticated any historical observer.
+    if reconciliation is not None or recorded == sealed["onboard"]:
+        return True
+
+    # An ordinary deployment can execute after an authorized hop. Without a
+    # retained observer proof, only the exact installed forward pair grants it.
+    current = migration.runtime_versions()["onboard"]
+    return recorded == current and migration._verified_runtime_pair() == (
+        sealed["onboard"], current
+    )
+
+
+def _accept_onboard_cli_smoke(
+    document: Mapping[str, Any],
+    *,
+    started: Any,
+    finished: Any,
+    root: Path,
+    source_ref: Any,
+    head: Any,
+    deployment_payload: Mapping[str, Any],
+    verified_manifest: Mapping[str, Any] | None,
+    context_paths: tuple[Path, Path] | None,
+) -> None:
+    """Trusted local check-projects capture. Not a business API pass."""
+    expected_keys = (
+        _ONBOARD_CLI_SMOKE_BOUND_KEYS
+        if context_paths is not None
+        else _ONBOARD_CLI_SMOKE_KEYS
+    )
+    if set(document) != expected_keys or document.get("schema") != ONBOARD_CLI_SMOKE_SCHEMA:
+        _fail(
+            "report-acceptance",
+            "an Onboard CLI smoke record is not the trusted check-projects identity",
+            3,
+        )
+    if document.get("status") != "passed" or document.get("mockStrategy") != "none":
+        _fail(
+            "report-acceptance",
+            "an Onboard CLI smoke record is not a non-mock passed run",
+            3,
+        )
+    exit_code = document.get("exitCode")
+    if isinstance(exit_code, bool) or exit_code != 0:
+        _fail("report-acceptance", "an Onboard CLI smoke record did not exit cleanly", 3)
+    if document.get("projectRoot") != str(root) or document.get("sourceRef") != source_ref:
+        _fail(
+            "report-acceptance",
+            "an Onboard CLI smoke record is bound to another root or revision",
+            3,
+        )
+    commit = document.get("sourceCommit")
+    if (commit.lower() if isinstance(commit, str) else None) != head:
+        _fail(
+            "report-acceptance",
+            "an Onboard CLI smoke record is bound to another root or revision",
+            3,
+        )
+    if not _matches_onboard_cli_producer(
+        document.get("onboardVersion"), deployment_payload, verified_manifest
+    ):
+        _fail(
+            "report-acceptance",
+            "an Onboard CLI smoke record does not match its authorized producer runtime",
+            3,
+        )
+    raw_started = _attempt_time(document, "startedAt")
+    raw_finished = _attempt_time(document, "finishedAt")
+    if raw_started > raw_finished or raw_started < started or raw_finished > finished:
+        _fail(
+            "report-acceptance",
+            "an Onboard CLI smoke record is outside the current deployment attempt",
+            3,
+        )
+    if context_paths is not None:
+        manifest_id = deployment_payload.get("manifest_id")
+        apply_id = deployment_payload.get("apply_id")
+        if (
+            not isinstance(manifest_id, str)
+            or not isinstance(apply_id, str)
+            or document.get("manifestId") != manifest_id
+            or document.get("applyId") != apply_id
+        ):
+            _fail(
+                "report-acceptance",
+                "an Onboard CLI smoke record is bound to another migration apply",
+                3,
+            )
+    if document.get("command") != onboard_cli_smoke_command(
+        root, context_paths=context_paths
+    ):
+        _fail(
+            "report-acceptance",
+            "an Onboard CLI smoke record did not run the installed check-projects command",
+            3,
+        )
+    projection = document.get("projection")
+    digest = document.get("projectionSha256")
+    expected = {
+        "mode": "check-projects",
+        "projects": [{"projectRoot": str(root), "sbtd": {"status": "success"}}],
+    }
+    if (
+        projection != expected
+        or not isinstance(digest, str)
+        or hashlib.sha256(contracts.canonical_json_bytes(expected)).hexdigest() != digest.lower()
+    ):
+        _fail(
+            "report-acceptance",
+            "an Onboard CLI smoke projection is not the closed check-projects identity",
+            3,
+        )
+
+
 def validate_deployment_reports(
     deployment_payload: Mapping[str, Any],
     project_record: Mapping[str, Any],
     *,
     epoch_started: Any = None,
+    context_paths: tuple[Path, Path] | None = None,
+    verified_manifest: Mapping[str, Any] | None = None,
 ) -> None:
     """Re-validate one project's bound deployment reports against the attempt.
 
@@ -510,7 +862,13 @@ def validate_deployment_reports(
     reference must still be the exact recorded file, at least one native
     validation-evidence v1/v2 envelope must pass its own unchanged schema
     validation, and at least one genuine non-mock API smoke raw run must be
-    bound to this root, revision and window. Sanitized ContractError only.
+    bound to this root, revision and window. When ``context_paths`` is supplied,
+    an Onboard CLI record must also carry this payload's manifest/apply IDs and
+    the exact argv for those paths; genuine native API evidence stays separate.
+    Fresh acceptance requires the installed runtime, which must also match
+    the reconciliation observer when present. Pass ``verified_manifest`` only
+    after checking the completed evidence's bindings, runtime and provenance.
+    Sanitized ContractError only.
     """
     if not isinstance(deployment_payload, Mapping) or not isinstance(
         project_record, Mapping
@@ -539,14 +897,40 @@ def validate_deployment_reports(
     if source_ref is None:
         source_ref = "HEAD" if head is not None else "non-git"
     bound = _bound_reports(project_record)
-    validator = _evidence_validator()
+    decoded = [_decode_report(content) for content in bound.values()]
+    cli_smoke = [
+        value
+        for value in decoded
+        if isinstance(value, dict) and value.get("schema") == ONBOARD_CLI_SMOKE_SCHEMA
+    ]
     envelopes = [
         value
-        for value in (_decode_report(content) for content in bound.values())
+        for value in decoded
         if isinstance(value, dict)
         and value.get("schemaVersion") in (1, 2)
         and isinstance(value.get("reports"), list)
     ]
+    if cli_smoke:
+        if len(cli_smoke) != 1:
+            _fail(
+                "report-acceptance",
+                "multiple Onboard CLI smoke identities are bound to this project",
+                3,
+            )
+        _accept_onboard_cli_smoke(
+            cli_smoke[0],
+            started=started,
+            finished=finished,
+            root=root,
+            source_ref=source_ref,
+            head=head,
+            deployment_payload=deployment_payload,
+            verified_manifest=verified_manifest,
+            context_paths=context_paths,
+        )
+        if not envelopes:
+            return
+    validator = _evidence_validator()
     if not envelopes:
         _fail(
             "report-unavailable",
@@ -572,65 +956,142 @@ def validate_deployment_reports(
             3,
         )
 
-def _check_approved_routing(manifest: Mapping[str, Any]) -> None:
-    """Reopen each approved candidate; drift is a conflict, not success.
+def _check_approved_routing(
+    manifest: Mapping[str, Any], *, collect: bool = False
+) -> set[str]:
+    """Re-derive approved project AGENTS bytes. A copy digest is not success.
 
-    A target this batch deployed through its declared ``graft-agents``
-    operation must equal the rendered approved projection — the re-proved
-    approved body plus exactly the managed fence. Only then is the shared
-    provenance resolver consulted (a successor batch is followed to its
-    revalidated predecessor origin). A current-manifest approved target
-    without a deployment keeps the raw paused-candidate comparison and its
-    drift failure unchanged; an ancestor batch's other approved targets
-    (e.g. global routing) are legitimately superseded by this batch's
-    declared deployment, and their outcomes stay pinned by the stage
-    receipts and retained-resource checks instead.
+    Selector ``approved-agents:<sha256>`` must name the signed paused
+    candidate minus the pause-file prefix and at most one following blank.
+    The live file must equal that rederived body. The sealed source stays
+    the paused candidate and is not the expected render. Historical D7
+    collection records a drifted target and continues; it does not abort
+    unrelated rows.
     """
-    rendered = {
+    from sbtd_deployment import APPROVED_AGENTS, approved_agents_selector
+    from sbtd_migration_plan import approved_agents_provenance
+
+    drifted: set[str] = set()
+
+    def note(target: str, message: str) -> None:
+        if collect:
+            drifted.add(target)
+            return
+        migration._fail("approved-routing-drift", message)
+
+    _origin, bodies = approved_agents_provenance(manifest)
+    prefix = APPROVED_AGENTS + ":"
+    deployed = {
+        operation["target"]: operation
+        for operation in migration._operations(manifest)
+        if operation["phase"] == "deploy"
+        and isinstance(operation.get("selector"), str)
+        and operation["selector"].startswith(prefix)
+    }
+    for target, operation in deployed.items():
+        expected = bodies.get(target)
+        if not isinstance(expected, bytes) or operation["selector"] != approved_agents_selector(expected):
+            note(target, "an approved project AGENTS body was not rederived from the signed candidate")
+            continue
+        try:
+            live = read_file(Path(target))
+        except contracts.ContractError:
+            note(target, "an approved project AGENTS file is not the signed body")
+            continue
+        if live != expected:
+            note(target, "an approved project AGENTS file is not the signed body")
+    rendered = set(deployed) | {
         operation["target"]
         for operation in migration._operations(manifest)
         if operation["phase"] == "deploy" and operation["selector"] == "graft-agents"
     }
-    if rendered:
-        from sbtd_codex_wiring import project_agents_candidate
-        from sbtd_migration_plan import approved_agents_provenance
-
-        origin, bodies = approved_agents_provenance(manifest)
-    else:
-        origin, bodies = manifest, {}
-    for operation in migration._operations(origin):
+    for operation in migration._operations(manifest):
         if operation["selector"] != "approved-routing-replacement":
             continue
         target = operation["target"]
         if target in rendered:
-            body = bodies.get(target)
-            expected = (
-                None
-                if body is None
-                else {
-                    "type": "file",
-                    "checksum": hashlib.sha256(
-                        project_agents_candidate(body)
-                    ).hexdigest(),
-                }
-            )
-        elif origin is manifest:
-            candidate = operation["change"]["source_ref"]
-            expected = snapshot(Path(candidate["path"]))
-        else:
             continue
-        if expected is None or snapshot(Path(target)) != expected:
-            migration._fail(
-                "approved-routing-drift",
-                "an approved routing file no longer matches its candidate",
-            )
+        candidate = operation["change"]["source_ref"]
+        expected_state = snapshot(Path(candidate["path"]))
+        if expected_state is None or snapshot(Path(target)) != expected_state:
+            note(target, "an approved routing file no longer matches its candidate")
+    return drifted
 
+
+
+def _load_post_write_attestation(
+    path: Path | None, deployment_id: str
+) -> list[dict[str, Any]]:
+    """Private signed sidecar. Embedded deployment fields are not proof."""
+    if path is None:
+        return []
+    from sbtd_migration_files import require_private_directory
+
+    attestation = Path(path)
+    require_private_directory(attestation.parent)
+    before = snapshot(attestation)
+    if before.get("type") != "file":
+        _fail("binding-violation", "an unsigned post-write attestation is not accepted")
+    raw = read_file(attestation, before)
+    if snapshot(attestation) != before:
+        _fail("state-conflict", "the post-write attestation changed during verification")
+    try:
+        document = json.loads(raw.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError):
+        _fail("binding-violation", "an unsigned post-write attestation is not accepted")
+    entries = document.get("attestations") if isinstance(document, dict) else None
+    if (
+        not isinstance(document, dict)
+        or document.get("schema_version") != 1
+        or document.get("purpose") != "post-write-mode"
+        or not isinstance(entries, list)
+        or not entries
+    ):
+        _fail("binding-violation", "an unsigned post-write attestation is not accepted")
+    if document.get("deployment_id") != deployment_id:
+        return []
+    proofs: list[dict[str, Any]] = []
+    for proof in entries:
+        if (
+            not isinstance(proof, Mapping)
+            or not isinstance(proof.get("signature"), str)
+            or not proof.get("signature")
+            or not isinstance(proof.get("resource_id"), str)
+            or not isinstance(proof.get("mode"), str)
+            or not isinstance(proof.get("after"), Mapping)
+        ):
+            _fail("binding-violation", "an unsigned post-write attestation is not accepted")
+        after = proof["after"]
+        try:
+            from cryptography.exceptions import InvalidSignature
+
+            _installed_lineage_key().verify(
+                base64.b64decode(proof["signature"], validate=True),
+                _mode_signed_bytes(
+                    deployment_id, proof["resource_id"], proof["mode"], after
+                ),
+            )
+        except (InvalidSignature, ValueError, TypeError, OSError, contracts.ContractError):
+            _fail("binding-violation", "an unsigned post-write attestation is not accepted")
+        proofs.append(
+            {
+                "kind": "signed-attestation",
+                "deployment_id": deployment_id,
+                "resource_id": proof["resource_id"],
+                "mode": proof["mode"],
+                "after": {"type": after.get("type"), "checksum": after.get("checksum")},
+                "signature": proof["signature"],
+            }
+        )
+    return proofs
 
 
 def verify_migration(
     manifest_path: Path,
     apply_receipt_path: Path,
     deployment_evidence_path: Path,
+    *,
+    post_write_attestation: Path | None = None,
 ) -> tuple[dict[str, Any], int]:
     """Read-only acceptance of one migrated batch; returns (envelope, exit_code).
 
@@ -655,9 +1116,17 @@ def verify_migration(
         "deployment_evidence": deployment_raw,
     }
     contracts.validate_declared_bindings(manifest, documents, raw_documents)
+    legacy_ops = migration._legacy_deploy_operations(manifest)
     contracts._bind_success_gate(deployment, {"succeeded"})
+    legacy_by_id = {operation["resource_id"]: operation for operation in legacy_ops}
+    legacy_records: list[dict[str, Any]] = []
+    seen_legacy: set[str] = set()
     migration._validate_context(
-        manifest_path, manifest, previous=apply_document, deployment=deployment
+        manifest_path,
+        manifest,
+        previous=apply_document,
+        deployment=deployment,
+        readonly_legacy=True,
     )
     migration._check_source_backups(manifest)
     stage_results = {
@@ -665,7 +1134,11 @@ def verify_migration(
         "deploy": migration._result_index(deployment),
     }
     migration._check_stage_backups(stage_results)
-    _check_approved_routing(manifest)
+    if legacy_ops:
+        route_drift = _check_approved_routing(manifest, collect=True)
+    else:
+        _check_approved_routing(manifest)
+        route_drift = set()
 
     epoch_started = None
     if deployment["payload"].get("previous_deployment_id") is not None:
@@ -688,12 +1161,18 @@ def verify_migration(
         for operation in migration._operations(manifest)
     }
 
+    deployment_id = deployment["deployment_id"]
+    proofs = _load_post_write_attestation(post_write_attestation, deployment_id)
     failed_roots: set[str] = set()
     blocked_roots: set[str] = set()
     for project in deployment["payload"]["projects"]:
         try:
             validate_deployment_reports(
-                deployment["payload"], project, epoch_started=epoch_started
+                deployment["payload"],
+                project,
+                epoch_started=epoch_started,
+                context_paths=(manifest_path, Path(apply_receipt_path)),
+                verified_manifest=manifest,
             )
         except contracts.ContractError as error:
             if error.code == "validator-unavailable":
@@ -742,8 +1221,12 @@ def verify_migration(
     projects: list[dict[str, Any]] = []
     for manifest_project in payload["projects"]:
         root = manifest_project["root"]
-        drift = root in failed_roots
+        drift = root in failed_roots or any(
+            Path(target) == Path(root) or Path(target).is_relative_to(Path(root))
+            for target in route_drift
+        )
         blocked = root in blocked_roots
+        project_rows: list[dict[str, Any]] = []
         retained_assets: list[dict[str, Any]] = []
         cleanup_candidates: list[dict[str, Any]] = []
         retained_resources = {
@@ -766,29 +1249,40 @@ def verify_migration(
             try:
                 state = snapshot(Path(target))
             except (contracts.ContractError, OSError, RuntimeError):
+                state = None
+            if state is not None:
+                if track_freshness:
+                    observed_states[target] = state
+                if state["type"] != "absent":
+                    retained_assets.append({"path": target, "state": state})
+                if target in publications and state != publications[target]:
+                    drift = True
+            elif rid not in legacy_by_id:
                 blocked = True
                 continue
-            if track_freshness:
-                observed_states[target] = state
-            if state["type"] != "absent":
-                retained_assets.append({"path": target, "state": state})
-            if state["type"] not in {"absent", expected_type}:
-                drift = True
+            last_phase = max(
+                (phase for phase in phases if phase != "cleanup"),
+                key=contracts._PHASE_ORDER.__getitem__, default=None,
+            )
+            result = stage_results.get(last_phase, {}).get(rid)
+            if rid in legacy_by_id:
+                record = _classify_legacy_resource(
+                    legacy_by_id[rid], result, state, proofs, deployment_id
+                )
+                if rid not in seen_legacy:
+                    legacy_records.append(record)
+                    seen_legacy.add(rid)
+                project_rows.append(record)
+                if record["status"] == "drifted":
+                    drift = True
                 continue
-            if target in publications and state != publications[target]:
+            if (
+                state["type"] not in {"absent", expected_type}
+                or result is None
+                or result["status"] != "succeeded"
+                or result["after"] != state
+            ):
                 drift = True
-                continue
-            completed = [phase for phase in phases if phase != "cleanup"]
-            if completed:
-                last_phase = max(completed, key=contracts._PHASE_ORDER.__getitem__)
-                if last_phase in stage_results:
-                    result = stage_results[last_phase].get(rid)
-                    if (
-                        result is None
-                        or result["status"] != "succeeded"
-                        or result["after"] != state
-                    ):
-                        drift = True
         declared_cleanup = {
             rid: phases["cleanup"]
             for rid, phases in private.get(root, {}).items()
@@ -820,8 +1314,26 @@ def verify_migration(
                 expected is not None and state != expected
             ):
                 drift = True
-        status = "failed" if drift else "blocked" if blocked else "verified"
-        reason, next_step = _PROJECT_OUTCOME[status]
+        if drift:
+            status = "failed"
+        elif blocked:
+            status = "blocked"
+        elif legacy_ops:
+            status = "not-verified"
+        else:
+            status = "verified"
+        if legacy_ops:
+            parts = [row["reason"] for row in project_rows]
+            reason = " ".join(parts) if parts else _PROJECT_OUTCOME[status][0]
+            if (
+                status == "not-verified"
+                and project_rows
+                and all(row["status"] == "verified" for row in project_rows)
+            ):
+                reason += " Matching historical Graft evidence does not authorize a write."
+            next_step = _NO_WRITE
+        else:
+            reason, next_step = _PROJECT_OUTCOME[status]
         projects.append(
             {
                 "root": root,
@@ -837,7 +1349,7 @@ def verify_migration(
 
     status = contracts._aggregate(
         [project["status"] for project in projects],
-        ("failed", "blocked"),
+        ("failed", "not-verified", "blocked"),
         "verified",
         None,
     )
@@ -852,6 +1364,8 @@ def verify_migration(
         "shared_cleanup_candidates": shared_candidates,
         "verified_at": _now(),
     }
+    if legacy_records:
+        verification_payload["legacy_resources"] = legacy_records
     if deployment["payload"].get("reconciliation") is not None:
         # The bound evidence is a provenance-marked current-state observation
         # of an interrupted deployment, not an executed-origin receipt; expose
@@ -862,7 +1376,14 @@ def verify_migration(
     contracts.validate_declared_bindings(
         manifest, {**documents, "verification": verification}, raw_documents
     )
-    reason, next_step = _VERIFY_OUTCOME[status]
+    if status in {"not-verified", "failed", "blocked"}:
+        joined = " ".join(
+            project["reason"] for project in projects if project["reason"].strip()
+        )
+        fallback, next_step = _VERIFY_OUTCOME[status]
+        reason = joined or fallback
+    else:
+        reason, next_step = _VERIFY_OUTCOME[status]
     envelope = contracts.make_envelope(
         "migration",
         "verify",

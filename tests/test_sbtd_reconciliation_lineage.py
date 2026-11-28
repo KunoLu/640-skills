@@ -11,11 +11,9 @@ and binds its endpoints to exactly manifest→observer, independent of the
 current pair file. Legacy records without embedded proof keep the
 same-runtime/current-pair fallback — and nothing more.
 
-Everything runs on the genuine producer (``reconcile_deployment``) and the
-genuine consumer (``verify_migration``) with real Ed25519 signatures under an
-isolated per-test trust key. Signature verification and the authority guard
-are never mocked; only the three native boundaries stay deterministic fixture
-doubles, exactly as in ``tests.test_sbtd_reconciliation``.
+Fixtures run the genuine producer and read-only consumer with real Ed25519
+signatures and an isolated Onboard package. The smoke subprocess sees the
+same measured package files, key and pair as the producer.
 """
 
 from __future__ import annotations
@@ -27,6 +25,8 @@ import contextlib
 import dataclasses
 import json
 import os
+import shutil
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -34,8 +34,9 @@ from unittest import mock
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from tests import test_sbtd_approved_agents_deployment as approved
+from tests import test_sbtd_reconciliation as reconciliation
 from tests.test_sbtd_reconciliation import (
+    _SignedBatch,
     _interrupted_deployment,
     _reconcile,
     _reseal_deployment_evidence,
@@ -44,41 +45,49 @@ from tests.test_sbtd_reconciliation import (
 import onboard_contracts as contracts
 import sbtd_migration as migration
 from onboard_contracts import canonical_json_bytes
-from sbtd_migration_verify import verify_migration
+from sbtd_migration_files import snapshot
+from sbtd_migration_verify import validate_deployment_reports, verify_migration
 
 
 def setUpModule():
-    approved.setUpModule()
+    reconciliation.setUpModule()
 
 
 def tearDownModule():
-    approved.tearDownModule()
-
-
-def _runtime(base: dict, tag: str) -> dict:
-    """One format-valid, distinct Onboard fingerprint over the sealed set."""
-    return {**base, "onboard": "runtime-sha256:" + tag * 64}
+    reconciliation.tearDownModule()
 
 
 class _LineageAuthority:
-    """One isolated Ed25519 trust key whose pair document can rotate.
+    """Isolated Onboard package whose measured runtime and signed pair rotate.
 
-    Rotation re-signs a new pair under the SAME key, so the installed trust
-    anchor never changes — only the pair document moves, exactly the rotation
-    the finding describes. Signed bytes come from the production constructor
-    ``migration._lineage_signed_bytes``, never a test-local shape.
+    Rotation re-signs under the same installed key. Package variants change
+    real measured bytes without changing the path executed by the smoke.
     """
 
     def __init__(self, directory: Path) -> None:
+        self.package = directory / "lineage-runtime"
+        shutil.copytree(
+            migration._PACKAGE,
+            self.package,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"),
+        )
+        self.entrypoint = self.package / "scripts" / "onboard.py"
+        self._entrypoint_bytes = self.entrypoint.read_bytes()
         self._key = Ed25519PrivateKey.generate()
-        self.public_path = directory / "lineage.pub"
+        self.public_path = self.package / "assets" / "runtime-lineage.pub"
         self.public_path.write_bytes(
             self._key.public_key().public_bytes(
                 serialization.Encoding.PEM,
                 serialization.PublicFormat.SubjectPublicKeyInfo,
             )
         )
-        self.pair_path = directory / "lineage.json"
+        self.pair_path = self.package / "assets" / "runtime-lineage.json"
+
+    def use_runtime(self, stage: str) -> dict[str, str]:
+        self.entrypoint.write_bytes(
+            self._entrypoint_bytes + f"\n# Scoped lineage fixture: {stage}\n".encode("ascii")
+        )
+        return migration.runtime_versions()
 
     def sign(self, predecessor: str, successor: str) -> dict:
         signed = migration._lineage_signed_bytes(predecessor, successor)
@@ -94,8 +103,13 @@ class _LineageAuthority:
 
 @contextlib.contextmanager
 def _installed(authority: _LineageAuthority):
-    """Point the consumer at this authority's trust key and pair document."""
+    """Select one on-disk package for both producer and smoke subprocess."""
+    import onboard
+
+    project_template = onboard.PROJECT_AGENTS_TEMPLATE.relative_to(migration._PACKAGE)
     with (
+        mock.patch.object(migration, "_PACKAGE", authority.package),
+        mock.patch.object(onboard, "PROJECT_AGENTS_TEMPLATE", authority.package / project_template),
         mock.patch.object(migration, "_LINEAGE_PUBLIC_KEY", authority.public_path),
         mock.patch.object(migration, "_LINEAGE_DOCUMENT", authority.pair_path),
     ):
@@ -112,7 +126,7 @@ def _verify(batch, manifest_path, apply_path, output_path):
 class _Produced:
     """One genuinely produced cross-runtime observation and its context."""
 
-    batch: approved._SignedBatch
+    batch: _SignedBatch
     manifest_path: Path
     apply_path: Path
     missing_path: Path
@@ -123,55 +137,91 @@ class _Produced:
     authority: _LineageAuthority
     pair_ab: dict
     reconciliation: dict
+    report_path: Path
+
+
+def _smoke_path(deployment):
+    return next(
+        path
+        for ref in deployment["payload"]["projects"][0]["report_refs"]
+        if (path := Path(ref["path"])).suffix == ".json"
+    )
+
+
+def _scoped_deployment(case):
+    directory = tempfile.TemporaryDirectory()
+    case.addCleanup(directory.cleanup)
+    base = Path(directory.name).resolve()
+    authority = _LineageAuthority(base)
+    batch = _SignedBatch(base)
+    with _installed(authority):
+        authority.use_runtime("predecessor")
+        manifest = batch.plan(deployment_mode="init")
+        manifest_path = batch.write_manifest(manifest, "manifest.json")
+        _, apply_path = batch.apply(manifest_path, routing_approvals=batch.approval)
+        deployment_path = batch.evidence / "interrupted-deployment.json"
+        deployed, code = batch.execute(manifest_path, apply_path, deployment_path)
+    case.assertEqual(code, 0, deployed)
+    return authority, batch, manifest, manifest_path, apply_path, deployment_path
+
+
+def _produce_cross_runtime_observation(case) -> _Produced:
+    """Genuinely reconcile A-sealed history observed by signed successor B."""
+    authority, batch, manifest, manifest_path, apply_path, missing_path = _scoped_deployment(case)
+    sealed = manifest["payload"]["tool_versions"]
+    missing_path.unlink()
+    output_path = batch.evidence / "successor-observation.json"
+    with _installed(authority):
+        observer = authority.use_runtime("observer")
+        case.assertNotEqual(observer["onboard"], sealed["onboard"])
+        pair_ab = authority.install(sealed["onboard"], observer["onboard"])
+        result = _reconcile(
+            batch, manifest, manifest_path, apply_path, missing_path, output_path
+        )
+        successor = authority.use_runtime("successor")
+        case.assertNotEqual(successor["onboard"], observer["onboard"])
+        case.assertEqual(authority.use_runtime("predecessor"), sealed)
+    case.assertEqual(result["path"], str(output_path))
+    deployment = json.loads(output_path.read_bytes())
+    provenance = deployment["payload"]["reconciliation"]
+    case.assertEqual(provenance["runtime_versions"], observer)
+    report_path = _smoke_path(deployment)
+    report = json.loads(report_path.read_bytes())
+    case.assertEqual(report["onboardVersion"], observer["onboard"])
+    case.assertEqual(report["command"][5], str(authority.entrypoint))
+    return _Produced(
+        batch=batch,
+        manifest_path=manifest_path,
+        apply_path=apply_path,
+        missing_path=missing_path,
+        output_path=output_path,
+        sealed=sealed,
+        observer=observer,
+        successor=successor,
+        authority=authority,
+        pair_ab=pair_ab,
+        reconciliation=provenance,
+        report_path=report_path,
+    )
 
 
 class HistoricalObserverLineageTests(unittest.TestCase):
-    def _produce_cross_runtime_observation(self) -> _Produced:
-        """Genuinely reconcile A-sealed history observed by successor B.
-
-        The real producer runs while the installed pair authorizes A→B, so on
-        a fixed producer the emitted evidence preserves that exact signed
-        object in ``reconciliation.observer_lineage``.
-        """
-        batch, manifest, manifest_path, apply_path, missing_path = (
-            _interrupted_deployment(self)
-        )
-        sealed = manifest["payload"]["tool_versions"]
-        observer = _runtime(sealed, "a")
-        successor = _runtime(sealed, "c")
-        self.assertNotEqual(observer["onboard"], sealed["onboard"])
-        self.assertNotEqual(successor["onboard"], observer["onboard"])
-        authority = _LineageAuthority(batch.evidence)
-        pair_ab = authority.install(sealed["onboard"], observer["onboard"])
-        output_path = batch.evidence / "successor-observation.json"
-        with (
-            _installed(authority),
-            mock.patch.object(migration, "runtime_versions", return_value=observer),
-        ):
-            result = _reconcile(
-                batch, manifest, manifest_path, apply_path, missing_path, output_path
+    def test_signed_successor_can_reconcile_and_verify_predecessor(self):
+        produced = _produce_cross_runtime_observation(self)
+        with _installed(produced.authority):
+            self.assertEqual(produced.authority.use_runtime("observer"), produced.observer)
+            verified, code = _verify(
+                produced.batch, produced.manifest_path, produced.apply_path, produced.output_path
             )
-        self.assertEqual(result["path"], str(output_path))
-        reconciliation = json.loads(output_path.read_bytes())["payload"][
-            "reconciliation"
-        ]
-        self.assertEqual(reconciliation["runtime_versions"], observer)
-        return _Produced(
-            batch=batch,
-            manifest_path=manifest_path,
-            apply_path=apply_path,
-            missing_path=missing_path,
-            output_path=output_path,
-            sealed=sealed,
-            observer=observer,
-            successor=successor,
-            authority=authority,
-            pair_ab=pair_ab,
-            reconciliation=reconciliation,
+        self.assertEqual(code, 0, verified)
+        self.assertEqual(verified["status"], "verified")
+        self.assertEqual(
+            verified["migration"]["verification"]["payload"]["acceptance_basis"],
+            "current-state",
         )
 
     def test_rotated_pair_keeps_embedded_historical_observer_authority(self):
-        produced = self._produce_cross_runtime_observation()
+        produced = _produce_cross_runtime_observation(self)
 
         # Rotation: the installed pair now authorizes B→C under the SAME,
         # unchanged trust key; the historical A→B authorization is gone from
@@ -192,7 +242,15 @@ class HistoricalObserverLineageTests(unittest.TestCase):
         # runs at the sealed manifest runtime, so no other lineage gate
         # intervenes; under the rotated pair the legacy fallback alone would
         # compare (B, C) against (A, B) and fail closed.
-        with _installed(produced.authority):
+        report_bytes = produced.report_path.read_bytes()
+        evidence_bytes = produced.output_path.read_bytes()
+        with (
+            _installed(produced.authority),
+            mock.patch(
+                "sbtd_deployment_smoke.run_project_smoke",
+                side_effect=AssertionError("verification cannot run a fresh smoke"),
+            ),
+        ):
             verified, code = _verify(
                 produced.batch,
                 produced.manifest_path,
@@ -205,10 +263,110 @@ class HistoricalObserverLineageTests(unittest.TestCase):
             verified["migration"]["verification"]["payload"]["acceptance_basis"],
             "current-state",
         )
+        self.assertEqual(produced.report_path.read_bytes(), report_bytes)
+        self.assertEqual(produced.output_path.read_bytes(), evidence_bytes)
         self.assertFalse(produced.missing_path.exists())
 
+    def test_bound_report_must_match_observer_window_and_checksum(self):
+        produced = _produce_cross_runtime_observation(self)
+        original_report = produced.report_path.read_bytes()
+        original_evidence = produced.output_path.read_bytes()
+        mutations = {
+            "consumer instead of observer": {"onboardVersion": produced.sealed["onboard"]},
+            "stale report": {"startedAt": "2000-01-01T00:00:00+00:00"},
+            "changed bound bytes": {},
+        }
+        with _installed(produced.authority):
+            for case, changes in mutations.items():
+                with self.subTest(case=case):
+                    report = {**json.loads(original_report), **changes}
+                    changed = canonical_json_bytes(report) if changes else original_report + b"\n"
+                    produced.report_path.write_bytes(changed)
+                    produced.output_path.write_bytes(original_evidence)
+                    if changes:
+                        def update_ref(payload):
+                            for reference in payload["projects"][0]["report_refs"]:
+                                if reference["path"] == str(produced.report_path):
+                                    reference["state"] = snapshot(produced.report_path)
+
+                        deployment = _reseal_deployment_evidence(produced.output_path, update_ref)
+                        if "onboardVersion" in changes:
+                            payload = deployment["payload"]
+                            with self.assertRaisesRegex(contracts.ContractError, "authorized producer runtime"):
+                                validate_deployment_reports(
+                                    payload,
+                                    payload["projects"][0],
+                                    context_paths=(produced.manifest_path, produced.apply_path),
+                                )
+                    submitted = produced.output_path.read_bytes()
+                    verified, code = _verify(
+                        produced.batch, produced.manifest_path, produced.apply_path, produced.output_path
+                    )
+                    self.assertEqual(code, 3, verified)
+                    self.assertEqual(verified["status"], "failed")
+                    self.assertEqual(produced.output_path.read_bytes(), submitted)
+                    self.assertEqual(produced.report_path.read_bytes(), changed)
+        self.assertFalse(produced.missing_path.exists())
+
+    def test_executed_report_survives_only_its_authorized_forward_hop(self):
+        authority, batch, manifest, manifest_path, apply_path, deployment_path = _scoped_deployment(self)
+        sealed = manifest["payload"]["tool_versions"]["onboard"]
+        evidence_bytes = deployment_path.read_bytes()
+        report_path = _smoke_path(json.loads(evidence_bytes))
+        report_bytes = report_path.read_bytes()
+        self.assertEqual(json.loads(report_bytes)["onboardVersion"], sealed)
+        with _installed(authority):
+            observer = authority.use_runtime("observer")["onboard"]
+            authority.install(sealed, observer)
+            verified, code = _verify(batch, manifest_path, apply_path, deployment_path)
+            self.assertEqual(code, 0, verified)
+            self.assertEqual(verified["status"], "verified")
+
+            successor = authority.use_runtime("successor")["onboard"]
+            authority.install(observer, successor)
+            with self.assertRaises(contracts.ContractError) as failure:
+                _verify(batch, manifest_path, apply_path, deployment_path)
+            self.assertEqual(failure.exception.code, "version-conflict")
+        self.assertEqual(report_path.read_bytes(), report_bytes)
+        self.assertEqual(deployment_path.read_bytes(), evidence_bytes)
+
+    def test_signed_retry_keeps_completed_observer_smoke(self):
+        authority, batch, manifest, manifest_path, apply_path, missing = _scoped_deployment(self)
+        missing.unlink()
+        observed_path = batch.evidence / "current-state-evidence.json"
+        retry_path = batch.evidence / "retry-deployment.json"
+        sealed = manifest["payload"]["tool_versions"]["onboard"]
+        with _installed(authority):
+            observed = _reconcile(batch, manifest, manifest_path, apply_path, missing, observed_path)
+            previous_bytes = observed_path.read_bytes()
+            refs = observed["evidence"]["payload"]["projects"][0]["report_refs"]
+            smoke_bytes = {ref["path"]: Path(ref["path"]).read_bytes() for ref in refs}
+            self.assertEqual(
+                json.loads(_smoke_path(observed["evidence"]).read_bytes())["onboardVersion"], sealed
+            )
+            successor = authority.use_runtime("successor")["onboard"]
+            authority.install(sealed, successor)
+
+            with mock.patch(
+                "sbtd_deployment_smoke.run_project_smoke",
+                side_effect=AssertionError("a retry cannot relabel a completed observation"),
+            ):
+                result, code = batch.execute(
+                    manifest_path, apply_path, retry_path, previous_path=observed_path
+                )
+                self.assertEqual(code, 0, result)
+                recorded = result["deploymentEvidence"]["evidence"]["payload"]
+                self.assertEqual(recorded["projects"][0]["report_refs"], refs)
+                self.assertEqual(recorded["reconciliation"], observed["evidence"]["payload"]["reconciliation"])
+                verified, code = _verify(batch, manifest_path, apply_path, retry_path)
+
+        self.assertEqual(code, 0, verified)
+        self.assertEqual(observed_path.read_bytes(), previous_bytes)
+        self.assertEqual({path: Path(path).read_bytes() for path in smoke_bytes}, smoke_bytes)
+        self.assertFalse(missing.exists())
+
     def test_tampered_embedded_observer_lineage_is_rejected(self):
-        produced = self._produce_cross_runtime_observation()
+        produced = _produce_cross_runtime_observation(self)
         embedded = produced.reconciliation.get("observer_lineage")
         self.assertEqual(embedded, produced.pair_ab)
         observer_onboard = produced.observer["onboard"]
@@ -324,10 +482,8 @@ class HistoricalObserverLineageTests(unittest.TestCase):
         self.assertFalse(missing_path.exists())
 
     def test_legacy_record_without_proof_keeps_bounded_pair_fallback(self):
-        produced = self._produce_cross_runtime_observation()
-        # Strip the preserved proof and honestly reseal: exactly the legacy
-        # pre-embedding record shape (the pop is a no-op against current
-        # producers, which never embed).
+        produced = _produce_cross_runtime_observation(self)
+        # Strip the proof and reseal exactly the pre-embedding record shape.
         _reseal_deployment_evidence(
             produced.output_path,
             lambda payload: payload["reconciliation"].pop("observer_lineage", None),

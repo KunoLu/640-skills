@@ -9,8 +9,6 @@ param(
   [switch]$SkipProjectAgents,
   [string]$GlobalAgentsPath = "",
   [string]$GlobalSkillsDir = "",
-  [switch]$GraftRetireLegacy,
-  [string]$GraftLegacyBindings = "",
   [switch]$NoMcp,
   [switch]$DryRun,
   [switch]$Yes,
@@ -31,12 +29,6 @@ if ($ProjectsRoot -and $InitProjects) {
 }
 if ($script:ProjectsOnly -and $Action) {
   throw "-InitProjects is a standalone mode and cannot be combined with -Action."
-}
-if ($script:ProjectsOnly -and $GraftRetireLegacy) {
-  throw "-InitProjects cannot retire global Graft MCP entries."
-}
-if ($GraftLegacyBindings -and -not $GraftRetireLegacy) {
-  throw "-GraftLegacyBindings requires -GraftRetireLegacy."
 }
 
 function Show-Usage {
@@ -71,13 +63,8 @@ Options:
       Override the global AGENTS.md target.
   -GlobalSkillsDir <path>
       Override global skills directory.
-  -GraftRetireLegacy
-      Explicitly retire exact owned fixed-project Graft MCP entries for the
-      selected roots after preview, preserving originals; not TEMP cleanup.
-  -GraftLegacyBindings <path>
-      Private old-runtime contract for an explicitly authorized MCP cutover.
   -NoMcp
-      Skip MCP configuration.
+      Skip the installer's generic MCP menu. Not forwarded to Onboard.
   -DryRun
       Print commands and MCP writes without making changes.
   -Yes
@@ -287,6 +274,7 @@ function Find-Python {
   Stop-WithMessage "python or py is required to run $SourceRoot\scripts\onboard.py"
 }
 
+# Probe the parser before collecting inputs; this does not authorize writes.
 function Assert-PlanActionSupport {
   $probe = @'
 import runpy
@@ -391,9 +379,6 @@ function Get-CommonArgs {
   if ($SkipProjectAgents) { $args += "--skip-project-agents" }
   if ($GlobalAgentsPath) { $args += @("--global-agents-path", $GlobalAgentsPath) }
   if ($GlobalSkillsDir) { $args += @("--global-skills-dir", $GlobalSkillsDir) }
-  if ($GraftRetireLegacy) { $args += "--graft-retire-legacy" }
-  if ($GraftLegacyBindings) { $args += @("--graft-legacy-bindings", $GraftLegacyBindings) }
-  if ($NoMcp) { $args += "--no-mcp" }
   return $args
 }
 
@@ -615,100 +600,6 @@ function Assert-PonytailProviderClear {
   }
 }
 
-# Graft is optional: the read-only `install-graft --json` probe (no --yes,
-# zero writes) is the single source of the real plan — frozen package, actual
-# npm prefix, telemetry target/changes. Only needs-confirmation leads to a
-# prompt and the confirmed `install-graft --yes`; blocked/operational states
-# degrade to a warning and onboarding continues without Graft. A confirmed
-# install failure still aborts the installer via Invoke-External.
-function Ensure-GraftCli {
-  Write-Host ""
-  Write-Colored "Graft CLI (optional)" Cyan
-
-  $probeArguments = $PythonPrefix + @((Get-OnboardPy), "install-graft", "--json")
-  Write-Host ("+ " + (@($PythonExe) + $probeArguments -join " "))
-  $probeOutput = & $PythonExe @probeArguments
-  $probeExit = $LASTEXITCODE
-  $probe = $null
-  try {
-    $probe = ($probeOutput -join "`n") | ConvertFrom-Json
-  }
-  catch {
-    $probe = $null
-  }
-  if ($null -eq $probe) {
-    Write-Warn "Graft CLI probe did not return a readable plan (exit $probeExit); skipping the optional Graft CLI."
-    return
-  }
-
-  $status = [string]$probe.status
-  $reason = [string]$probe.reason
-  if ($status -eq "already-installed") {
-    Write-Host "Graft CLI is already installed and usable; skipping."
-    return
-  }
-  if ($status -eq "blocked") {
-    if (-not $reason) { $reason = "unknown reason" }
-    Write-Warn "Graft CLI is blocked: $reason. Skipping the optional Graft CLI; existing GitNexus/Graft configuration and data are left untouched."
-    return
-  }
-  if ($status -ne "needs-confirmation") {
-    if (-not $reason) { $reason = "no reason given" }
-    Write-Warn "Graft CLI probe returned status '$status' (exit $probeExit): $reason. Skipping the optional Graft CLI."
-    return
-  }
-
-  $plan = $probe.plan
-  $package = "@nanonets/graft@0.29.0"
-  if ($plan -and $plan.PSObject.Properties["package"] -and $plan.package) {
-    $package = [string]$plan.package
-  }
-  $prefix = "<unresolved>"
-  if ($plan -and $plan.PSObject.Properties["prefix"] -and $plan.prefix) {
-    $prefix = [string]$plan.prefix
-  }
-  $telemetryPath = "<unknown>"
-  $changeText = "none"
-  if ($plan -and $plan.PSObject.Properties["telemetry"] -and $plan.telemetry) {
-    if ($plan.telemetry.PSObject.Properties["path"] -and $plan.telemetry.path) {
-      $telemetryPath = [string]$plan.telemetry.path
-    }
-    if ($plan.telemetry.PSObject.Properties["changes"] -and $plan.telemetry.changes) {
-      $pairs = @()
-      foreach ($property in $plan.telemetry.changes.PSObject.Properties) {
-        $pairs += ("{0}={1}" -f $property.Name, $property.Value)
-      }
-      if ($pairs.Count -gt 0) { $changeText = $pairs -join ", " }
-    }
-  }
-  $telemetryOnly = $probe.PSObject.Properties["before"] -and $probe.before -and $probe.before.PSObject.Properties["installed"] -and $probe.before.installed
-  $prompt = "Install the optional Graft CLI now?"
-  if ($telemetryOnly) {
-    Write-Host "Graft telemetry opt-out plan:"
-    Write-Host "  Existing CLI: verified; only persist telemetry opt-out (no package install)"
-    $prompt = "Persist telemetry opt-out for the existing Graft CLI now?"
-  }
-  else {
-    Write-Host "Graft CLI install plan:"
-    Write-Host "  Package: $package (frozen pin; never latest)"
-    Write-Host "  Target: npm global prefix $prefix"
-    Write-Host "  Requires: Node.js >= 20 and npm native lifecycle scripts for the pinned allow list"
-  }
-  Write-Host "  Telemetry: set $changeText in $telemetryPath (unknown keys preserved)"
-  if (-not (Prompt-YesNo $prompt "n")) {
-    Write-Host "Graft optional changes declined; continuing without changes."
-    return
-  }
-  if ($telemetryOnly) {
-    Invoke-Onboard "install-graft" @("--telemetry-only", "--yes")
-  }
-  else {
-    Invoke-Onboard "install-graft" @("--yes")
-  }
-  Update-Check
-}
-
-
 function Install-MissingRuntimeAndSkills {
   Write-Host ""
   Write-Colored "Preflight check" Cyan
@@ -733,8 +624,6 @@ function Install-MissingRuntimeAndSkills {
     }
     Update-Check
   }
-
-  Ensure-GraftCli
 
   if (-not (Skill-Installed "caveman")) {
     if (Prompt-YesNo "caveman skill is missing. Install it as a user-level global skill?" "n") {

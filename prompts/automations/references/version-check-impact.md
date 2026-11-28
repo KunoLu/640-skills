@@ -105,7 +105,7 @@
 
 <a id="platform-wiring"></a>
 ## 平台接线、协议与隐私
-- 宿主配置格式变化时，沿实际导入核对 `sbtd-workflow-onboard/scripts/` 下的实现：`sbtd_omp_sources.py` 使用 `sbtd_omp_wiring.py` 解析配置；升级与迁移模块还使用 `sbtd_codex_wiring.py`、`sbtd_omp_wiring.py` 生成或校验候选。只读源码，不修改或执行接线。T3 删除或拆分这些依赖时，随消费者更新读取范围。
+- 宿主配置格式变化时，沿实际导入核对 `sbtd-workflow-onboard/scripts/`：`sbtd_omp_sources.py` 解析 OMP 配置来源，`sbtd_deployment.py` 校验部署声明，`sbtd_retirement.py` 判定旧条目归属，`sbtd_onboard_retirement.py` 将候选纳入显示的计划。只读检查 `sbtd_probe_links.py` 与 `upgrade verify --probe` 的授权边界；安装器 capability probe 只检查参数解析。不得执行接线或宿主探针。
 
 - `.gitattributes` 仅作为载荷原始字节边界的只读评估对象：`sbtd-workflow-onboard/** -text` 防止 checkout 改写固定摘要输入；检查目录摘要统一按相对 POSIX 字符串排序，不按平台路径对象排序。不得为消除校验失败而转换 stable 镜像字节、重写 pin 或放宽私有目录 DACL。
 

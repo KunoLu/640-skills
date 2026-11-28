@@ -283,6 +283,17 @@ def plan_recovery(
     if conflicts:
         return _blocked_plan(manifest, projects, input_evidence, conflicts)
 
+    from sbtd_deployment import legacy_graft_operations
+
+    legacy_ids = {
+        operation["resource_id"]
+        for operation in legacy_graft_operations(manifest["payload"])
+    }
+    if any(rid in legacy_ids for _phase, rid in required_steps):
+        _fail(
+            "unsupported-in-rc.3",
+            "a sealed plan still contains Graft operations; regenerate the plan",
+        )
     steps: list[dict[str, Any]] = []
     previous_by_resource: dict[str, str] = {}
     shared_ids: set[str] = set()
@@ -399,6 +410,14 @@ def _execute_step(
         "error": None,
     }
     try:
+        change = operation.get("change") or {}
+        if change.get("kind") in {"build-graft", "configure-graft"} or operation.get(
+            "selector"
+        ) in {"graft-agents", "graft-mcp", "graft-hooks", "graft-omp-mcp"}:
+            _fail(
+                "unsupported-in-rc.3",
+                "a sealed plan still contains Graft operations; regenerate the plan",
+            )
         if before != step["expected_current"]:
             _fail("state-conflict", "a recovery step target changed after planning")
         scope = _resource_scope(manifest, operation)
@@ -642,6 +661,21 @@ def apply_recovery(
     _require_reconciliation_provenance(
         manifest, stage_documents.get("deployment_evidence")
     )
+    from sbtd_deployment import legacy_graft_operations
+
+    legacy_ids = {
+        operation["resource_id"]
+        for operation in legacy_graft_operations(manifest["payload"])
+    }
+    if any(
+        step["resource_id"] in legacy_ids
+        and previous_results.get(step["step_id"], {}).get("status") != "succeeded"
+        for step in plan["payload"]["steps"]
+    ):
+        _fail(
+            "unsupported-in-rc.3",
+            "a sealed plan still contains Graft operations; regenerate the plan",
+        )
     started = _now()
     global_error = None
     try:

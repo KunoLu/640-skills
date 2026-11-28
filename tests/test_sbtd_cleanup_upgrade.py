@@ -151,10 +151,14 @@ def build_inventory(scope, *, package_root=None):
 
 ENGINE_COPY = (
     "sbtd_upgrade.py",
+    "sbtd_upgrade_hosts.py",
+    "sbtd_retirement.py",
+    "sbtd_retirement_paths.py",
     "sbtd_external_notices.py",
     "sbtd_upgrade_paths.py",
     "onboard_contracts.py",
     "sbtd_migration_files.py",
+    "sbtd_retirement_permissions.py",
     "sbtd_cleanup_targets.py",
     "sbtd_project.py",
 )

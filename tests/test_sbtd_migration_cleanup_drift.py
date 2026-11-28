@@ -14,8 +14,9 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "sbtd-workflow-onboard/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import onboard_contracts as contracts
+from onboard import GLOBAL_AGENTS_TEMPLATE
 from onboard_contracts import ContractError, canonical_json_bytes
-from sbtd_graft_deployment import (
+from sbtd_deployment import (
     execute_migration_deployment,
     load_deployment_context,
     validate_deployment_declarations,
@@ -28,8 +29,6 @@ from sbtd_migration_verify import verify_migration
 from tests.test_sbtd_followup_batch import (
     FollowupMigration,
     _focused_installation_templates,
-    _graph_fixture,
-    _synthetic_smoke,
 )
 from tests.test_sbtd_migration_apply import legacy_project
 from tests.test_sbtd_migration_cleanup import (
@@ -109,26 +108,7 @@ class _OmpBatch:
                 roots=[self.root],
                 hooks_authorized=False,
             )
-            runtime = {
-                "node": "/fixture/node",
-                "cli": "/fixture/cli.js",
-                "python": "/fixture/python",
-            }
-            with (
-                mock.patch(
-                    "sbtd_graft_deployment.verified_runtime",
-                    return_value=runtime,
-                ),
-                mock.patch(
-                    "sbtd_graft_deployment.build_project_graph",
-                    side_effect=_graph_fixture,
-                ),
-                mock.patch(
-                    "sbtd_graft_deployment.run_project_smoke",
-                    side_effect=_synthetic_smoke(self.manifest),
-                ),
-            ):
-                deployed, code = execute_migration_deployment(context)
+            deployed, code = execute_migration_deployment(context)
             if code != 0:
                 raise AssertionError(f"deploy failed: {deployed}")
             verified, code = verify_migration(
@@ -204,7 +184,9 @@ class CleanupOnlyDeploymentDriftTests(unittest.TestCase):
             self.assertNotEqual(config.read_bytes(), drifted)
             config.write_bytes(drifted)
             codex_raw = (batch.codex / "config.toml").read_bytes()
-            mcp_raw = (batch.agent / "mcp.json").read_bytes()
+            rules = batch.agent / "AGENTS.md"
+            rules_bytes = rules.read_bytes()
+            self.assertEqual(rules_bytes, GLOBAL_AGENTS_TEMPLATE.read_bytes())
             result, code = batch.cleanup(
                 confirm_cleanup=batch.verification["verification_id"]
             )
@@ -215,7 +197,8 @@ class CleanupOnlyDeploymentDriftTests(unittest.TestCase):
             # neither restores nor edits deployment-only inputs.
             self.assertEqual(config.read_bytes(), drifted)
             self.assertEqual((batch.codex / "config.toml").read_bytes(), codex_raw)
-            self.assertEqual((batch.agent / "mcp.json").read_bytes(), mcp_raw)
+            self.assertEqual(rules.read_bytes(), rules_bytes)
+            self.assertFalse((batch.agent / "mcp.json").exists())
 
     def test_the_same_drift_still_rejects_deploy_verify_and_apply(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -373,26 +356,7 @@ class CleanupOnlyDeploymentDriftTests(unittest.TestCase):
                     roots=[root],
                     hooks_authorized=False,
                 )
-                runtime = {
-                    "node": "/fixture/node",
-                    "cli": "/fixture/cli.js",
-                    "python": "/fixture/python",
-                }
-                with (
-                    mock.patch(
-                        "sbtd_graft_deployment.verified_runtime",
-                        return_value=runtime,
-                    ),
-                    mock.patch(
-                        "sbtd_graft_deployment.build_project_graph",
-                        side_effect=_graph_fixture,
-                    ),
-                    mock.patch(
-                        "sbtd_graft_deployment.run_project_smoke",
-                        side_effect=_synthetic_smoke(manifest),
-                    ),
-                ):
-                    deployed, code = execute_migration_deployment(context)
+                deployed, code = execute_migration_deployment(context)
                 self.assertEqual(code, 0, deployed)
                 verified, code = verify_migration(
                     manifest_path, apply_path, evidence / "deployment.json"
@@ -529,10 +493,14 @@ class CleanupOnlyDeploymentDriftTests(unittest.TestCase):
     def test_write_target_drift_remains_rejected_for_cleanup(self):
         with tempfile.TemporaryDirectory() as directory:
             batch = _OmpBatch(Path(directory).resolve()).build()
-            # The deployed MCP resource is an explicit deployment write
-            # target and a retained asset; any late change keeps cleanup
-            # rejected before the first write.
-            target = batch.agent / "mcp.json"
+            # Drift on a declared, retained global rules write still blocks.
+            target = batch.agent / "AGENTS.md"
+            self.assertTrue(
+                any(
+                    item["phase"] == "deploy" and item["target"] == str(target)
+                    for item in batch.manifest["payload"]["shared_operations"]
+                )
+            )
             drifted = target.read_bytes() + b"\n"
             target.write_bytes(drifted)
             with self.assertRaises(ContractError) as drift:

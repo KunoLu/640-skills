@@ -1,7 +1,7 @@
 # AI Tools 项目工具流程精简概要
 
 > 本文件记录个人 Codex / OMP Agent Harness 的模板化工具定位、版本监控基线和 Skill 编排规则。
-> 当前主流程已收敛为 `Codex / OMP + sbtd-task + Graft + Chrome DevTools MCP + Playwright + Maestro`。
+> 当前主流程已收敛为 `Codex / OMP + sbtd-task + Chrome DevTools MCP + Playwright + Maestro`。
 > Chrome DevTools MCP 负责 Web 运行时诊断，Playwright CLI 负责 Web 可重复回归，Maestro 负责移动 App E2E 和可选跨端 smoke。
 > `web-ui-autotest-generator` 作为 Web UI Playwright 测试资产生成、选择器审计和覆盖率报告的可选专项分支。
 > `shadcn Skill` 作为 shadcn/ui 项目组件、registry、preset 和 CLI 工作流的可选辅助，必须先确认项目存在 `components.json`、使用或准备初始化 shadcn/ui，或任务明确涉及 shadcn registry / preset / CLI。
@@ -60,10 +60,9 @@ flowchart TD
     A[PRD / 需求输入] --> B[Codex / OMP]
     B --> C[sbtd-task 模式路由: default / lite / strict]
     C --> D{是否需要结构证据或影响分析?}
-    D -- 是 --> E[Graft 结构图 / 影响分析]
-    D -- 否 --> F[源码 / LSP / contract 补充]
-    E --> G[Codex / OMP implementation]
-    F --> G
+    D -- 是 --> E[实际源码 / LSP / contract；可用时 ast-grep 或 rg]
+    D -- 否 --> G[Codex / OMP implementation]
+    E --> G
     G --> H[项目测试 / 回归验证]
     H --> I{是否涉及 Web 运行时诊断?}
     I -- 是 --> J[Chrome DevTools MCP 诊断 console / network / trace / screenshot]
@@ -87,7 +86,7 @@ flowchart TD
 | Codex | 主 coding agent | 是 | 默认执行代码理解、修改、调试、测试、文档生成等任务 |
 | OMP | Oh My Pi coding agent | 是 | 当前 host 为 OMP 时作为主 coding agent；CLI 为 `omp`，npm 包为 `@oh-my-pi/pi-coding-agent` |
 | sbtd-task | default / lite / strict 任务路由、记录、状态、handoff | 是 | 每个新任务先路由；strict 才加载完整适用 Gate，default/lite 按需使用，不引入替代调度器 |
-| Graft | 固定版本结构图与影响分析辅助 | 按需启用 | 仅对授权单仓根、固定 `@nanonets/graft@0.29.0` 且满足 DNT / 禁 LLM / cloud 边界时启用；不可用则用源码 / LSP / contract 补充 |
+| 结构证据 | 实际源码、LSP 与 contract；可用时 ast-grep 或 rg | 按需 | 只读已授权的单仓根。不上传代码、diff 或作者信息，不启用 LLM／cloud。空结果或 exit 0 不证明无影响 |
 | Chrome DevTools MCP | Web 运行时诊断 / 浏览器现场证据 | 按场景启用 | 页面白屏、console error、network、cookie、storage、性能 trace、截图或临时复现需要真实 Chrome 检查时启用；不替代 Playwright 测试 |
 | Playwright CLI | Web E2E / Web 回归 / CI gate | Web 测试阶段启用 | Web UI、路由、表单、权限、跨页面流程、API 集成或浏览器兼容需要可重复验证时启用；项目内未安装时先询问用户 |
 | Playwright MCP | Agentic Web 探索 / locator 辅助 | 可选启用 | 需要 agent 通过可访问性快照探索页面、辅助生成 locator 或临时检查时启用；不替代项目内 `playwright test` |
@@ -172,7 +171,7 @@ grill-me / grill-with-docs（内部使用 grilling，涉及项目语言时使用
   → to-spec
   → to-tickets as executable Markdown tasks
   → sbtd-task strict workflow（适用时）
-  → Graft impact-analysis（固定可用且授权时；否则源码 / LSP / contract）
+  → 结构证据：实际源码 / LSP / contract；可用时 ast-grep 或 rg。空结果或 exit 0 不证明无影响
   → ponytail（首次实现编辑前选择最小正确实现）
   → Codex implementation
   → tdd / codebase-design（行为风险需要回归测试或测试面设计时）
@@ -196,7 +195,7 @@ grill-with-docs（访谈时按需使用 domain-modeling）
   → to-spec
   → to-tickets as executable Markdown tasks
   → sbtd-task strict workflow（适用时）
-  → Graft impact-analysis（固定可用且授权时；否则源码 / LSP / contract）
+  → 结构证据：实际源码 / LSP / contract；可用时 ast-grep 或 rg。空结果或 exit 0 不证明无影响
   → tdd / codebase-design
   → Codex implementation
   → regression tests
@@ -206,7 +205,7 @@ grill-with-docs（访谈时按需使用 domain-modeling）
 
 ```text
 代码阅读 / codebase-design
-  → Graft exploring / impact-analysis（固定可用且授权时；否则源码 / LSP / contract）
+  → 结构证据：实际源码 / LSP / contract；可用时 ast-grep 或 rg。空结果或 exit 0 不证明无影响
 ```
 
 长任务切换 / 上下文压缩：
@@ -231,20 +230,7 @@ handoff
 
 ---
 
-## 4. Graft 当前使用要点
-
-| 项目 | 当前结论 |
-|---|---|
-| 当前定位 | 固定版本结构图、影响分析和结构证据辅助 |
-| 固定版本 | `@nanonets/graft@0.29.0` npm pin；不使用 latest，不纳入版本监控。版本变化仍需重新证明能力和遥测边界 |
-| 安全边界 | 受管入口持续 `DO_NOT_TRACK=1`，禁止 `--deep`、`blast --name`、LLM / cloud、代码或查询上传；父目录不建图 |
-| 使用条件 | 只对明确授权的单仓根调用；安装前确认固定包、native lifecycle 与 telemetry 变更 |
-| 不可用时 | 不循环安装；使用源码 / LSP / contract 补充，不以空图或 exit 0 证明无影响 |
-| 迁移边界 | GitNexus CLI / MCP / 索引契约已退役，只作为历史或迁移输入；本表不再监控 GitNexus |
-
----
-
-## 5. Chrome DevTools MCP 当前使用要点
+## 4. Chrome DevTools MCP 当前使用要点
 
 | 项目 | 当前结论 |
 |---|---|
@@ -257,7 +243,7 @@ handoff
 
 ---
 
-## 6. Playwright 当前使用要点
+## 5. Playwright 当前使用要点
 
 | 项目 | 当前结论 |
 |---|---|
@@ -271,7 +257,7 @@ handoff
 
 ---
 
-## 7. Maestro 当前使用要点
+## 6. Maestro 当前使用要点
 
 | 项目 | 当前结论 |
 |---|---|
@@ -286,7 +272,7 @@ handoff
 
 ---
 
-## 8. web-ui-autotest-generator 当前使用要点
+## 7. web-ui-autotest-generator 当前使用要点
 
 | 项目 | 当前结论 |
 |---|---|
@@ -301,7 +287,7 @@ handoff
 
 ---
 
-## 9. React Bits Pro Skill 当前使用要点
+## 8. React Bits Pro Skill 当前使用要点
 
 | 项目 | 当前结论 |
 |---|---|
@@ -319,7 +305,7 @@ handoff
 
 ---
 
-## 10. 当前版本汇总
+## 9. 当前版本汇总
 
 | 类别 | 工具 | 当前版本记录 |
 |---|---|---:|
@@ -335,14 +321,14 @@ handoff
 
 ---
 
-## 11. 精简结论
+## 10. 精简结论
 
 当前 AI Tools 的主线调整为：
 
 ```text
 Codex / OMP 作为核心开发入口
 sbtd-task 负责 default / lite / strict 任务路由、记录与恢复
-Graft 负责固定版本结构图和影响分析辅助
+结构证据优先实际源码、LSP 与 contract；可用时使用 ast-grep 或 rg
 Chrome DevTools MCP 负责 Web 运行时诊断和现场证据
 Playwright CLI 负责 Web E2E / 回归 / CI gate
 Playwright MCP 负责 agentic Web 探索和 locator 辅助

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 import onboard_contracts as contracts
-from graft_runtime import GRAFT_PINNED_VERSION
+
 from onboard import missing_file_lines
 from sbtd_identity import DeveloperStore
 from sbtd_migration_files import (
@@ -69,55 +69,109 @@ def runtime_versions() -> dict[str, str]:
     return _runtime_versions_at(_PACKAGE, cleanup_upgrade=True)
 
 
-def _runtime_versions_at(package: Path, *, cleanup_upgrade: bool) -> dict[str, str]:
-    """Measure a known package layout without importing its executable code."""
+_CURRENT_RUNTIME_FILES = (
+    "onboard-contracts.schema.json",
+    "requirements.txt",
+    "catalog.json",
+    "catalog.schema.json",
+    "assets/migration-local-ignore.txt",
+    "assets/migration-legacy-ownership.json",
+    "assets/migration-paused-agents.txt",
+    "assets/routing-approval.pub",
+    "assets/runtime-lineage.pub",
+    "scripts/onboard.py",
+    "scripts/onboard_arguments.py",
+    "scripts/onboard_contracts.py",
+    "scripts/sbtd_deployment.py",
+    "scripts/sbtd_deployment_smoke.py",
+    "scripts/sbtd_onboard_retirement.py",
+    "scripts/sbtd_retirement.py",
+    "scripts/sbtd_retirement_paths.py",
+    "scripts/sbtd_retirement_permissions.py",
+    "scripts/sbtd_omp_sources.py",
+    "scripts/sbtd_handoff.py",
+    "scripts/sbtd_identity.py",
+    "scripts/sbtd_migration.py",
+    "scripts/sbtd_migration_files.py",
+    "scripts/sbtd_migration_legacy.py",
+    "scripts/sbtd_migration_plan.py",
+    "scripts/sbtd_cleanup_targets.py",
+    "scripts/sbtd_cleanup_legacy.py",
+    "scripts/sbtd_trellis_uninstall.py",
+    "scripts/sbtd_migration_verify.py",
+    "scripts/sbtd_reconciliation.py",
+    "scripts/sbtd_recovery.py",
+    "scripts/sbtd_project.py",
+    "scripts/sbtd_task_document.py",
+    "scripts/sbtd_task_state.py",
+    "templates/agents/AGENTS.global.md",
+    "templates/agents/AGENTS.project.md",
+    "templates/skills/sbtd-task/references/task-data.schema.json",
+    "templates/skills/project-validation/scripts/validate_validation_evidence.py",
+    "templates/skills/project-validation/references/validation-evidence.schema.json",
+    "templates/skills/project-validation/references/validation-evidence.v2.schema.json",
+)
+# rc.2 measurement list only. Never copy these assets into the current install.
+_HISTORICAL_RUNTIME_FILES = (
+    "onboard-contracts.schema.json",
+    "requirements.txt",
+    "catalog.json",
+    "catalog.schema.json",
+    "assets/migration-local-ignore.txt",
+    "assets/migration-legacy-ownership.json",
+    "assets/migration-paused-agents.txt",
+    "assets/routing-approval.pub",
+    "assets/runtime-lineage.pub",
+    "assets/graft-build-policy.json",
+    "assets/graft-instructions.txt",
+    "assets/graft-hook-entry.mjs",
+    "scripts/graft_runtime.py",
+    "scripts/onboard.py",
+    "scripts/onboard_arguments.py",
+    "scripts/onboard_contracts.py",
+    "scripts/sbtd_graft_deployment.py",
+    "scripts/sbtd_codex_wiring.py",
+    "scripts/sbtd_omp_wiring.py",
+    "scripts/sbtd_omp_sources.py",
+    "scripts/sbtd_graft_entry.py",
+    "scripts/sbtd_handoff.py",
+    "scripts/sbtd_identity.py",
+    "scripts/sbtd_migration.py",
+    "scripts/sbtd_migration_files.py",
+    "scripts/sbtd_migration_legacy.py",
+    "scripts/sbtd_migration_plan.py",
+    "scripts/sbtd_cleanup_targets.py",
+    "scripts/sbtd_cleanup_legacy.py",
+    "scripts/sbtd_trellis_uninstall.py",
+    "scripts/sbtd_migration_verify.py",
+    "scripts/sbtd_reconciliation.py",
+    "scripts/sbtd_recovery.py",
+    "scripts/sbtd_project.py",
+    "scripts/sbtd_task_document.py",
+    "scripts/sbtd_task_state.py",
+    "templates/agents/AGENTS.global.md",
+    "templates/agents/AGENTS.project.md",
+    "templates/skills/sbtd-task/references/task-data.schema.json",
+    "templates/skills/project-validation/scripts/validate_validation_evidence.py",
+    "templates/skills/project-validation/references/validation-evidence.schema.json",
+    "templates/skills/project-validation/references/validation-evidence.v2.schema.json",
+)
+
+
+def _runtime_versions_at(
+    package: Path, *, cleanup_upgrade: bool, historical: bool = False
+) -> dict[str, str]:
+    """Measure a known package layout without importing its executable code.
+
+    ``historical`` reproduces an rc.2 package fingerprint from that package's
+    own files. It does not copy retired assets into the current install.
+    """
     import importlib.metadata
     import sys
 
-    names = [
-        "onboard-contracts.schema.json",
-        "requirements.txt",
-        "catalog.json",
-        "catalog.schema.json",
-        "assets/migration-local-ignore.txt",
-        "assets/migration-legacy-ownership.json",
-        "assets/migration-paused-agents.txt",
-        "assets/routing-approval.pub",
-        "assets/runtime-lineage.pub",
-        "assets/graft-build-policy.json",
-        "assets/graft-instructions.txt",
-        "assets/graft-hook-entry.mjs",
-        "scripts/graft_runtime.py",
-        "scripts/onboard.py",
-        "scripts/onboard_arguments.py",
-        "scripts/onboard_contracts.py",
-        "scripts/sbtd_graft_deployment.py",
-        "scripts/sbtd_codex_wiring.py",
-        "scripts/sbtd_omp_wiring.py",
-        "scripts/sbtd_omp_sources.py",
-        "scripts/sbtd_graft_entry.py",
-        "scripts/sbtd_handoff.py",
-        "scripts/sbtd_identity.py",
-        "scripts/sbtd_migration.py",
-        "scripts/sbtd_migration_files.py",
-        "scripts/sbtd_migration_legacy.py",
-        "scripts/sbtd_migration_plan.py",
-        "scripts/sbtd_cleanup_targets.py",
-        "scripts/sbtd_cleanup_legacy.py",
-        "scripts/sbtd_trellis_uninstall.py",
-        "scripts/sbtd_migration_verify.py",
-        "scripts/sbtd_reconciliation.py",
-        "scripts/sbtd_recovery.py",
-        "scripts/sbtd_project.py",
-        "scripts/sbtd_task_document.py",
-        "scripts/sbtd_task_state.py",
-        "templates/agents/AGENTS.global.md",
-        "templates/agents/AGENTS.project.md",
-        "templates/skills/sbtd-task/references/task-data.schema.json",
-        "templates/skills/project-validation/scripts/validate_validation_evidence.py",
-        "templates/skills/project-validation/references/validation-evidence.schema.json",
-        "templates/skills/project-validation/references/validation-evidence.v2.schema.json",
-    ]
+    names = list(
+        _HISTORICAL_RUNTIME_FILES if historical else _CURRENT_RUNTIME_FILES
+    )
     if cleanup_upgrade:
         names.extend(
             (
@@ -152,7 +206,10 @@ def _runtime_versions_at(package: Path, *, cleanup_upgrade: bool) -> dict[str, s
         "python": list(sys.version_info[:3]),
     }
     digest = hashlib.sha256(contracts.canonical_json_bytes(identity)).hexdigest()
-    return {"onboard": f"runtime-sha256:{digest}", "graft": GRAFT_PINNED_VERSION}
+    versions = {"onboard": f"runtime-sha256:{digest}"}
+    if historical:
+        versions["graft"] = contracts.ARCHIVED_GRAFT_PIN
+    return versions
 
 
 def _read_reference(reference: Mapping[str, Any]) -> bytes:
@@ -721,9 +778,27 @@ def _require_runtime_lineage(
     onboard = sealed.get("onboard") if isinstance(sealed, Mapping) else None
     consumer = current
     if previous_package is not None:
+        current_layout = any(
+            _lstat(previous_package / name) is not None
+            for name in _CURRENT_RUNTIME_FILES
+            if name not in _HISTORICAL_RUNTIME_FILES
+        )
+        historical = any(
+            _lstat(previous_package / name) is not None
+            for name in _HISTORICAL_RUNTIME_FILES
+            if name not in _CURRENT_RUNTIME_FILES
+        )
+        if current_layout == historical:
+            _fail(
+                "runtime-unavailable",
+                "the installed migration runtime layout is incomplete or mixed",
+            )
         consumer = _runtime_versions_at(
             previous_package,
-            cleanup_upgrade=snapshot(previous_package / "scripts" / "sbtd_cleanup_upgrade.py")["type"] == "file",
+            cleanup_upgrade=not historical
+            or snapshot(previous_package / "scripts" / "sbtd_cleanup_upgrade.py")["type"]
+            == "file",
+            historical=historical,
         )
     if previous_package is not None and sealed == consumer:
         predecessor = successor = consumer["onboard"]
@@ -733,6 +808,7 @@ def _require_runtime_lineage(
         previous is None
         or not isinstance(sealed, Mapping)
         or sealed.get("graft") != current.get("graft")
+        or sealed.get("graft") != consumer.get("graft")
         or onboard != predecessor
         or consumer.get("onboard") != successor
     ):
@@ -878,6 +954,73 @@ def _require_reconciliation_provenance(
     return references
 
 
+def _legacy_deploy_operations(manifest: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    return [
+        operation
+        for operation in _operations(manifest)
+        if operation.get("phase") == "deploy"
+        and operation.get("change", {}).get("kind") in {"build-graft", "configure-graft"}
+    ]
+
+
+def historical_lineage_grants_verify(
+    sealed_onboard: str, current_onboard: str, lineage: Mapping[str, Any]
+) -> bool:
+    """Exact signed predecessor to the executing successor. Not set membership."""
+    if not isinstance(lineage, Mapping):
+        return False
+    signature = lineage.get("signature")
+    return (
+        isinstance(sealed_onboard, str)
+        and isinstance(current_onboard, str)
+        and sealed_onboard != current_onboard
+        and isinstance(signature, str)
+        and signature != ""
+        and lineage.get("schema_version") == 1
+        and lineage.get("purpose") == "runtime-lineage"
+        and lineage.get("predecessor") == sealed_onboard
+        and lineage.get("successor") == current_onboard
+    )
+
+
+def _bind_legacy_d7(manifest: Mapping[str, Any]) -> None:
+    """Read-only. Exact signed predecessor to this executor. No write grant.
+
+    rc.3 cannot have produced this deployment. Equality with the executing
+    fingerprint is not historical. A local unsigned file is not a signature.
+    """
+    sealed = manifest["payload"]["tool_versions"]
+    if sealed.get("graft") != contracts.ARCHIVED_GRAFT_PIN:
+        _fail("version-conflict", "the historical graft pin is not the archived pin")
+    policy = contracts.archived_graft_policy()
+    operations = _legacy_deploy_operations(manifest)
+    if not operations:
+        _fail(
+            "version-conflict",
+            "legacy verification requires historical Graft operations",
+        )
+    for operation in operations:
+        if operation["change"].get("source_ref") != policy:
+            _fail(
+                "ownership-conflict",
+                "the historical policy is not the archived policy",
+            )
+    current_onboard = runtime_versions()["onboard"]
+    sealed_onboard = sealed.get("onboard")
+    if not isinstance(sealed_onboard, str) or sealed_onboard == current_onboard:
+        _fail(
+            "version-conflict",
+            "the historical runtime is not an exact signed predecessor of this runtime",
+        )
+    # Installed key only. No caller file, previous package, or self-pair.
+    lineage = _verified_runtime_lineage()
+    if not historical_lineage_grants_verify(sealed_onboard, current_onboard, lineage):
+        _fail(
+            "version-conflict",
+            "the historical runtime is not an exact signed predecessor of this runtime",
+        )
+
+
 def _validate_context(
     manifest_path: Path,
     manifest: Mapping[str, Any],
@@ -888,6 +1031,7 @@ def _validate_context(
     *,
     cleanup_only: bool = False,
     previous_package: Path | None = None,
+    readonly_legacy: bool = False,
 ) -> None:
     if previous_package is not None and not cleanup_only:
         _fail("upgrade-lineage-conflict", "upgrade trust is restricted to cleanup")
@@ -899,7 +1043,11 @@ def _validate_context(
     )
     sealed_versions = manifest["payload"]["tool_versions"]
     current_versions = runtime_versions()
-    if sealed_versions != current_versions:
+    if readonly_legacy and _legacy_deploy_operations(manifest):
+        # Ordinary and followup verifies stay read-only too. Lineage binding
+        # applies only when this manifest itself carries historical Graft ops.
+        _bind_legacy_d7(manifest)
+    elif previous_package is not None or sealed_versions != current_versions:
         _require_runtime_lineage(
             manifest,
             previous,
@@ -940,18 +1088,30 @@ def _validate_context(
                     "physical-alias",
                     "managed resources have ambiguous physical ownership",
                 )
+    archived_policy = contracts.archived_graft_policy() if readonly_legacy else None
+
+    def resolve_reference(reference: Mapping[str, Any]) -> Mapping[str, Any]:
+        if archived_policy is not None and reference == archived_policy:
+            return reference
+        return _original_reference(reference, manifest, previous, deployment, cleanup)
+
     for reference in _all_input_references(manifest):
-        _original_reference(reference, manifest, previous, deployment, cleanup)
+        resolve_reference(reference)
     from sbtd_migration_plan import validate_legacy_inputs
+
+    def read_original(reference: Mapping[str, Any]) -> bytes:
+        resolved = resolve_reference(reference)
+        if archived_policy is not None and resolved == archived_policy:
+            _fail(
+                "ownership-conflict",
+                "the archived policy is a frozen identity, not a live or local file",
+            )
+        return _read_reference(resolved)
 
     validate_legacy_inputs(
         manifest,
-        lambda reference: _read_reference(
-            _original_reference(reference, manifest, previous, deployment, cleanup)
-        ),
-        resolve_original=lambda reference: _original_reference(
-            reference, manifest, previous, deployment, cleanup
-        ),
+        read_original,
+        resolve_original=resolve_reference,
         stage_results={
             phase: _result_index(document)
             for phase, document in (
@@ -962,6 +1122,7 @@ def _validate_context(
             if document is not None
         },
         cleanup_only=cleanup_only,
+        readonly_legacy=readonly_legacy,
     )
 
 
@@ -2068,11 +2229,16 @@ def cleanup_migration(
             "confirmation-required",
             "migration cleanup requires this verification's explicit confirmation",
         )
-    if verification["payload"]["status"] != "verified":
+    if verification["payload"]["status"] != "verified" or verification["payload"].get(
+        "legacy_resources"
+    ):
         _fail(
             "unverified-input",
             "migration cleanup requires a verification with status verified",
         )
+    from sbtd_deployment import reject_legacy_execution
+
+    reject_legacy_execution(manifest["payload"])
     upgrade_context = None
     if (upgrade_plan_path is None) != (upgrade_receipt_path is None):
         _fail("missing-input", "cleanup upgrade evidence must be supplied as a pair")
@@ -2111,7 +2277,7 @@ def cleanup_migration(
     def check_deployment_inputs(
         cleanup_results: Mapping[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        from sbtd_graft_deployment import validate_deployment_declarations
+        from sbtd_deployment import validate_deployment_declarations
 
         return validate_deployment_declarations(
             manifest["payload"],
@@ -2534,10 +2700,14 @@ def run_migration(args: Any) -> int:
         elif args.phase == "verify":
             from sbtd_migration_verify import verify_migration
 
+            attestation = getattr(args, "post_write_attestation", None)
             envelope, code = verify_migration(
                 _argument_path(args.manifest),
                 _argument_path(args.apply_receipt),
                 _argument_path(args.deployment_evidence),
+                post_write_attestation=(
+                    _argument_path(attestation) if attestation else None
+                ),
             )
         elif args.phase == "cleanup":
             envelope, code = cleanup_migration(

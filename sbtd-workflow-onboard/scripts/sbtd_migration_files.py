@@ -53,14 +53,17 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 from onboard_contracts import ContractError, canonical_json_bytes
+import sbtd_retirement_permissions as _retirement_permissions
 from sbtd_project import TaskDataError, open_regular_file
 
 __all__ = [
     "RetainedObjectError",
+    "assert_private_file",
     "backup_reference",
     "directory_snapshot",
     "discard_withdrawn_directory",
     "install_reference",
+    "preflight_windows_permissions",
     "read_file",
     "remove_reference",
     "rename_directory_exclusive",
@@ -612,6 +615,22 @@ def _win32_acl_private(handle: int, me: Any, trusted: list[Any]) -> bool:
     finally:
         if descriptor.value:
             api.LocalFree(descriptor)
+
+
+def assert_private_file(path: Path) -> None:
+    """Prove private Windows evidence on the file itself, not only its parent."""
+    target = _canonical(path)
+    try:
+        with (
+            _retirement_permissions._file(target) as (handle, _),
+            _win32_current_user_sid() as me,
+            _win32_well_known_sids() as trusted,
+        ):
+            if _win32_acl_private(handle, me, trusted):
+                return
+    except (ContractError,) + _WIN32_FAILURES:
+        pass
+    _fail("privacy-unproven", "Windows evidence file access is not proven private")
 
 
 def _windows_acl_proven(path: Path) -> bool:
@@ -1180,7 +1199,11 @@ def _remove_directory_files(target: Path, entries: list[dict[str, Any]]) -> None
             _release_removal_holder(holder, identity)
 
 
-def remove_reference(path: Path, expected: Mapping[str, Any], *, scope: Path) -> None:
+def remove_reference(
+    path: Path, expected: Mapping[str, Any], *, scope: Path,
+    expected_windows_digest: str | None = None,
+    expected_windows_mode: int | None = None,
+) -> None:
     """Remove only the captured entries; concurrent additions are retained.
 
     Callers preserve the original first. This is a single-controller operation,
@@ -1188,6 +1211,12 @@ def remove_reference(path: Path, expected: Mapping[str, Any], *, scope: Path) ->
     """
     target = _target_in_scope(path, scope)
     before = _expect_state(expected)
+    if expected_windows_digest is not None or expected_windows_mode is not None:
+        if os.name != "nt" or before["type"] != "file" or expected_windows_digest is None:
+            _fail("invalid-argument", "Windows permission proof requires an existing Windows file")
+        _check_windows_mode(expected_windows_mode)
+        _remove_windows_file(target, before["checksum"], expected_windows_digest, expected_windows_mode)
+        return
     if before["type"] == "directory":
         current, entries = directory_snapshot(target)
     else:
@@ -1378,6 +1407,147 @@ def _stage_copy(source: Path, parent: Path) -> str:
     return temporary  # type: ignore[return-value]
 
 
+def _check_windows_mode(mode: int | None) -> None:
+    if mode is not None and (type(mode) is not int or not 0 <= mode <= 0o7777):
+        _fail("invalid-argument", "Windows retirement mode is invalid")
+
+
+def _windows_mode(path: Path) -> int:
+    info = _lstat(path)
+    if info is None or not stat.S_ISREG(info.st_mode):
+        _fail("state-conflict", "Windows permission target is not an existing file")
+    return stat.S_IMODE(info.st_mode)
+
+
+def _windows_handle_checksum(fd: int) -> str:
+    os.lseek(fd, 0, os.SEEK_SET)
+    observed = hashlib.sha256()
+    while chunk := os.read(fd, _CHUNK):
+        observed.update(chunk)
+    return observed.hexdigest()
+
+
+def _windows_replay_stage(
+    target: Path,
+    content: bytes,
+    raw: bytes,
+    mode: int | None,
+    *,
+    before: dict[str, Any] | None = None,
+) -> None:
+    permissions = _retirement_permissions
+    raw = permissions._pack(*permissions._parts(raw))
+    checksum = _bytes_checksum(content)
+    holder = _private_sibling(target.parent, ".sbtd-retirement-stage-")
+    identity = holder.lstat()
+    try:
+        staged = holder / target.name
+        try:
+            os.close(os.open(staged, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
+        except OSError:
+            _fail("write-failed", "a private empty Windows candidate could not be created")
+        opened = published = False
+        try:
+            assert_private_file(staged)
+            access = (
+                permissions._DELETE | permissions._WRITE_DAC | permissions._WRITE_OWNER
+                | permissions._READ_DATA | permissions._GENERIC_WRITE
+            )
+            with permissions._file(staged, access, share=1) as (handle, fd):
+                opened = True
+                try:
+                    permissions._apply_permissions(handle, fd, raw)
+                    os.lseek(fd, 0, os.SEEK_SET)
+                    remaining = memoryview(content)
+                    while remaining:
+                        written = os.write(fd, remaining[:_CHUNK])
+                        if not written:
+                            _fail("write-failed", "Windows staged write made no progress")
+                        remaining = remaining[written:]
+                    if mode is not None:
+                        permissions._set_read_only(
+                            handle, os.fstat(fd).st_file_attributes, enabled=not mode & stat.S_IWUSR,
+                        )
+                    os.fsync(fd)
+                    if _windows_handle_checksum(fd) != checksum:
+                        _fail("preservation-failed", "Windows staged file bytes differ", exit_code=3)
+                    permissions._verify_staged(staged, raw)
+                    if mode is not None and _windows_mode(staged) != mode:
+                        _fail("preservation-failed", "Windows staged read-only attribute differs", exit_code=3)
+                    if before is None:
+                        return
+                    if permissions._read_handle(handle) != raw:
+                        _fail("state-conflict", "staged Windows file permissions changed before publication")
+                    replace = before["type"] == "file"
+                    if replace:
+                        if _windows_mode(target) != mode:
+                            _fail("state-conflict", "live Windows file mode changed before publication")
+                        with permissions._file(target, permissions._READ_DATA, share=1) as (live, live_fd):
+                            if (
+                                _windows_handle_checksum(live_fd) != before["checksum"]
+                                or permissions._read_handle(live) != raw
+                            ):
+                                _fail("state-conflict", "live Windows bytes or permissions changed before publication")
+                    elif snapshot(target) != before:
+                        _fail("state-conflict", "target appeared while the Windows write was staged")
+                    permissions._rename_handle(
+                        handle, target, replace=replace,
+                        read_only=replace and mode is not None and not mode & stat.S_IWUSR,
+                    )
+                    published = True
+                finally:
+                    if not published:
+                        try:
+                            permissions._delete_handle(handle, read_only=not os.fstat(fd).st_mode & stat.S_IWUSR)
+                        except OSError:
+                            raise RetainedObjectError(staged) from None
+        except FileExistsError:
+            _fail("state-conflict", "target appeared during a no-overwrite Windows create")
+        except OSError:
+            _fail("write-failed", "Windows file staging or publication failed")
+        finally:
+            if not opened:
+                _unlink_quiet(staged)
+    finally:
+        _release_removal_holder(holder, identity)
+    with permissions._file(target, permissions._READ_DATA, share=1) as (live, live_fd):
+        intact = _windows_handle_checksum(live_fd) == checksum and permissions._read_handle(live) == raw
+    if not intact or (mode is not None and _windows_mode(target) != mode):
+        _fail("preservation-failed", "published Windows file failed permission or content readback", exit_code=3)
+
+
+def preflight_windows_permissions(target: Path, raw: bytes) -> None:
+    """Prove a descriptor replays on a private sibling, without publishing."""
+    if os.name != "nt":
+        _fail("invalid-argument", "native Windows replay requires Windows")
+    _windows_replay_stage(_canonical(target), b"", raw, None)
+
+
+def _remove_windows_file(target: Path, checksum: str, expected_digest: str, expected_mode: int | None) -> None:
+    permissions = _retirement_permissions
+    raw = permissions.capture(target)
+    if permissions.digest(raw) != expected_digest:
+        _fail("state-conflict", "live Windows file permissions changed before removal")
+    mode = _windows_mode(target)
+    if expected_mode is not None and mode != expected_mode:
+        _fail("state-conflict", "live Windows file mode changed before removal")
+    _windows_replay_stage(target, b"", raw, mode)
+    with permissions._file(target, permissions._DELETE | permissions._READ_DATA, share=0) as (handle, fd):
+        try:
+            read_only = not os.fstat(fd).st_mode & stat.S_IWUSR
+            if (
+                _windows_handle_checksum(fd) != checksum
+                or read_only != (not mode & stat.S_IWUSR)
+                or permissions._read_handle(handle) != raw
+            ):
+                _fail("state-conflict", "retirement file changed before Windows removal")
+            permissions._delete_handle(handle, read_only=read_only)
+        except OSError:
+            _fail("write-failed", "the verified Windows file could not be removed")
+    if snapshot(target) != _ABSENT:
+        _fail("preservation-failed", "Windows removal did not leave the target absent", exit_code=3)
+
+
 def _commit_staged(
     target: Path,
     temporary: str,
@@ -1511,14 +1681,19 @@ def backup_reference(
 
 
 def write_file(
-    path: Path, content: bytes, expected: Mapping[str, Any], *, scope: Path
+    path: Path, content: bytes, expected: Mapping[str, Any], *, scope: Path,
+    windows_permissions: bytes | None = None,
+    expected_windows_digest: str | None = None,
+    windows_mode: int | None = None,
 ) -> None:
     """Write one file inside ``scope`` against its expected before-state.
 
     An originally absent target is created without overwrite; an existing
     file is replaced atomically only while it still matches ``expected``.
-    Unknown target or user changes are rejected and the known original is
-    kept on every failure.
+    Unknown target or user changes are rejected before publication.
+
+    Retirement-only Windows writes prove access before and after publication.
+    An absent-name restore supplies its recorded read-only mode separately.
     """
     if not isinstance(content, (bytes, bytearray)):
         _fail("invalid-argument", "write content must be bytes")
@@ -1529,6 +1704,20 @@ def write_file(
     target = _target_in_scope(path, scope)
     if snapshot(target) != before:
         _fail("state-conflict", "write target changed before the authorized write")
+    if windows_permissions is not None or expected_windows_digest is not None or windows_mode is not None:
+        if os.name != "nt" or windows_permissions is None:
+            _fail("invalid-argument", "Windows retirement writes require a native Windows security descriptor")
+        _check_windows_mode(windows_mode)
+        desired = _retirement_permissions.digest(windows_permissions)
+        if before["type"] == "file":
+            if desired != expected_windows_digest:
+                _fail("state-conflict", "retained Windows permissions do not match the approved live digest")
+            if windows_mode is None:
+                windows_mode = _windows_mode(target)
+        elif expected_windows_digest is not None or windows_mode is None:
+            _fail("invalid-argument", "an absent Windows target requires archived mode and no live digest")
+        _windows_replay_stage(target, payload, windows_permissions, windows_mode, before=before)
+        return
     temporary = _stage(target.parent, payload)
     _commit_staged(target, temporary, before, None, _bytes_checksum(payload))
 

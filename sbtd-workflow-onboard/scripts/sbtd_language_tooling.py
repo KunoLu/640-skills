@@ -37,11 +37,13 @@ from pathlib import Path
 
 import yaml
 
+from sbtd_retirement_paths import HISTORICAL_GRAPH_STATE
+
 # Directories never entered by the bounded source scan.
 _SCAN_SKIP_DIRS = frozenset(
     {
         ".git",
-        ".graft",
+        HISTORICAL_GRAPH_STATE,
         ".sbtd",
         ".trail",
         ".venv",

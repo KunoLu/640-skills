@@ -83,31 +83,56 @@ These are **natural-language requests to your agent**, not new CLI commands. Rep
 | Goal | Choose | What it means |
 |---|---|---|
 | Inspect without installing | `check` / `plan` | Read-only inventory and proposed work; not proof that setup ran |
-| First full setup | `init` | Install missing/invalid Skills; preserve valid Skill shells, not necessarily current content; no default global Graft MCP |
+| First full setup | `init` | Install missing/invalid Skills; preserve valid Skill shells, not necessarily current content; does not install or retire managed host entries |
 | Add a project only | `init-projects` | Project AGENTS/ignore and applicable local assets; no global installation or user MCP/hooks |
 | Align an existing environment | `upgrade` | Fixed-baseline plan/apply/verify, explicit drift decisions, backups and recovery |
-| Deliberately reinstall | `reset` | Overwrite bundled Skills **without backup**, reinstall required externals; not an upgrade recovery protocol |
+| Deliberately reinstall | `reset` | Overwrite bundled Skills **without backup**, reinstall required externals; not an upgrade recovery protocol, and not permission to delete every matching host entry |
 | Move legacy data | `migration` | Approved projections, retained originals and verified receipts; separate deployment authorization; interrupted deployment evidence is reconciled from current state, never backfilled |
 | Retire detected legacy assets | `cleanup-legacy` | Display actual candidates, then obtain separate execution consent |
 | Restore an authorized batch | `recovery` | Plan and confirm restoration from trusted batch evidence; not a general undo command |
 
 <a id="graft-retirement"></a>
 <details>
-<summary><strong>Existing projects: Graft retirement is a breaking change</strong></summary>
+<summary><strong>Existing projects: removing Graft is a breaking change</strong></summary>
 
-Removing `sbtd-graft` takes away the MCP connection used for graph queries. Removing its Codex hook handlers also stops their event-driven updates. AST search replaces structural search, not every graph query or hook. **An upgrade is not consent to retire Graft.**
+rc.3 removes Graft from the workflow. There is no `install-graft` command and no `--graft-*` flag. Replacing Onboard, including with `npx skills add`, can leave a Codex or OMP entry that still names the removed launcher. Host startup may warn. The warning is not fatal, and it is not consent to delete the entry. This section does not claim that your environment has been upgraded, that a host accepted the change, or that Antigravity CLI support is available.
 
-Ordinary `init` and default `check`/`plan` leave global Graft MCP and hook configuration untouched. Explicit project roots still retain local fence/graph setup; a graph does not prove host registration. `reset`, explicit `--graft-hooks` / `--graft-retire-legacy`, and sealed migration deployment keep their wiring contracts. A separately confirmed `upgrade --phase apply` can write a managed MCP configuration if the upgrade plan includes that host and calls for the change. For upgrade originals, use the plan's `payload.backup_root` and the receipt's `backup_ref`. Neither `cleanup-legacy` nor `--graft-retire-legacy` uninstalls the current global connection; the latter switches older fixed-root bindings to the current wiring.
+`check`, `plan`, and `reset` report `graftRetirement` for the selected domain. `status: dangling` means the recognized entry's launcher is missing, **not** that Onboard owns the entry. `verification: proven` requires a bound write receipt and matching live bytes. Unproven or drifted entries stay. If one points to a missing launcher or one about to be replaced, reset and upgrade stop. Retiring a proven entry requires confirmation and a private backup. Global host changes affect every project using that domain.
 
-1. **Test the replacement first.** In the selected host, approve and run a read-only search on a known fixture; verify the match and that a tool outside the allowlist cannot run. If the project still needs graph queries or hooks, keep Graft.
-2. **Prove who wrote the entry.** Identify the exact Codex `mcp_servers.sbtd-graft`, OMP `mcpServers.sbtd-graft`, or Codex hook handler. Use the plan and `graftWiring.operationResults` for normal/reset wiring, the manifest and deployment evidence for migration, or the upgrade plan and its apply receipt for upgrade. Match the successful write to the specific entry; a changed file alone does not prove who wrote every entry in it.
-   - **Replaced file:** verify the recorded original backup and compare it with the recorded after-state to establish what changed.
-   - **New file:** require a recorded `before.type=absent` and evidence that the operation created the target with this entry. There was no original to back up; `backup_ref=null` alone does not prove creation.
-   - In either case, verify the current file still matches the recorded after-state. Preserve entries with unknown ownership or later edits.
-3. **Record the cutover.** List the exact entries, projects sharing the connection, and recovery path. Obtain separate consent and stop concurrent writers. Privately back up the **still-wired** files and their permissions. Remove only approved entries; keep unrelated entries and the user's hook file. After each change, before proceeding, record the target path, whether it now exists, and, if present, its content digest and permissions. Link that observation to its pre-retirement backup. If it cannot be recorded, stop. Verify replacement search and a second pass with no further writes.
-4. **Roll back only against that record.** Compare each target to its recorded post-retirement existence, digest and permissions. Restore the verified pre-retirement backup only on a match, then verify the restored bytes and permissions. If evidence is missing or the target has changed, preserve both copies; do not overwrite later edits. Check host loading separately. The isolated fixture exercised file restoration, not a production uninstall command.
+**Reset is not cleanup consent.** Preview with `plan --action reset` and the same platform, roots and options. Retirement also requires the displayed `--confirm-retirement` digest, `--yes`, and an existing private `--retirement-backup-root` outside installation targets. Supply the `--retirement-evidence` descriptor from inside that vault. Select the affected Codex or OMP domain before replacing an existing launcher. For a proven project rules fence, reset retires only the fence and skips the template overwrite. If another write would overwrite unproven content, reset stops; exclude the target and preview again.
 
-[Current wiring, backup locations and legacy cutover](sbtd-workflow-onboard/REFERENCE.md#codex-and-omp-wiring-and-deployment)
+Root installers never approve retirement by themselves. When retirement is required, they stop and direct you to this plan/confirm sequence. `--no-mcp` only skips the installer's generic MCP menu. It is not forwarded to Onboard and it is not host wiring.
+
+Standalone cleanup, from the installed `scripts/onboard.py`:
+
+```bash
+python scripts/onboard.py cleanup-legacy --phase plan \
+  --projects-root /abs/project --backup-root /abs/private-vault \
+  --retirement-evidence /abs/private-vault/evidence.json
+python scripts/onboard.py cleanup-legacy --phase apply \
+  --plan /abs/private-vault/plan.json --confirm-cleanup <plan_id>
+python scripts/onboard.py cleanup-legacy --phase rollback \
+  --plan /abs/private-vault/plan.json \
+  --cleanup-receipt /abs/private-vault/receipt.json \
+  --confirm-cleanup <plan_id>
+```
+
+`--retirement-evidence` is optional on plan and must stay inside the selected vault. Apply may also pass the previous `--cleanup-receipt` for a retry. Rollback restores a retired resource only when the current bytes and permissions still match the recorded post-retirement state. There is no `restore-retirement` command.
+
+These are not deleted: project `graft/` and `.graft`, the user telemetry file, and the global npm package. The report lists present project trees and manual commands, including `npm uninstall -g @nanonets/graft`. You decide.
+
+An upgrade plan includes the same `graftRetirement` disclosure. Confirm that displayed plan with the existing upgrade confirmation. Upgrade success is not cleanup consent. Upgrade has no `--retirement-evidence` flag. Declare retirement only as scoped `retirement_evidence` receipt bindings in the upgrade scope, together with the normal single private `backup_root`. Do not pass an unregistered flag. Generic `upgrade verify --probe` and the installer capability probe stay; they do not start Graft and are not host acceptance.
+
+A sealed migration plan that still contains `build-graft` or `configure-graft` fails closed as `unsupported-in-rc.3`. Regenerate the plan. Historical `migration verify` reads an old receipt only when the installed signature binds that exact predecessor to this executing successor. A missing or wrong signature is `version-conflict`. Verify stays read-only, does not rerun smoke, and does not start Graft. It compares recorded bytes with a signed post-write mode. Bytes or a trusted mode that differ are `drifted`. Both matching is `verified`. Matching bytes with no trusted post-write permission evidence are `not-verified`. Other resources continue. None of these results authorize a write. A past rc.2 deployment is not verifiable merely because it once succeeded. Fresh migration deploy and reconcile do not run a Graft CLI. A local deployment check, when the executing code performs one, is a trusted read-only `check-projects` plus a recheck of sealed targets. It is not business API, host, or model acceptance. This section does not claim that check passed.
+
+Historical permission evidence, when supplied, is only `migration --phase verify --post-write-attestation <private-file>`. That flag is verify-only. The detached signed record must bind the exact historical deployment ID, resource ID, recorded after-state, and permission. It does not rewrite the old manifest or receipt and does not grant a write. Do not mint a post-hoc signature or use a release private key. Released rc.2 byte-only evidence cannot prove unchanged permissions.
+
+Fresh migration smoke checks one selected project against its manifest and successful apply receipt. A matching `.trellis` tree is expected until separately confirmed cleanup. The same tree still blocks ordinary onboarding; unrelated project-state errors still block migration smoke.
+
+
+Structural search uses actual source, LSP, and contracts. Use `ast-grep` or `rg` when they are already available. An empty result or exit 0 does not prove no impact.
+
+[Host wiring and retirement boundaries](sbtd-workflow-onboard/REFERENCE.md#codex-and-omp-wiring-and-deployment)
 
 </details>
 
@@ -146,7 +171,7 @@ and missing prerequisites. Do not install, reset, migrate, clean up or change co
 Use sbtd-workflow-onboard in init-projects mode for /abs/project, platform omp.
 Install project AGENTS.md. First run project-only preflight and show the local write scope;
 wait for approval before writing. Do not install or modify global tools, Skills,
-AGENTS, MCP or hooks. Report whether the local Graft graph was built or unavailable.
+AGENTS, MCP or hooks. Do not build or delete historical project trees.
 ```
 
 </details>
@@ -286,7 +311,7 @@ I confirm --yes explicitly and run the standard verify afterwards.
 The migration planner accepts characterized Trellis **0.6.15 / 0.6.17 data layouts**, not arbitrary old versions. Hash claims on user content are not deletion authority; missing approvals, contradictory task relationships and unknown host configuration still block. A genuinely host-free project can retain an empty platform list without inventing host files. Vendor-uninstall runtime support remains separately pinned.
 
 Stale recorded template hashes may be reconciled only against the installed package's reviewed **exact path/version/content pins**; migration neither refreshes the old hash file nor fetches templates at runtime. Mixed project `AGENTS.md` content is not generated-file ownership: replacing it still requires the existing signed approval, bound to the actual before-state and exact candidate. Recognition is not authorization to apply or clean up.
-Migration deployment retains the approved project-rule body, removing only the maintenance pause and adding the managed Graft fence; it does not silently swap that body for the generic template.
+Migration deployment retains the approved project-rule body and removes only the maintenance pause. It does not add a managed graph fence and does not silently swap that body for the generic template. A sealed plan that still contains `build-graft` or `configure-graft` fails closed until regenerated.
 OMP deployment also recognizes configuration-input changes already proved by bound successful migration receipts and intact originals. Unrecorded drift still blocks; this does not waive runtime-version checks or authorize a deployment retry.
 
 An interrupted deployment whose evidence was never saved is reconciled from **current state**, not backfilled: `migration --phase reconcile` requires the complete successful apply receipt, a genuinely absent historical evidence path, a new non-overwriting output path and explicit `--yes`. It revalidates the signed runtime lineage, retained originals and sealed resources, then writes one new evidence document explicitly typed `kind: current-state` / `historical_execution: unknown` — each result pairs a before-state proven by the retained original with a freshly measured after-state, and no historical exit code, success claim or timestamp is invented. Acceptance means the current postconditions hold, not that the original process exited cleanly or wrote new targets; the subsequent standard `verify` reports `acceptance_basis: current-state`. This authorizes no install, deployment retry or cleanup, and the regular deploy/retry/recovery gates are unchanged.
@@ -429,16 +454,14 @@ Onboard uses the **Ponytail skill-only provider**. An enabled official Ponytail 
 
 | Tool / layer | Owns | Does not prove |
 |---|---|---|
-| Graft | Pinned, scoped structural analysis and impact assistance | Compiler semantics, business correctness or automatic host readiness |
+| Structural evidence | Actual source, LSP, and contracts; `ast-grep` or `rg` when already available | Compiler semantics, business correctness, or no impact from an empty result or exit 0 |
 | Chrome DevTools MCP | Browser runtime, console/network/performance diagnosis | Repeatable CI regression |
 | Playwright MCP | Page exploration and locator assistance | A passing project Playwright suite |
 | Playwright CLI | Project-local Web regression and E2E | Full-stack behavior when only mocks/contracts are available |
 | Maestro CLI / MCP | Mobile/Hybrid flows; device/flow diagnostics; optional Web smoke | Primary Web regression or unavailable real-device behavior |
 | RTK / Caveman | Terminal-output / reply compression | Test execution, reports or reduced workflow obligations |
 
-Graft installation is separately confirmed and pinned by the [managed runtime](sbtd-workflow-onboard/scripts/graft_runtime.py). Ordinary `init` and default `check`/`plan` do not create, update, or remove a global `sbtd-graft` connection; existing global Graft MCP/hook configuration stays untouched. `reset` and explicit `--graft-hooks` / `--graft-retire-legacy` retain their existing wiring behavior. With explicit project roots, project setup prepares the local fence and graph; graph presence does not prove host registration. Where a global connection already exists or is explicitly configured, one connection per effective Codex/OMP configuration domain locks the real repository/worktree from startup cwd. No parent-directory multi-project graph, implicit cloud enrichment, or silent legacy binding replacement. Codex hooks are a separate opt-in; OMP setup does not write hooks. [Wiring contract](sbtd-workflow-onboard/REFERENCE.md#codex-and-omp-wiring-and-deployment)
-
-Managed Graft stays on the Graft command/tool contract even when Trail is installed: child environments disable automatic Trail switching and inherited Trail configuration. Project `.trail` notes are subject to the same no-link/no-special-file scope checks as native graph inputs. See [pin acceptance scenarios](sbtd-workflow-onboard/REFERENCE.md#graft-pin-acceptance-scenarios).
+Read only an authorized single repository root. Do not upload source, diffs, or author data, and do not enable LLM or cloud enrichment. Managed host-entry retirement is a separate confirmed operation: see [Existing projects: removing Graft](#graft-retirement).
 
 **Report what actually ran.** Native commands are preferred for report-producing tests. Keep failed runs, named native/raw reports and same-stem **Chinese** summaries. Distinguish `full-stack`, `contract-backed`, `mock-backed`/`app-mocked`, `backend-only`, `smoke-only` and `blocked`; a generated report is not a passing test. Dirty local evidence is not exact PR-head CI proof.
 
@@ -546,7 +569,7 @@ Ignore rules do not sanitize secrets, untrack existing files or authorize deleti
 
 For source changes, assess both language READMEs, [English CHANGELOG](CHANGELOG.md), [Chinese CHANGELOG](CHANGELOG.zh.md) and the [versioned automation prompt](prompts/automations/sbtd-workflow-tools-version-check.md). The changelogs must match entry for entry: same versions, dates, order, facts, URLs, commit SHAs and code identifiers; only prose language differs. Update the top unpublished section in both, and preserve published history. Ordinary edits do **not** sync installed copies or live automation. Repository-maintenance `sync` requires explicit authorization; `update` advances the monitored baselines and archives the analyzed update. These are not Onboard upgrade commands or BDD sync requests.
 
-The version-check automation uses a short main prompt, a per-run scope policy and an on-demand impact checklist. It validates the assigned Orca workspace, protects existing changes, distinguishes unavailable evidence from “no update”, and keeps `ENTRYPOINT.md` as the fixed baseline for official tool releases. Graft is not monitored. Native tag names are retained separately from comparison versions. When no confirmed unpublished CHANGELOG section exists, release-note proposals stay in `UPDATE.md` or the run output; the automation does not invent the next tag. Updating these source files does not update the live automation; that remains an explicit `sync` operation.
+The version-check automation uses a short main prompt, a per-run scope policy and an on-demand impact checklist. It validates the assigned Orca workspace, protects existing changes, distinguishes unavailable evidence from “no update”, and keeps `ENTRYPOINT.md` as the fixed baseline for official tool releases. Native tag names are retained separately from comparison versions. When no confirmed unpublished CHANGELOG section exists, release-note proposals stay in `UPDATE.md` or the run output; the automation does not invent the next tag. Updating these source files does not update the live automation; that remains an explicit `sync` operation.
 
 The native full-suite command remains `python -B -m unittest discover -s tests -p 'test_*.py'`. CI discovers that complete Linux set and partitions it into disjoint shards weighted by measured per-case seconds, splitting fixture-free cases individually and keeping class/module fixtures together (cases without a recorded weight are estimated at the median and listed in each shard inventory); Windows partitions its native scope without repeating overlapping PowerShell/Unicode selectors. macOS keeps its native scope. The existing check names aggregate all required shards; any failed, cancelled or missing shard blocks success. The minimum supported TOML-editor run remains a separate dependency variant, not a duplicate. Per-case timings, skip reasons and Chinese result summaries are retained as CI artifacts. Consult the [workflow](.github/workflows/validation.yml) and [runner](tests/run_ci.py) for exact scope. Source checks, installed-copy checks, real host loading and release acceptance remain separate evidence.
 

@@ -831,5 +831,132 @@ class MigrationVerifyPathTests(unittest.TestCase):
                 )
 
 
+
+class HistoricalModeProofTests(unittest.TestCase):
+    def test_a_self_added_post_write_mode_is_not_proof(self):
+        from sbtd_migration_verify import _classify_legacy_resource
+
+        after = {"type": "file", "checksum": "ab" * 32}
+        record = _classify_legacy_resource(
+            {"resource_id": "cd" * 32, "target": "/tmp/agents"},
+            {
+                "status": "succeeded",
+                "phase": "deploy",
+                "after": after,
+                "post_write_mode": "0640",
+            },
+            after,
+            [],
+            "deployment-id",
+        )
+        self.assertEqual(record["bytes"], "match")
+        self.assertEqual(record["mode"], "absent")
+        self.assertIsNone(record["mode_source"])
+        self.assertEqual(record["status"], "not-verified")
+        self.assertIn("no trusted", record["reason"])
+
+    def test_unreadable_absence_is_not_drift(self):
+        from sbtd_migration_verify import _classify_legacy_resource
+
+        record = _classify_legacy_resource(
+            {"resource_id": "cd" * 32, "target": "/tmp/agents"},
+            None,
+            None,
+            [],
+            "deployment-id",
+        )
+        self.assertEqual(record["bytes"], "unreadable")
+        self.assertEqual(record["status"], "not-verified")
+        self.assertNotEqual(record["status"], "drifted")
+
+    def test_stale_deployment_proof_and_known_mismatch(self):
+        from sbtd_migration_verify import _classify_legacy_resource
+
+        after = {"type": "file", "checksum": "ab" * 32}
+        stale = _classify_legacy_resource(
+            {"resource_id": "cd" * 32, "target": "/tmp/agents"},
+            {"status": "succeeded", "after": after},
+            after,
+            [
+                {
+                    "kind": "signed-attestation",
+                    "deployment_id": "other-deployment",
+                    "resource_id": "cd" * 32,
+                    "mode": "0640",
+                    "after": after,
+                    "signature": "not-this-deployment",
+                }
+            ],
+            "this-deployment",
+        )
+        self.assertEqual(stale["status"], "not-verified")
+        self.assertIsNone(stale["mode_source"])
+        mismatched = _classify_legacy_resource(
+            {"resource_id": "cd" * 32, "target": "/tmp/agents"},
+            {"status": "succeeded", "after": after},
+            {"type": "directory", "checksum": "ef" * 32},
+            [],
+            "this-deployment",
+        )
+        self.assertEqual(mismatched["bytes"], "differ")
+        self.assertEqual(mismatched["status"], "drifted")
+        absent = _classify_legacy_resource(
+            {"resource_id": "cd" * 32, "target": "/tmp/agents"},
+            {"status": "succeeded", "after": after},
+            {"type": "absent", "checksum": None},
+            [],
+            "this-deployment",
+        )
+        self.assertEqual(absent["status"], "drifted")
+
+
+
+class OnboardCliSmokeTests(unittest.TestCase):
+    def test_trusted_check_projects_is_not_business_api(self):
+        from sbtd_migration_verify import ONBOARD_CLI_SMOKE_SCHEMA, onboard_cli_smoke_command
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            projection = {
+                "mode": "check-projects",
+                "projects": [{"projectRoot": str(root), "sbtd": {"status": "success"}}],
+            }
+            document = {
+                "schema": ONBOARD_CLI_SMOKE_SCHEMA,
+                "projectRoot": str(root),
+                "sourceRef": "non-git",
+                "sourceCommit": None,
+                "startedAt": "2026-11-27T00:00:01Z",
+                "finishedAt": "2026-11-27T00:00:02Z",
+                "command": onboard_cli_smoke_command(root),
+                "exitCode": 0,
+                "status": "passed",
+                "mockStrategy": "none",
+                "onboardVersion": runtime_versions()["onboard"],
+                "projection": projection,
+                "projectionSha256": hashlib.sha256(canonical_json_bytes(projection)).hexdigest(),
+            }
+            path = root / "cli-smoke.json"
+            path.write_text(json.dumps(document), encoding="utf-8")
+            record = {
+                "root": str(root),
+                "source_ref": None,
+                "head": None,
+                "report_refs": [{"path": str(path), "state": snapshot(path)}],
+            }
+            payload = {
+                "started_at": "2026-11-27T00:00:00Z",
+                "finished_at": "2026-11-27T00:00:03Z",
+                "previous_deployment_id": None,
+            }
+            validate_deployment_reports(payload, record)
+            document["mockStrategy"] = "app-mocked"
+            path.write_text(json.dumps(document), encoding="utf-8")
+            record["report_refs"] = [{"path": str(path), "state": snapshot(path)}]
+            with self.assertRaises(ContractError) as raised:
+                validate_deployment_reports(payload, record)
+            self.assertEqual(raised.exception.code, "report-acceptance")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -74,23 +74,9 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             npm_installed=false
             agent_installed=false
             external_installed=true
-            graft_installed=false
-            graft_status=not-available
-            graft_reason='Graft CLI is not installed.'
-            graft_next='Confirm the installer plan to install @nanonets/graft@0.18.0.'
             [ -f "$FAKE_STATE_DIR/npm" ] && npm_installed=true
             [ -f "$FAKE_STATE_DIR/agent" ] && agent_installed=true
             [ -f "$FAKE_STATE_DIR/external-missing" ] && external_installed=false
-            if [ -f "$FAKE_STATE_DIR/graft" ]; then
-              graft_installed=true
-              graft_status=available
-              graft_reason=''
-              graft_next=''
-            elif [ -f "$FAKE_STATE_DIR/graft-blocked" ]; then
-              graft_status=blocked
-              graft_reason='A conflicting executable already provides this command.'
-              graft_next='Remove the conflicting executable, then rerun the installer.'
-            fi
 
             case "$mode" in
               check-agent-cli)
@@ -108,45 +94,6 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 : > "$FAKE_STATE_DIR/agent"
                 printf '{"status":"installed"}\n'
                 ;;
-              install-graft)
-                confirmed=false
-                telemetry_only=false
-                for arg in "$@"; do
-                  [ "$arg" = "--yes" ] && confirmed=true
-                  [ "$arg" = "--telemetry-only" ] && telemetry_only=true
-                done
-                  if [ "$confirmed" = false ] && [ -f "$FAKE_STATE_DIR/graft-telemetry-only" ]; then
-                    printf '{"mode":"install-graft","status":"needs-confirmation","reason":"persist telemetry opt-out only","plan":{"telemetry":{"path":"/tmp/fake-home/.graft/telemetry.json","changes":{"enabled":false}}},"before":{"installed":true}}\n'
-                    exit 2
-                  fi
-                if [ "$confirmed" = false ]; then
-                  if [ -f "$FAKE_STATE_DIR/graft" ]; then
-                    printf '{"mode":"install-graft","status":"already-installed","reason":"pinned Graft CLI already verified usable","plan":{},"before":{"installed":true}}\n'
-                    exit 0
-                  fi
-                  if [ -f "$FAKE_STATE_DIR/graft-blocked" ]; then
-                    printf '{"mode":"install-graft","status":"blocked","stage":"conflict","reason":"an unrecognized graft executable already occupies PATH","plan":{},"before":{}}\n'
-                    exit 2
-                  fi
-                  if [ ! -f "$FAKE_STATE_DIR/npm" ]; then
-                    printf '{"mode":"install-graft","status":"blocked","stage":"npm","reason":"npm is required for the global install but was not found","plan":{},"before":{}}\n'
-                    exit 2
-                  fi
-                  printf '{"mode":"install-graft","status":"needs-confirmation","reason":"explicit confirmation is required before any download, install, or telemetry write; no changes were made","plan":{"package":"@nanonets/graft@0.18.0","prefix":"/tmp/fake-prefix","telemetry":{"path":"/tmp/fake-home/.graft/telemetry.json","changes":{"enabled":false}}},"before":{"installed":false}}\n'
-                  exit 2
-                fi
-                if [ "$telemetry_only" = true ]; then
-                  : > "$FAKE_STATE_DIR/telemetry-disabled"
-                  printf '{"mode":"install-graft","status":"already-installed"}\n'
-                  exit 0
-                fi
-                if [ -f "$FAKE_STATE_DIR/graft-fails" ]; then
-                  printf '{"mode":"install-graft","status":"failed","stage":"npm-install","reason":"npm exited 1"}\n'
-                  exit 1
-                fi
-                : > "$FAKE_STATE_DIR/graft"
-                printf '{"mode":"install-graft","status":"installed"}\n'
-                ;;
               check)
                 json=false
                 for arg in "$@"; do
@@ -157,7 +104,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                     printf '{"runtime":{"npm":{"installed":true}},"tools":[],"skills":[],"manualChecks":[],"ponytailProvider":{"provider":"conflict"}}\\n'
                     exit 4
                   fi
-                  printf '{"runtime":{"npm":{"installed":%s}},"tools":[{"name":"rtk","installed":true},{"name":"trellis","installed":true},{"name":"graft","category":"cli","installed":%s,"version":"0.18.0","pinnedVersion":"0.18.0","status":"%s","reason":"%s","nextStep":"%s"},{"name":"java","installed":true},{"name":"maestro","installed":true}],"skills":[{"name":"caveman","installed":true},{"name":"diagnosing-bugs","group":"referenced","installed":%s}],"manualChecks":[]}\n' "$npm_installed" "$graft_installed" "$graft_status" "$graft_reason" "$graft_next" "$external_installed"
+                  printf '{"runtime":{"npm":{"installed":%s}},"tools":[{"name":"rtk","installed":true},{"name":"trellis","installed":true},{"name":"java","installed":true},{"name":"maestro","installed":true}],"skills":[{"name":"caveman","installed":true},{"name":"diagnosing-bugs","group":"referenced","installed":%s}],"manualChecks":[]}\n' "$npm_installed" "$external_installed"
                 else
                   printf 'preflight check\n'
                 fi
@@ -512,7 +459,10 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 plan = next(args for args in invocations if args[1:2] == ["plan"])
                 self.assertEqual(plan.count("--action"), 1)
                 self.assertEqual(plan[plan.index("--action") + 1], action)
-                self.assertIn("--no-mcp", plan)
+                self.assertNotIn("--no-mcp", plan)
+                self.assertIn(
+                    "MCP configuration skipped by --no-mcp.", completed.stdout
+                )
                 modes = self.modes()
                 if dry_run:
                     self.assertNotIn(action, modes)
@@ -523,6 +473,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                     )
                     self.assertNotIn("--action", execution)
                     self.assertEqual(execution[-1], "--yes")
+                    self.assertNotIn("--no-mcp", execution)
                     self.assertLess(modes.index("plan"), modes.index(action))
 
     def test_bash_plan_action_capability_rejects_legacy_source_before_actions(self) -> None:
@@ -557,7 +508,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
 
         for path in (self.log_path, self.args_log_path, self.capability_log_path):
             path.unlink(missing_ok=True)
-        for state in ("npm", "agent", "graft"):
+        for state in ("npm", "agent"):
             (self.state_dir / state).touch()
         # An empty, unrelated project module must not replace the probe's stdlib pathlib.
         (self.project_root / "pathlib.py").touch()
@@ -755,7 +706,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 "--no-mcp",
                 "--no-color",
             ),
-            input=f"n\n{projects_csv}\nn\ny\n",
+            input=f"n\n{projects_csv}\ny\n",
             check=False,
             capture_output=True,
             text=True,
@@ -786,6 +737,12 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         self.assertNotIn("--skills-scope", completed.stdout)
         self.assertNotIn("--project-skills-dir", completed.stdout)
         self.assertNotIn("--trellis", completed.stdout)
+        self.assertIn(
+            "Skip the installer's generic MCP menu. Not forwarded to Onboard.",
+            completed.stdout,
+        )
+        self.assertNotIn("graft", completed.stdout.lower())
+        self.assertNotIn("graft", INSTALL_SH.read_text(encoding="utf-8").lower())
 
     def powershell_environment(self) -> tuple[str, dict[str, str]]:
         runtime = os.environ.get("SBTD_TEST_PWSH") or shutil.which("pwsh")
@@ -829,6 +786,31 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(valid.returncode, 0, valid.stderr)
+        self.assertIn(
+            "Skip the installer's generic MCP menu. Not forwarded to Onboard.",
+            valid.stdout,
+        )
+        self.assertNotIn("graft", valid.stdout.lower())
+        for extra in (
+            ["-GraftRetireLegacy"],
+            ["-GraftLegacyBindings", "unused.json"],
+        ):
+            with self.subTest(extra=extra):
+                rejected_graft = subprocess.run(
+                    [*command, *extra],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    env=environment,
+                    timeout=30,
+                    check=False,
+                )
+                self.assertNotEqual(
+                    rejected_graft.returncode,
+                    0,
+                    "Retired parameter was silently accepted",
+                )
         rejected = subprocess.run(
             [*command, "-TrellisUser", "synthetic"],
             capture_output=True,
@@ -1087,9 +1069,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         self.assertIn("--skills diagnosing-bugs", invocation)
         self.assertIn("--scope global --source auto --yes", invocation)
 
-    def test_working_target_cli_skips_npm_bootstrap_and_optional_graft(
-        self,
-    ) -> None:
+    def test_working_target_cli_skips_npm_bootstrap(self) -> None:
         (self.state_dir / "agent").touch()
 
         completed = self.run_installer()
@@ -1098,111 +1078,66 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         modes = self.modes()
         self.assertEqual(modes[0], "check-agent-cli")
         self.assertNotIn("ensure-npm", modes)
-        self.assertEqual(modes.count("install-graft"), 1)  # read-only probe only
-        self.assertIn("Graft CLI is blocked", completed.stderr)
+        self.assertNotIn("install-graft", modes)
+        combined = (completed.stdout + completed.stderr).lower()
+        self.assertNotIn("install-graft", combined)
+        self.assertNotIn("telemetry", combined)
 
-    def test_graft_install_shows_plan_and_delegates_to_onboard(self) -> None:
-        (self.state_dir / "npm").touch()
-        (self.state_dir / "agent").touch()
-        npm_log = self.root / "npm.log"
-        self.env["FAKE_NPM_LOG"] = str(npm_log)
-        self.write_executable(
-            self.bin_dir / "npm",
-            """
-            #!/bin/sh
-            printf '%s\n' "$*" >> "$FAKE_NPM_LOG"
-            if [ "$1" = "config" ]; then printf '/tmp/fake-prefix\n'; fi
-            exit 0
-            """,
+    def test_retired_flags_die_before_any_onboard_call(self) -> None:
+        cases = (
+            ("--graft-retire-legacy",),
+            ("--graft-legacy-bindings", "/tmp/unused.json"),
+            ("--graft-hooks",),
+            ("install-graft",),
         )
+        for args in cases:
+            with self.subTest(args=args):
+                self.log_path.unlink(missing_ok=True)
+                self.args_log_path.unlink(missing_ok=True)
+                completed = subprocess.run(
+                    (
+                        "/bin/bash",
+                        str(INSTALL_SH),
+                        "--platform",
+                        "codex",
+                        "--source-root",
+                        str(SOURCE_ROOT),
+                        *args,
+                        "--no-color",
+                    ),
+                    cwd=self.project_root,
+                    capture_output=True,
+                    text=True,
+                    env=self.env,
+                    timeout=30,
+                    check=False,
+                )
+                self.assertNotEqual(completed.returncode, 0, completed.stdout)
+                self.assertIn("Unknown option", completed.stderr)
+                self.assertFalse(self.log_path.exists())
+                self.assertFalse(self.args_log_path.exists())
 
-        completed = self.run_installer()
-
+    def test_no_mcp_skips_menu_and_is_not_forwarded(self) -> None:
+        (self.state_dir / "npm").touch()
+        (self.state_dir / "agent").touch()
+        completed = self.run_installer(no_mcp=True)
         self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
-        self.assertIn("@nanonets/graft@0.18.0", completed.stdout)
-        self.assertIn("npm global prefix /tmp/fake-prefix", completed.stdout)
-        self.assertIn("/tmp/fake-home/.graft/telemetry.json", completed.stdout)
-        self.assertEqual(self.modes().count("install-graft"), 2)  # probe + confirmed
-        self.assertTrue((self.state_dir / "graft").exists())
-        self.assertFalse(
-            npm_log.exists(),
-            "wrapper must not run npm directly; the Python probe owns the plan",
+        self.assertIn("MCP configuration skipped by --no-mcp.", completed.stdout)
+        self.assertIn("MCP: skip", completed.stdout)
+        self.assertIn("init", self.modes())
+        self.assertNotIn("install-graft", self.modes())
+        for line in self.invocation_args():
+            self.assertNotIn("--no-mcp", line.split())
+
+    def test_workflow_mode_still_forwards_language_tooling(self) -> None:
+        completed = self.run_workflow_mode(
+            "migration", "--language-tooling", "--json"
         )
-
-    def test_graft_existing_cli_requests_only_telemetry_consent(self) -> None:
-        (self.state_dir / "npm").touch()
-        (self.state_dir / "agent").touch()
-        (self.state_dir / "graft-telemetry-only").touch()
-        completed = self.run_installer()
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertIn("telemetry opt-out plan", completed.stdout)
-        self.assertIn("no package install", completed.stdout)
-        self.assertNotIn("Graft CLI install plan:", completed.stdout)
-        self.assertTrue((self.state_dir / "telemetry-disabled").exists())
-        self.assertFalse((self.state_dir / "graft").exists())
-
-    def test_powershell_existing_graft_requests_only_telemetry_consent(self) -> None:
-        runtime, environment = self.powershell_fake_onboard_environment()
-        (self.state_dir / "npm").touch()
-        (self.state_dir / "agent").touch()
-        (self.state_dir / "graft-telemetry-only").touch()
-        completed = self.run_powershell_installer(runtime, environment)
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertIn("telemetry opt-out plan", completed.stdout)
-        self.assertIn("no package install", completed.stdout)
-        self.assertNotIn("Graft CLI install plan:", completed.stdout)
-        self.assertTrue((self.state_dir / "telemetry-disabled").exists())
-        self.assertFalse((self.state_dir / "graft").exists())
-
-    def test_graft_decline_continues_onboarding_without_install(self) -> None:
-        (self.state_dir / "npm").touch()
-        (self.state_dir / "agent").touch()
-
-        completed = self.run_installer(user_input="n\ny\n", yes=False)
-
-        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
-        modes = self.modes()
-        self.assertEqual(modes.count("install-graft"), 1)  # read-only probe only
-        self.assertIn("init", modes)
-        self.assertFalse((self.state_dir / "graft").exists())
-        self.assertIn("declined", completed.stdout)
-
-    def test_graft_confirmed_failure_aborts_with_nonzero_exit(self) -> None:
-        (self.state_dir / "npm").touch()
-        (self.state_dir / "agent").touch()
-        (self.state_dir / "graft-fails").touch()
-
-        completed = self.run_installer()
-
-        self.assertNotEqual(completed.returncode, 0, completed.stdout)
-        modes = self.modes()
-        self.assertEqual(modes.count("install-graft"), 2)  # probe + confirmed
-        self.assertNotIn("init", modes)
-        self.assertFalse((self.state_dir / "graft").exists())
-
-    def test_graft_blocked_conflict_is_reported_without_overwrite(self) -> None:
-        (self.state_dir / "npm").touch()
-        (self.state_dir / "agent").touch()
-        (self.state_dir / "graft-blocked").touch()
-
-        completed = self.run_installer()
-
-        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
-        self.assertIn("Graft CLI is blocked", completed.stderr)
-        self.assertIn("left untouched", completed.stderr)
-        self.assertEqual(self.modes().count("install-graft"), 1)  # probe only
-        self.assertFalse((self.state_dir / "graft").exists())
-
-    def test_graft_already_installed_skips_reinstall(self) -> None:
-        (self.state_dir / "npm").touch()
-        (self.state_dir / "agent").touch()
-        (self.state_dir / "graft").touch()
-
-        completed = self.run_installer()
-
-        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
-        self.assertIn("already installed and usable", completed.stdout)
-        self.assertEqual(self.modes().count("install-graft"), 1)  # read-only probe only
+        forwarded = self.invocation_args()[-1]
+        self.assertIn("--language-tooling", forwarded)
+        self.assertIn("--json", forwarded)
+        self.assertNotIn("--no-mcp", forwarded.split())
 
     def test_retired_gitnexus_menu_option_now_selects_custom_stdio(self) -> None:
         (self.state_dir / "npm").touch()
@@ -1217,7 +1152,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             exit 0
             """,
         )
-        answers = "n\n\n4\ncustom-echo\necho\n\n\ny\n"
+        answers = "\n4\ncustom-echo\necho\n\n\ny\n"
 
         completed = self.run_installer(user_input=answers, yes=False, no_mcp=False)
 
@@ -1473,7 +1408,10 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 plan = next(args for args in invocations if args[1:2] == ["plan"])
                 self.assertEqual(plan.count("--action"), 1)
                 self.assertEqual(plan[plan.index("--action") + 1], action)
-                self.assertIn("--no-mcp", plan)
+                self.assertNotIn("--no-mcp", plan)
+                self.assertIn(
+                    "MCP configuration skipped by -NoMcp.", completed.stdout
+                )
                 modes = self.modes()
                 if dry_run:
                     self.assertNotIn(action, modes)
@@ -1484,6 +1422,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                     )
                     self.assertNotIn("--action", execution)
                     self.assertEqual(execution[-1], "--yes")
+                    self.assertNotIn("--no-mcp", execution)
                     self.assertLess(modes.index("plan"), modes.index(action))
 
     def test_powershell_plan_action_capability_rejects_legacy_source_before_actions(
@@ -1525,7 +1464,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
 
         for path in (self.log_path, self.args_log_path, self.capability_log_path):
             path.unlink(missing_ok=True)
-        for state in ("npm", "agent", "graft"):
+        for state in ("npm", "agent"):
             (self.state_dir / state).touch()
         (self.project_root / "pathlib.py").touch()
         completed = self.run_powershell_installer(
@@ -1583,7 +1522,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
 
     def test_powershell_blocks_on_ponytail_provider_conflict(self) -> None:
         runtime, environment = self.powershell_fake_onboard_environment()
-        for state in ("npm", "agent", "graft", "ponytail-conflict"):
+        for state in ("npm", "agent", "ponytail-conflict"):
             (self.state_dir / state).touch()
         completed = self.run_powershell_installer(runtime, environment)
         self.assertNotEqual(completed.returncode, 0)
@@ -1593,45 +1532,83 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             self.assertNotIn(forbidden, modes)
         self.assertEqual(list(self.project_root.iterdir()), [])
 
-    def test_powershell_graft_install_delegates_to_onboard_handler(self) -> None:
+
+    def test_powershell_retired_parameters_die_before_onboard(self) -> None:
+        runtime, environment = self.powershell_fake_onboard_environment()
+        cases = (
+            ["-GraftRetireLegacy"],
+            ["-GraftLegacyBindings", "unused.json"],
+            ["--graft-hooks"],
+        )
+        for extra in cases:
+            with self.subTest(extra=extra):
+                self.log_path.unlink(missing_ok=True)
+                completed = subprocess.run(
+                    [
+                        runtime,
+                        "-NoProfile",
+                        "-NonInteractive",
+                        "-File",
+                        str(INSTALL_PS1),
+                        "-Platform",
+                        "codex",
+                        "-SourceRoot",
+                        str(SOURCE_ROOT),
+                        *extra,
+                        "-NoColor",
+                    ],
+                    cwd=self.project_root,
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=30,
+                    check=False,
+                )
+                self.assertNotEqual(completed.returncode, 0, completed.stdout)
+                self.assertFalse(self.log_path.exists())
+
+    def test_powershell_no_mcp_skips_menu_and_is_not_forwarded(self) -> None:
         runtime, environment = self.powershell_fake_onboard_environment()
         (self.state_dir / "npm").touch()
         (self.state_dir / "agent").touch()
-        npm_log = self.root / "npm-pwsh.log"
-        environment["FAKE_NPM_LOG"] = str(npm_log)
-        self.write_executable(
-            self.bin_dir / "npm",
-            '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$FAKE_NPM_LOG"\n'
-            'if [ "$1" = "config" ]; then printf \'/tmp/fake-prefix\\n\'; fi\n'
-            "exit 0\n",
-        )
-
         completed = self.run_powershell_installer(runtime, environment)
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        self.assertIn("MCP configuration skipped by -NoMcp.", completed.stdout)
+        self.assertIn("init", self.modes())
+        self.assertNotIn("install-graft", self.modes())
+        for line in self.invocation_args():
+            self.assertNotIn("--no-mcp", line.split())
 
+    def test_powershell_workflow_still_forwards_language_tooling(self) -> None:
+        runtime, environment = self.powershell_fake_onboard_environment()
+        completed = subprocess.run(
+            [
+                runtime,
+                "-NoProfile",
+                "-NonInteractive",
+                "-File",
+                str(INSTALL_PS1),
+                "-WorkflowMode",
+                "migration",
+                "--source-root",
+                str(SOURCE_ROOT),
+                "--language-tooling",
+                "--json",
+            ],
+            env=environment,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+        )
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertIn("@nanonets/graft@0.18.0", completed.stdout)
-        self.assertIn("npm global prefix /tmp/fake-prefix", completed.stdout)
-        self.assertEqual(self.modes().count("install-graft"), 2)  # probe + confirmed
-        self.assertTrue((self.state_dir / "graft").exists())
-        self.assertFalse(
-            npm_log.exists(),
-            "wrapper must not run npm directly; the Python probe owns the plan",
-        )
-
-    def test_powershell_graft_confirmed_failure_is_nonzero(self) -> None:
-        runtime, environment = self.powershell_fake_onboard_environment()
-        (self.state_dir / "npm").touch()
-        (self.state_dir / "agent").touch()
-        (self.state_dir / "graft-fails").touch()
-
-        completed = self.run_powershell_installer(runtime, environment)
-
-        self.assertNotEqual(completed.returncode, 0, completed.stdout)
-        modes = self.modes()
-        self.assertEqual(modes.count("install-graft"), 2)  # probe + confirmed
-        self.assertNotIn("init", modes)
-        self.assertFalse((self.state_dir / "graft").exists())
-
+        forwarded = self.invocation_args()[-1]
+        self.assertIn("--language-tooling", forwarded)
+        self.assertNotIn("--no-mcp", forwarded.split())
 
 class PowerShellInstallerAgentCliFlowTests(unittest.TestCase):
     def test_powershell_startup_banner_matches_kuno_welcome_panel(self) -> None:
@@ -1663,6 +1640,11 @@ class PowerShellInstallerAgentCliFlowTests(unittest.TestCase):
 
     def test_powershell_script_has_utf8_bom_for_windows_powershell(self) -> None:
         self.assertTrue(INSTALL_PS1.read_bytes().startswith(b"\xef\xbb\xbf"))
+        self.assertNotIn("graft", INSTALL_PS1.read_text(encoding="utf-8").lower())
+        self.assertIn(
+            "Skip the installer's generic MCP menu. Not forwarded to Onboard.",
+            INSTALL_PS1.read_text(encoding="utf-8"),
+        )
 
     def test_powershell_installs_paid_react_bits_skill_at_agent_path(self) -> None:
         source = INSTALL_PS1.read_text(encoding="utf-8")

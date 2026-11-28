@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import stat
+import struct
 import subprocess
 import sys
 import tempfile
@@ -19,9 +20,11 @@ import sbtd_migration_files
 from onboard_contracts import ContractError, canonical_json_bytes
 from sbtd_migration_files import (
     RetainedObjectError,
+    assert_private_file,
     backup_reference,
     directory_snapshot,
     install_reference,
+    preflight_windows_permissions,
     read_file,
     remove_reference,
     require_private_directory,
@@ -29,6 +32,8 @@ from sbtd_migration_files import (
     snapshot,
     write_file,
 )
+from sbtd_retirement_permissions import capture as capture_windows_permissions
+from sbtd_retirement_permissions import digest as windows_permissions_digest
 
 ABSENT = {"type": "absent", "checksum": None}
 
@@ -1281,6 +1286,212 @@ def _powershell_acl_proven(path: Path) -> bool:
     except ValueError:
         return False
     return isinstance(result, dict) and result.get("ok") is True
+
+
+class WindowsRetirementDigestTests(unittest.TestCase):
+    def test_semantic_digest_binds_order_flags_and_protection_not_offsets_or_slack(self):
+        sid = bytes.fromhex("010100000000000512000000")
+        allow = struct.pack("<BBHI", 0, 0, 20, 0x1F01FF) + sid
+        deny = struct.pack("<BBHI", 1, 0, 20, 0x10) + sid
+
+        def descriptor(first, second, *, control=0x9404, gap=b"", slack=b""):
+            acl = struct.pack("<BBHHH", 2, 0, 48 + len(slack), 2, 0) + first + second + slack
+            return (
+                struct.pack("<BBHIIII", 1, 0, control, 20, 32, 0, 44 + len(gap))
+                + sid + sid + gap + acl
+            )
+
+        baseline = windows_permissions_digest(descriptor(allow, deny))
+        self.assertEqual(baseline, windows_permissions_digest(descriptor(allow, deny, gap=b"\0" * 4, slack=b"\0" * 4)))
+        self.assertNotEqual(baseline, windows_permissions_digest(descriptor(deny, allow)))
+        self.assertNotEqual(baseline, windows_permissions_digest(descriptor(allow, deny, control=0x8404)))
+        inherited = allow[:1] + b"\x10" + allow[2:]
+        self.assertNotEqual(baseline, windows_permissions_digest(descriptor(inherited, deny)))
+        with self.assertRaisesRegex(ContractError, "absent DACL"):
+            windows_permissions_digest(struct.pack("<BBHIIII", 1, 0, 0x8000, 0, 0, 0, 0))
+
+
+@unittest.skipUnless(os.name == "nt", "requires native Windows file security")
+class WindowsRetirementPermissionTests(unittest.TestCase):
+    def test_protected_file_permissions_survive_writes_removal_and_restore(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            target = root / "selected.txt"
+            sibling = root / "inherited.txt"
+            target.write_bytes(b"before")
+            sibling.write_bytes(b"unchanged")
+            _powershell(_SET_RETIREMENT_DACL, target)
+            inherited = _retirement_acl_oracle(sibling)
+            before = _retirement_acl_oracle(target)
+            self.assertFalse(inherited["protected"])
+            self.assertTrue(before["protected"])
+            self.assertEqual(before["order"], ["AccessDenied", "AccessAllowed", "AccessAllowed"])
+            self.assertNotEqual(before["fingerprint"], inherited["fingerprint"])
+
+            raw = capture_windows_permissions(target)
+            fingerprint = windows_permissions_digest(raw)
+            self.assertEqual(
+                subprocess.check_output(
+                    [
+                        sys.executable, "-B", "-c",
+                        "import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); "
+                        "from sbtd_retirement_permissions import capture, digest; "
+                        "print(digest(capture(Path(sys.argv[2]))))",
+                        str(SCRIPTS), str(target),
+                    ],
+                    text=True,
+                    timeout=15,
+                ).strip(),
+                fingerprint,
+            )
+
+            target.chmod(stat.S_IREAD)
+            mode = stat.S_IMODE(target.stat().st_mode)
+            vault = require_private_directory(root / "private", create=True)
+            backup = vault / "original"
+            backup_reference(
+                {"path": str(target), "state": file_state(b"before")}, backup,
+                private_root=vault,
+            )
+            assert_private_file(backup)
+            self.assertNotEqual(_retirement_acl_oracle(backup)["fingerprint"], before["fingerprint"])
+
+            write_file(
+                target, b"after", file_state(b"before"), scope=root,
+                windows_permissions=raw, expected_windows_digest=fingerprint, windows_mode=mode,
+            )
+            self.assertEqual(target.read_bytes(), b"after")
+            self.assertEqual(stat.S_IMODE(target.stat().st_mode), mode)
+            self.assertEqual(_retirement_acl_oracle(target), before)
+            remove_reference(
+                target, file_state(b"after"), scope=root,
+                expected_windows_digest=fingerprint, expected_windows_mode=mode,
+            )
+            self.assertFalse(target.exists())
+            write_file(target, backup.read_bytes(), ABSENT, scope=root, windows_permissions=raw, windows_mode=mode)
+            self.assertEqual(target.read_bytes(), b"before")
+            self.assertEqual(stat.S_IMODE(target.stat().st_mode), mode)
+            self.assertEqual(_retirement_acl_oracle(target), before)
+            self.assertEqual(_retirement_acl_oracle(sibling), inherited)
+            assert_private_file(backup)
+
+    def test_unprotected_inherited_dacl_survives_a_write(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            target = root / "selected.txt"
+            target.write_bytes(b"before")
+            before = _retirement_acl_oracle(target)
+            self.assertFalse(before["protected"])
+            self.assertTrue(before["inherited"])
+
+            raw = capture_windows_permissions(target)
+            write_file(
+                target, b"after", file_state(b"before"), scope=root,
+                windows_permissions=raw, expected_windows_digest=windows_permissions_digest(raw),
+            )
+            self.assertEqual(target.read_bytes(), b"after")
+            self.assertEqual(_retirement_acl_oracle(target), before)
+
+    def test_null_and_empty_dacls_never_authorize_a_live_write(self):
+        import ctypes
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            target = root / "selected.txt"
+            target.write_bytes(b"before")
+            raw = capture_windows_permissions(target)
+            fingerprint = windows_permissions_digest(raw)
+            api = sbtd_migration_files._win32()
+            handle = api.CreateFileW(str(target), 0x60000, 7, None, 3, 0x200000, None)
+            self.assertNotIn(handle, (None, ctypes.c_void_p(-1).value))
+            dacl = ctypes.c_void_p()
+            descriptor = ctypes.c_void_p()
+            try:
+                self.assertEqual(api.GetSecurityInfo(
+                    handle, 1, 4, None, None, ctypes.byref(dacl), None, ctypes.byref(descriptor),
+                ), 0)
+                self.assertEqual(api.SetSecurityInfo(handle, 1, 0x80000004, None, None, None, None), 0)
+                with self.assertRaisesRegex(ContractError, "null DACL"):
+                    capture_windows_permissions(target)
+                with self.assertRaises(ContractError):
+                    write_file(
+                        target, b"replacement", file_state(b"before"), scope=root,
+                        windows_permissions=raw, expected_windows_digest=fingerprint,
+                    )
+                with self.assertRaises(ContractError):
+                    remove_reference(target, file_state(b"before"), scope=root, expected_windows_digest=fingerprint)
+                with self.assertRaisesRegex(ContractError, "null DACL"):
+                    capture_windows_permissions(target)
+                self.assertEqual(target.read_bytes(), b"before")
+
+                empty = ctypes.create_string_buffer(8)
+                self.assertTrue(api.InitializeAcl(empty, len(empty), 2))
+                self.assertEqual(api.SetSecurityInfo(handle, 1, 0x80000004, None, None, empty, None), 0)
+                with self.assertRaisesRegex(ContractError, "empty DACL"):
+                    capture_windows_permissions(target)
+            finally:
+                try:
+                    if descriptor.value:
+                        self.assertEqual(api.SetSecurityInfo(handle, 1, 0x80000004, None, None, dacl, None), 0)
+                finally:
+                    if descriptor.value:
+                        api.LocalFree(descriptor)
+                    api.CloseHandle(handle)
+            self.assertEqual(target.read_bytes(), b"before")
+
+
+    def test_unassignable_owner_cannot_publish_a_candidate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            original = root / "selected.txt"
+            target = root / "absent.txt"
+            original.write_bytes(b"unchanged")
+            raw = capture_windows_permissions(original)
+            # A synthetic non-token owner. This exercises real Win32 replay.
+            foreign = bytearray(raw)
+            struct.pack_into("<I", foreign, 4, len(foreign))
+            foreign.extend(bytes.fromhex("010500000000000515000000ae040000c01000001d28000047430800"))
+            replacement = bytes(foreign)
+            self.assertNotEqual(windows_permissions_digest(replacement), windows_permissions_digest(raw))
+            with self.assertRaisesRegex(ContractError, "replayed|replay"):
+                preflight_windows_permissions(original, replacement)
+            with self.assertRaisesRegex(ContractError, "replayed|replay"):
+                write_file(
+                    target, b"not published", ABSENT, scope=root, windows_permissions=replacement,
+                    windows_mode=stat.S_IMODE(original.stat().st_mode),
+                )
+            self.assertFalse(target.exists())
+            self.assertEqual(original.read_bytes(), b"unchanged")
+            self.assertEqual(windows_permissions_digest(capture_windows_permissions(original)), windows_permissions_digest(raw))
+
+
+_SET_RETIREMENT_DACL = """
+$ErrorActionPreference = 'Stop'
+$path = $env:SBTD_PRIVATE_PATH
+$me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+$acl = Get-Acl -LiteralPath $path
+$acl.SetSecurityDescriptorSddlForm("D:P(D;;0x10;;;WD)(A;;FA;;;$me)(A;;FR;;;WD)", 'Access')
+Set-Acl -LiteralPath $path -AclObject $acl
+[Console]::Out.Write('ok')
+"""
+
+_OBSERVE_RETIREMENT_DACL = """
+$ErrorActionPreference = 'Stop'
+$acl = Get-Acl -LiteralPath $env:SBTD_PRIVATE_PATH
+$raw = [System.Security.AccessControl.RawSecurityDescriptor]::new($acl.GetSecurityDescriptorBinaryForm(), 0)
+$sddl = $raw.GetSddlForm('Owner,Group,Access')
+$hash = [System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($sddl))
+[Console]::Out.Write((@{
+    protected = [bool]($raw.ControlFlags -band 4096)
+    order = @($raw.DiscretionaryAcl | ForEach-Object { $_.AceType.ToString() })
+    inherited = [bool]($raw.DiscretionaryAcl | Where-Object { $_.IsInherited } | Select-Object -First 1)
+    fingerprint = [Convert]::ToBase64String($hash)
+} | ConvertTo-Json -Compress))
+"""
+
+
+def _retirement_acl_oracle(path: Path) -> dict:
+    return json.loads(_powershell(_OBSERVE_RETIREMENT_DACL, path, check=False))
 
 
 if __name__ == "__main__":

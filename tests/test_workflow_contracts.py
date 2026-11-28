@@ -978,7 +978,7 @@ class WorkflowContractTests(unittest.TestCase):
 
         summary_omp = [
             row
-            for row in markdown_table(entrypoint, "## 10. 当前版本汇总")
+            for row in markdown_table(entrypoint, "## 9. 当前版本汇总")
             if row["工具"] == "OMP"
         ]
         self.assertEqual(len(summary_omp), 1)

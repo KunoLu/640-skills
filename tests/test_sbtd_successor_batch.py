@@ -19,7 +19,7 @@ import onboard_arguments
 import onboard_contracts as contracts
 import sbtd_migration_plan
 from onboard_contracts import ContractError, canonical_json_bytes
-from sbtd_graft_deployment import load_deployment_context
+from sbtd_deployment import load_deployment_context
 from sbtd_migration import apply_migration
 from sbtd_migration_files import read_file, snapshot
 from sbtd_migration_plan import plan_migration, validate_legacy_inputs
@@ -28,7 +28,7 @@ from tests.test_sbtd_migration_apply import legacy_project
 
 _TEST_APPROVAL_KEY = None
 _TEST_KEY_PATCH = None
-_TOOL_VERSIONS = {"onboard": "fixture", "graft": "0.18.0"}
+_TOOL_VERSIONS = {"onboard": "fixture"}
 
 
 def setUpModule():

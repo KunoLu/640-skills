@@ -12,6 +12,11 @@
 ### 变更
 
 - 版本检查自动化不再监控 Graft。删除 `ENTRYPOINT.md` 监控表和版本汇总中的 Graft 行、已发布 pin 同步例外，以及 Graft 专属的范围与影响检查。`update` 不再有跳过 Graft 的分支，自动化也不再查询 `nanonets/graft` 或 `@nanonets/graft`。本条不改变已发布工作流中固定的 Graft 运行时。
+- **不兼容变更：**移除 Graft 安装器、启动器、MCP 接线和 hooks。既有 Codex／OMP 配置仍可能引用已移除的启动器。项目 `graft/` 和 `.graft` 继续忽略；不自动删除项目数据、遥测文件或全局 npm 包。
+- 用 `graftRetirement` 检查选定配置域。优先在明确确认的 reset 或 upgrade 计划中退役已证明归属的条目。若 Onboard 已被替换，使用 `cleanup-legacy` 重新生成计划。归属不明且指向缺失或即将被替换的启动器时，阻断 reset 和 upgrade。全局变更可能影响其他项目。仅凭私有备份与匹配回执恢复，见[退役与回退](sbtd-workflow-onboard/REFERENCE.md#codex-and-omp-wiring-and-deployment)。
+- Windows 文件退役须同时保留原生访问权限与字节。无法读取或复现原生权限描述符时，阻断写入；私有备份不继承目标文件的权限。
+- 仍包含退役操作的迁移计划须重新生成。历史 `verify` 要求签名将精确前驱绑定到当前执行后继，否则返回 `version-conflict`。按资源报告字节或可信权限漂移，不重跑 smoke，也不授权写入。仅凭字节相同不能证明权限未变。
+- 新部署和现态调和执行本地只读 `check-projects` 并复核封存的写入目标。迁移等待单独清理时，此检查只认可原 manifest 和成功 apply 回执绑定到选定项目的 `.trellis` 原件。它不证明业务 API、宿主或模型验收通过。
 
 ## v2.2.0-rc.2（2026-11-25）
 

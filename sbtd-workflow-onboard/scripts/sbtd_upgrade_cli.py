@@ -100,6 +100,8 @@ def _validate_supplied_paths(args: Any, names: tuple[str, ...]) -> None:
             raise ValueError("a supplied path must not be blank")
 
 
+
+
 def run_upgrade(args: Any) -> int:
     if args.phase == "verify" and args.probe and not args.yes:
         return _emit(args, {"mode": "upgrade", "phase": "verify", "status": "blocked",
@@ -119,7 +121,9 @@ def run_upgrade(args: Any) -> int:
         )
 
         if args.phase == "plan":
-            plan = plan_upgrade(_load(args.scope), _input_path(args.backup_root))
+            scope = _load(args.scope)
+            # retirement_evidence belongs in the scope object. The parent parser owns that field.
+            plan = plan_upgrade(scope, _input_path(args.backup_root))
             output = _save(plan, args.output)
             result = {"mode": "upgrade", "phase": "plan", "plan": plan, "plan_path": output}
             status = plan["payload"].get("status", "planned")

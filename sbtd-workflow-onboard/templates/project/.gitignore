@@ -59,7 +59,7 @@ venv/
 .impeccable/critique/
 .impeccable/config.local.json
 
-# ---------- Graft ----------
+# ---------- 历史 Graft 数据 ----------
 /graft
 /.graft
 

@@ -1008,8 +1008,7 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "onboard",
-            "graft"
+            "onboard"
           ],
           "properties": {
             "onboard": {
@@ -1724,8 +1723,7 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "onboard",
-            "graft"
+            "onboard"
           ],
           "properties": {
             "onboard": {
@@ -1816,6 +1814,7 @@
         "status": {
           "enum": [
             "verified",
+            "not-verified",
             "blocked",
             "failed"
           ]
@@ -1860,6 +1859,41 @@
         }
       ]
     },
+    "legacy_resource_status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resource_id",
+        "target",
+        "bytes",
+        "mode",
+        "status",
+        "mode_source",
+        "reason"
+      ],
+      "properties": {
+        "resource_id": {"$ref": "#/$defs/digest"},
+        "target": {"$ref": "#/$defs/absolute_path"},
+        "bytes": {"enum": ["match", "differ", "unreadable"]},
+        "mode": {"enum": ["match", "differ", "absent"]},
+        "status": {"enum": ["verified", "drifted", "not-verified"]},
+        "mode_source": {
+          "anyOf": [
+            {"type": "null"},
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "purpose"],
+              "properties": {
+                "kind": {"const": "signed-attestation"},
+                "purpose": {"const": "post-write-mode"}
+              }
+            }
+          ]
+        },
+        "reason": {"$ref": "#/$defs/nonblank"}
+      }
+    },
     "verification_payload": {
       "type": "object",
       "additionalProperties": false,
@@ -1885,6 +1919,7 @@
         "status": {
           "enum": [
             "verified",
+            "not-verified",
             "blocked",
             "failed"
           ]
@@ -1908,6 +1943,13 @@
         },
         "acceptance_basis": {
           "const": "current-state"
+        },
+        "legacy_resources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/legacy_resource_status"
+          },
+          "minItems": 0
         }
       }
     },
@@ -2785,6 +2827,7 @@
             "planned",
             "applied",
             "verified",
+            "not-verified",
             "cleaned",
             "restored",
             "reconciled",
@@ -2834,6 +2877,7 @@
             "applied",
             "reconciled",
             "verified",
+            "not-verified",
             "cleaned",
             "already-complete",
             "blocked",
@@ -3043,6 +3087,7 @@
               "status": {
                 "enum": [
                   "verified",
+                  "not-verified",
                   "blocked",
                   "failed"
                 ]
@@ -3080,7 +3125,8 @@
               },
               "status": {
                 "enum": [
-                  "verified"
+                  "verified",
+                  "not-verified"
                 ]
               }
             }

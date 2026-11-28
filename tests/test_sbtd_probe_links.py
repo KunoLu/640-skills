@@ -85,7 +85,6 @@ def _runtime(base: Path) -> dict[str, str]:
 def _package(base: Path) -> Path:
     root = base / "package"
     (root / "scripts").mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(SCRIPTS / "sbtd_graft_entry.py", root / "scripts" / "sbtd_graft_entry.py")
     return root
 
 
@@ -131,6 +130,7 @@ def _sealed_plan(vault: Path, scope: dict, resources: list[dict]) -> dict:
         "resources": resources,
         "domains": [],
         "blocked_resources": [],
+        "graftRetirement": hosts.plan_retirement(scope, vault, evidence=[])["disclosure"],
     }
     return {"schema_version": 1, "plan_id": _digest(payload), "payload": payload}
 
@@ -269,6 +269,8 @@ class _Rig:
         self.expected_skills = list(expected_skills)
         self.extra_roots: list[str] = []
         self.spawns: list[list[str]] = []
+        self.omp_agent: Path | None = None
+        self.omp_commands_skills: list[str] | None = None
 
     def _mcp_handler(self, request: dict):
         method = request.get("method")
@@ -365,9 +367,16 @@ class _Rig:
                 },
             }
         if rtype == "get_available_commands":
+            assert self.omp_agent is not None
+            active = self.omp_agent / "skills"
+            self.omp_commands_skills = sorted(
+                child.name
+                for child in active.iterdir()
+                if child.is_dir() and (child / "SKILL.md").is_file()
+            ) if active.is_dir() else []
             return {
                 **envelope,
-                "data": [{"name": f"skill:{name}"} for name in self.expected_skills],
+                "data": [{"name": f"skill:{name}"} for name in self.omp_commands_skills],
             }
         return None
 
@@ -376,6 +385,7 @@ class _Rig:
         if "app-server" in argv:
             return _Proc(self._codex_handler)
         if "--mode" in argv:
+            self.omp_agent = Path(env["PI_CODING_AGENT_DIR"])
             return _Proc(self._omp_handler)
         return _Proc(self._mcp_handler)
 
@@ -1167,10 +1177,6 @@ class VerifyHostsProbeLinkTests(_LinksCase):
     def _aligned_scope(self, platform: str = "codex"):
         runtime, package = _runtime(self.base), _package(self.base)
         root, link, physical, _alpha = self.linked_fixture()
-        # The installed Onboard copy used for launcher bindings.
-        onboard = root / "sbtd-workflow-onboard" / "scripts"
-        onboard.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(SCRIPTS / "sbtd_graft_entry.py", onboard / "sbtd_graft_entry.py")
         project = self.base / "project"
         project.mkdir()
         if platform == "codex":
@@ -1178,10 +1184,6 @@ class VerifyHostsProbeLinkTests(_LinksCase):
         else:
             host = _omp_host(self.base, runtime, root, project)
         scope = {"hosts": [host], "skills_roots": [str(root)]}
-        resource = hosts.build_host_resources(scope, package_root=package)[0]
-        config = Path(host["config"])
-        config.parent.mkdir(parents=True, exist_ok=True)
-        config.write_bytes(hosts.render_resource(resource))
         return scope, package, root, link, physical, host
 
     def test_authorized_probe_passes_with_full_link_evidence(self) -> None:
@@ -1247,6 +1249,7 @@ class VerifyHostsProbeLinkTests(_LinksCase):
         skills = entry["host"]["checks"]["skills"]
         self.assertEqual(skills["status"], "verified", skills)
         self.assertEqual(skills["link_authorizations"][0]["status"], "materialized")
+        self.assertEqual(rig.omp_commands_skills, ["alpha", "linked-skill"])
 
     def test_unauthorized_link_fails_before_any_host_spawn(self) -> None:
         scope, package, root, link, physical, _host = self._aligned_scope()
@@ -1325,9 +1328,6 @@ class UpgradeEngineLinkTests(_LinksCase):
     def _engine_fixture(self):
         runtime, package = _runtime(self.base), _package(self.base)
         root, link, physical, alpha = self.linked_fixture()
-        onboard = root / "sbtd-workflow-onboard" / "scripts"
-        onboard.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(SCRIPTS / "sbtd_graft_entry.py", onboard / "sbtd_graft_entry.py")
         project = self.base / "project"
         project.mkdir()
         host = _codex_host(self.base, runtime, root, project)
@@ -1410,10 +1410,6 @@ class UpgradeEngineLinkTests(_LinksCase):
             )
             for selected in scope["hosts"]
         ]
-        for resource in hosts.build_host_resources(scope, package_root=SCRIPTS.parent):
-            config = Path(resource["target"])
-            config.parent.mkdir(parents=True, exist_ok=True)
-            config.write_bytes(hosts.render_resource(resource))
         rig = _Rig(self, ["alpha", "linked-skill", "sbtd-workflow-onboard"]).install()
         result = sbtd_upgrade.verify_upgrade(plan, probe=True, link_authorizations=documents)
         self.assertEqual(result["status"], "aligned", result)
@@ -1458,10 +1454,6 @@ class UpgradeEngineLinkTests(_LinksCase):
         document = sbtd_upgrade.prepare_probe_link_authorization(
             plan, host_id=HOST_ID, skill_path=str(link), target_path=str(physical)
         )
-        resource = hosts.build_host_resources(scope, package_root=SCRIPTS.parent)[0]
-        config = Path(host["config"])
-        config.parent.mkdir(parents=True, exist_ok=True)
-        config.write_bytes(hosts.render_resource(resource))
         rig = _Rig(self, ["alpha", "linked-skill", "sbtd-workflow-onboard"]).install()
         result = sbtd_upgrade.verify_upgrade(
             plan, probe=True, link_authorizations=[document]
@@ -1474,7 +1466,7 @@ class UpgradeEngineLinkTests(_LinksCase):
         self.assertEqual(evidence[0]["authorization_id"], document["authorization_id"])
         self.assertEqual(evidence[0]["status"], "materialized")
         self.assertEqual(evidence[0]["target"], document["payload"]["target"])
-        self.assertTrue(rig.host_spawns())
+        self.assertEqual(len(rig.host_spawns()), 1)
         self.assertEqual(plan_path.read_bytes(), plan_bytes)
         self.assertEqual(legacy_receipt.read_bytes(), receipt_bytes)
         self.assertTrue(link.is_symlink())
@@ -1512,10 +1504,13 @@ class UpgradeCliLinkTests(_LinksCase):
 
     def _cli_fixture(self):
         root, link, physical, _alpha = self.linked_fixture()
+        project = self.base / "project"
+        project.mkdir()
+        host = _codex_host(self.base, _runtime(self.base), root, project)
         scope = {
             "schema_version": 1,
             "skills_roots": [str(root)],
-            "hosts": [{"id": HOST_ID, "skills_roots": [str(root)]}],
+            "hosts": [host],
             "decisions": {},
         }
         vault = require_private_directory(self.base / "vault", create=True)
@@ -1656,10 +1651,6 @@ class UpgradeCliLinkTests(_LinksCase):
         first_file.write_text(json.dumps(first), encoding="utf-8")
         second_file = self.base / "auth-two.json"
         second_file.write_text(json.dumps(second_doc), encoding="utf-8")
-        resource = hosts.build_host_resources(scope, package_root=SCRIPTS.parent)[0]
-        config = Path(host["config"])
-        config.parent.mkdir(parents=True, exist_ok=True)
-        config.write_bytes(hosts.render_resource(resource))
         rig = _Rig(
             self, ["alpha", "linked-skill", "other-skill", "sbtd-workflow-onboard"]
         ).install()

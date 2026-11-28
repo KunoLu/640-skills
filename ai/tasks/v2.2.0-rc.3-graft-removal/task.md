@@ -4,12 +4,12 @@ id: v2.2.0-rc.3-graft-removal
 workflow_mode: strict
 mode_source: user
 mode_note: rc.3 PRD D11、D13；T2 main CI 通过后接续 T3。
-status: "blocked"
+status: "checking"
 branch: feat/v2.2.0-rc.3-graft-removal
 created_at: '2026-11-27T18:51:31.622028+08:00'
-updated_at: "2026-11-27T18:52:38.180501+08:00"
+updated_at: "2026-11-28T08:34:31.342631+08:00"
 completed_at: null
-"blocked_reason": "OMP：PRD D7 与 rc.2 旧回执权限字段不一致；按定稿停止条件，等待确认缺失历史权限时的逐资源结果。"
+"blocked_reason": null
 ---
 # T3：移除 Graft 与存量安装退役
 
@@ -22,7 +22,7 @@ completed_at: null
 FR-7／FR-8、D6／D7：移除启动和接线能力，保持非目标宿主能力；证据不足不得退役。只在隔离夹具操作，不接触实际宿主。保留历史数据 ignore、不可变记录与原件。T4 的 agy 适配和可选 ast-grep 检测不在本 PR。
 
 - Legacy Safety：复用已完成的 T2 50 项退役夹具，另测新建文件、固定根正例、OMP 生效目录和历史权限证据；删除模块前建立 rc.2 与保留行为基线。
-- Refactoring：先保护 `omp_agents_target` 与 `sbtd_omp_sources` 的共享解析依赖；不把删除专用模块作为绕过历史校验的手段。未批准生产编辑。
+- Refactoring：先保护 `omp_agents_target` 与 `sbtd_omp_sources` 的共享解析依赖；不把删除专用模块作为绕过历史校验的手段。现有安装、迁移和升级入口各自保留调用与授权边界。
 - DDIA／migration：设计前确认归属、写后状态及权限证明，保留 plan_id、备份、逐项回执和条件恢复。未具备的历史证据不得补造。
 - 未完整调用 grill-with-docs：已给定 PRD 与范围；下列事实差异需要用户决定，不是开放式需求访谈。后续生产路径须完成可逆验证、项目验证、Release Readiness、内外审及同 SHA CI。
 
@@ -30,7 +30,16 @@ FR-7／FR-8、D6／D7：移除启动和接线能力，保持非目标宿主能�
 
 PRD 要求历史 Graft 资源按记录的字节和权限比对。rc.2 tag `d8b2191204e368035fd69544aa74c6600961a2f6` 的 `onboard-contracts.schema.json` 中 `resource_result.after` 使用封闭 `state`，只允许 `type`、`checksum`；对普通文件，`sbtd_migration_files.snapshot` 只哈希内容。相同字节从 0600 改为 0644，rc.2 生产函数返回相同状态。`backup_ref` 指向写入前备份，不等于独立的写后权限证据，尤其是新建文件。T2 控制器记录了自己的夹具模式，不会给旧部署回执增加字段。
 
-建议：已证实字节或权限不同记 drifted；字节相同且有可信独立写后权限记录才可判两者匹配；字节相同但缺历史权限证据，标该资源 not-verified 并列明原因，不误报 drifted 或 verified，继续其他资源。该只读结果不授权退役、清理或升级。等待确认；不修改旧 schema 或回执来补历史。
+已确认：已证实字节或权限不同记 `drifted`；字节相同且有可信独立写后权限记录才可判 `verified`；字节相同但缺历史权限证据，标该资源 `not-verified` 并列明原因，继续其他资源。三种状态均不授权变更；不修改旧 schema 或回执来补历史。
+
+## 实施与独立审查边界
+
+- **存量退役（D6）**：只读 `graftRetirement` 分开报告启动器是否悬空与条目是否归属已证。证据不足不得写；有归属也须确认。`reset` 不用项目模板覆盖已选择退役的项目围栏。`cleanup-legacy`、reset 和 upgrade 均须按已显示范围保留私有原件；回退核对退役后状态，不重装旧软件。项目图、遥测及 npm 包只提供手工指引。
+- **历史验证（D7）**：只信任精确历史前驱到执行后继的已安装签名；缺失或不匹配返回 `version-conflict`。可选写后权限附证是单独、私有且签名绑定具体 deployment、resource、after 与模式的输入。已有 rc.2 原件不变；`verified`、`drifted` 或 `not-verified` 均不直接授权写入。开发夹具使用独立测试密钥；未签发真实发行签名。
+- **新迁移 smoke**：用户选择受信 Onboard `check-projects`，不是业务 API 或模型 smoke。对一个规范项目根显式传原 manifest 与成功 apply 回执；只有与计划一致的 `.trellis` 才可在独立 cleanup 前保留。其他阻断继续生效。普通 `check-projects` 不变；历史 verify 不重跑 smoke。
+- **Windows 原生权限**：`chmod` 和私有 vault 的 DACL 均不能证明目标文件的 ACL。Windows 退役须绑定目标权限摘要，在私有区留存描述符并在发布前验证可恢复性，不能证明则停止。真实 Windows 行为由 PR 的原生必跑用例判定；macOS 测试和静态选择器都不能替代。
+- **证据**：macOS 的 Codex／OMP `check`、`plan` 与 rc.2 对照四组匹配；比较器校验各自的真实 inventory 摘要，仅放行列明差异。44 文件组合中修复了一个测试签名夹具生命周期错误；冻结前六文件复跑 90 passed、4 skipped、49 subtests passed。原生失败和复跑报告均留在本任务 ignored `reports/`。CI 未完成前不能宣称所有平台通过。
+- **未执行**：未改真实宿主、未清理历史图、未发布或同步。下载目录的输入 PRD 与既有历史 lesson 不作为本 PR 的写入目标。独立审查以精确提交及这些已确认决策为准；T4 须等本 PR 三项门禁、合入、分支删除和 main CI。
 
 ## 状态事件
 
@@ -39,3 +48,12 @@ PRD 要求历史 Graft 资源按记录的字节和权限比对。rc.2 tag `d8b21
 | 2026-11-27T18:51:42.263347+08:00 | planned | in-progress | OMP：开始 核对 rc.2 历史部署权限证据与 D7 | {"changed_files": [], "evidence_files": [], "sync_files": {}, "validation": ""} |
 | 2026-11-27T18:52:27.349471+08:00 | in-progress | in-progress | OMP：完成 核对 rc.2 历史部署权限证据与 D7 | {"changed_files": [], "evidence_files": ["ai/tasks/v2.2.0-rc.3-graft-removal/reports/d7-mode.json", "ai/tasks/v2.2.0-rc.3-graft-removal/reports/d7-mode.md"], "sync_files": {"ai/tasks/v2.2.0-rc.3-graft-removal/reports/d7-mode.json": {"mtime_ns": 1795776702359309029, "sha256": "671c4ed40e4d33b554a67b28b0bb702b3337f0e72b46c83dc368bed584a13c8e", "size": 543}, "ai/tasks/v2.2.0-rc.3-graft-removal/reports/d7-mode.md": {"mtime_ns": 1795776719567383037, "sha256": "cf18db78f673fa1b8f399fa4d5476f26383a6b2b3033091ae7edcb27e33dc0ac", "size": 1549}}, "validation": "发行 schema 与生产普通文件快照只含 type/checksum，0600→0644 字节未变时快照不变。D7 缺失模式不能判 verified 或 drifted。"} |
 | 2026-11-27T18:52:38.180501+08:00 | in-progress | blocked | OMP：PRD D7 与 rc.2 旧回执权限字段不一致；按定稿停止条件，等待确认缺失历史权限时的逐资源结果。 | 只做 rc.2 契约及临时普通文件特征实测；不改生产路径，不填造历史权限，不执行退役。 |
+| 2026-11-27T19:00:28.294243+08:00 | blocked | in-progress | OMP：用户确认 D7 三态规则；解除历史权限字段缺失的设计阻断，开始核对迁移消费者与保留行为。 | 字节或有可信证据的权限不符为 drifted；字节及可信写后权限均匹配为 verified；字节相同但缺写后权限证明为 not-verified。逐项只读判断，不授予写入权限。 |
+| 2026-11-27T20:50:07.025210+08:00 | in-progress | blocked | OMP：已接纳 D7 三态；跨版本验证信任策略尚待用户决定。保留未发布的工作区实现，不合入、不使用或修改真实签名密钥。 | 临时 rc.2 tag 实测指纹与已发布签名两端均不符。修正新 plan 仍要求 graft 键的问题后，pytest tests/test_sbtd_migration_rc3_graft.py 5 passed / 1 failed：历史测试夹具试图用当前运行时 apply 旧 manifest，在 lineage 校验处被拒；该用例待用隔离的合法历史回执验证。此失败不是要求用户签名或放宽权限。 |
+| 2026-11-27T20:50:43.832331+08:00 | blocked | in-progress | OMP：用户同意保留安全检查；只在签名精确绑定历史前驱和实际执行后继时验证旧回执，恢复 T3 集成。 | 缺失或错误签名返回 version-conflict。仅使用隔离测试签名；不接触发布私钥，不将开发夹具当作真实发布签名。 |
+| 2026-11-27T21:21:57.971912+08:00 | in-progress | in-progress | OMP：开始 接入用户选定的新部署 smoke：受信 Onboard check-projects 仅检查已选项目，并复核计划内资源写后状态；不作为业务 API、宿主或模型 smoke，历史 verify 不重跑 | {"changed_files": [], "evidence_files": [], "sync_files": {"ai/tasks/v2.2.0-rc.3-graft-removal/reports/d7-mode.json": {"mtime_ns": 1795776702359309029, "sha256": "671c4ed40e4d33b554a67b28b0bb702b3337f0e72b46c83dc368bed584a13c8e", "size": 543}, "ai/tasks/v2.2.0-rc.3-graft-removal/reports/d7-mode.md": {"mtime_ns": 1795776719567383037, "sha256": "cf18db78f673fa1b8f399fa4d5476f26383a6b2b3033091ae7edcb27e33dc0ac", "size": 1549}}, "validation": ""} |
+| 2026-11-27T22:17:32.365839+08:00 | in-progress | in-progress | OMP：开始 修正迁移中期检查：用户已选择仅凭原 manifest、成功 apply 回执与现场匹配的旧目录认定按计划保留；其他项目状态仍检查，普通 onboarding 与 cleanup 授权不变 | {"changed_files": [], "evidence_files": [], "sync_files": {"ai/tasks/v2.2.0-rc.3-graft-removal/reports/d7-mode.json": {"mtime_ns": 1795776702359309029, "sha256": "671c4ed40e4d33b554a67b28b0bb702b3337f0e72b46c83dc368bed584a13c8e", "size": 543}, "ai/tasks/v2.2.0-rc.3-graft-removal/reports/d7-mode.md": {"mtime_ns": 1795776719567383037, "sha256": "cf18db78f673fa1b8f399fa4d5476f26383a6b2b3033091ae7edcb27e33dc0ac", "size": 1549}}, "validation": ""} |
+| 2026-11-27T22:21:20.193753+08:00 | in-progress | in-progress | OMP：完成 验证 upgrade 退役、凭证与条件恢复的受影响调用链 | {"changed_files": [], "evidence_files": ["ai/tasks/v2.2.0-rc.3-graft-removal/reports/phase1-upgrade-focused.txt", "ai/tasks/v2.2.0-rc.3-graft-removal/reports/phase1-upgrade-focused.md"], "sync_files": {"ai/tasks/v2.2.0-rc.3-graft-removal/reports/d7-mode.json": {"mtime_ns": 1795776702359309029, "sha256": "671c4ed40e4d33b554a67b28b0bb702b3337f0e72b46c83dc368bed584a13c8e", "size": 543}, "ai/tasks/v2.2.0-rc.3-graft-removal/reports/d7-mode.md": {"mtime_ns": 1795776719567383037, "sha256": "cf18db78f673fa1b8f399fa4d5476f26383a6b2b3033091ae7edcb27e33dc0ac", "size": 1549}, "ai/tasks/v2.2.0-rc.3-graft-removal/reports/phase1-upgrade-focused.md": {"mtime_ns": 1795789258231999424, "sha256": "3375991558ed45b4362d134c2aeee06409a7b9975588b1c5b66e96f008cfe023", "size": 2260}, "ai/tasks/v2.2.0-rc.3-graft-removal/reports/phase1-upgrade-focused.txt": {"mtime_ns": 1795789238509726000, "sha256": "8b40ced322b1a5ebbde44bda1f3bad6cdfc0084200e438c60016d74def24115c", "size": 455}}, "validation": "隔离 macOS 影响子集：285 passed、10 skipped、70 subtests passed。不是 Windows 实机或最终 PR head。"} |
+| 2026-11-28T07:58:36.412276+08:00 | in-progress | in-progress | OMP：开始 补齐 Windows 退役原生访问权限：用户选择完整保权，备份、执行、恢复绑定原生权限并以 Windows CI 合成夹具验收；无法证明则阻断，不提权、不修改真实宿主 | {"changed_files": [], "evidence_files": [], "sync_files": {"ai/tasks/v2.2.0-rc.3-graft-removal/reports/d7-mode.json": {"mtime_ns": 1795776702359309029, "sha256": "671c4ed40e4d33b554a67b28b0bb702b3337f0e72b46c83dc368bed584a13c8e", "size": 543}, "ai/tasks/v2.2.0-rc.3-graft-removal/reports/d7-mode.md": {"mtime_ns": 1795776719567383037, "sha256": "cf18db78f673fa1b8f399fa4d5476f26383a6b2b3033091ae7edcb27e33dc0ac", "size": 1549}, "ai/tasks/v2.2.0-rc.3-graft-removal/reports/phase1-upgrade-focused.md": {"mtime_ns": 1795789258231999424, "sha256": "3375991558ed45b4362d134c2aeee06409a7b9975588b1c5b66e96f008cfe023", "size": 2260}, "ai/tasks/v2.2.0-rc.3-graft-removal/reports/phase1-upgrade-focused.txt": {"mtime_ns": 1795789238509726000, "sha256": "8b40ced322b1a5ebbde44bda1f3bad6cdfc0084200e438c60016d74def24115c", "size": 455}}, "validation": ""} |
+| 2026-11-28T08:34:09.779246+08:00 | in-progress | in-progress | OMP：完成 收敛 T3 迁移、退役、保权与回退实现，封存本地验证 | {"changed_files": [], "evidence_files": ["ai/tasks/v2.2.0-rc.3-graft-removal/reports/unit-t3-prefreeze-focused.xml", "ai/tasks/v2.2.0-rc.3-graft-removal/reports/unit-t3-prefreeze-focused.md", "ai/tasks/v2.2.0-rc.3-graft-removal/reports/t3-host-parity-final.txt", "ai/tasks/v2.2.0-rc.3-graft-removal/reports/t3-host-parity-final.md"], "sync_files": {"ai/tasks/v2.2.0-rc.3-graft-removal/reports/d7-mode.json": {"mtime_ns": 1795776702359309029, "sha256": "671c4ed40e4d33b554a67b28b0bb702b3337f0e72b46c83dc368bed584a13c8e", "size": 543}, "ai/tasks/v2.2.0-rc.3-graft-removal/reports/d7-mode.md": {"mtime_ns": 1795776719567383037, "sha256": "cf18db78f673fa1b8f399fa4d5476f26383a6b2b3033091ae7edcb27e33dc0ac", "size": 1549}, "ai/tasks/v2.2.0-rc.3-graft-removal/reports/phase1-upgrade-focused.md": {"mtime_ns": 1795789258231999424, "sha256": "3375991558ed45b4362d134c2aeee06409a7b9975588b1c5b66e96f008cfe023", "size": 2260}, "ai/tasks/v2.2.0-rc.3-graft-removal/reports/phase1-upgrade-focused.txt": {"mtime_ns": 1795789238509726000, "sha256": "8b40ced322b1a5ebbde44bda1f3bad6cdfc0084200e438c60016d74def24115c", "size": 455}, "ai/tasks/v2.2.0-rc.3-graft-removal/reports/t3-host-parity-final.md": {"mtime_ns": 1795825311002756855, "sha256": "3fbb67eb1504a012282035ab82377fa4da4bf075a32be79e62ecce337e10bd50", "size": 2180}, "ai/tasks/v2.2.0-rc.3-graft-removal/reports/t3-host-parity-final.txt": {"mtime_ns": 1795825292952755382, "sha256": "a8b28b9e6f96f00ba38236d83f434dc59547e1148965078dbf46a6304a4be68a", "size": 1342}, "ai/tasks/v2.2.0-rc.3-graft-removal/reports/unit-t3-prefreeze-focused.md": {"mtime_ns": 1795825967459351402, "sha256": "fea212382db1502154ce36769b4cc454f995ab36f99f22d89c035eeec151af80", "size": 2109}, "ai/tasks/v2.2.0-rc.3-graft-removal/reports/unit-t3-prefreeze-focused.xml": {"mtime_ns": 1795825940239147036, "sha256": "2c60d18e4f69b570448ba1690aaff4cbfe60e9b4ca7e61dd6bb9e58afb3c2840", "size": 15436}}, "validation": "四组 Codex/OMP plan/check 对照通过。历史观察者夹具修复后，六个影响文件 90 passed、4 skipped、49 subtests passed。Windows 必跑节点已注册；Mac 不是原生 Windows 证明。"} |
+| 2026-11-28T08:34:31.342631+08:00 | in-progress | checking | OMP：开始精确候选提交的内置 /review 和 PR CI；等待 Windows 原生权限证据及 agy 外审。 | 只冻结 T3。没有把跳过、工作区报告或旧 SHA 当成发布验收。 |

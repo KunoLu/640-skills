@@ -374,6 +374,14 @@ class MigrationPhaseTests(ParseErrorAssertions):
         )
         self.assertEqual(args.deployment_evidence, "d.json")
 
+    def test_detached_mode_proof_is_verify_only(self) -> None:
+        chain = ["--manifest", "m.json", "--apply-receipt", "a.json", "--deployment-evidence", "d.json"]
+        proof = ["--post-write-attestation", "modes.json"]
+        args = parse_workflow_args(["migration", "--phase", "verify", *chain, *proof])
+        self.assertEqual(args.post_write_attestation, "modes.json")
+        self.assert_parse_error(["migration", "--phase", "cleanup", *chain, "--verification", "v.json", *proof])
+        self.assert_parse_error(["migration", "--phase", "apply", "--manifest", "m.json", *proof])
+
     def test_verify_phase_requires_full_evidence_chain(self) -> None:
         self.assert_parse_error(
             ["migration", "--phase", "verify", "--manifest", "m.json"]
@@ -478,7 +486,6 @@ class MigrationPhaseTests(ParseErrorAssertions):
             ["--deployment-evidence", "existing.json"],
             ["--verification", "verification.json"],
             ["--confirm-cleanup", "cleanup-id"],
-            ["--graft-hooks"],
             ["--no-routing-approvals"],
         ):
             with self.subTest(extra=extra[0]):

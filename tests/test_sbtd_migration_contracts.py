@@ -69,7 +69,7 @@ class MigrationIdentityContractTests(unittest.TestCase):
                 "backup_root": str(base / "vault"),
                 "created_at": "2026-09-19T00:00:00Z",
                 "retention": copy.deepcopy(build_manifest_payload()["retention"]),
-                "tool_versions": {"onboard": "fixture", "graft": "0.18.0"},
+                "tool_versions": {"onboard": "fixture"},
                 "deployment": None,
             }
             sealed = contracts.seal_document("manifest", payload)

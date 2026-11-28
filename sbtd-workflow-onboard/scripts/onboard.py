@@ -30,7 +30,6 @@ if __name__ == "__main__":
 
 if TYPE_CHECKING:
     from sbtd_identity import IdentityResult
-from graft_runtime import check_graft, install_graft
 from onboard_arguments import (
     SingleValueAction,
     WorkflowArgumentParser,
@@ -38,6 +37,7 @@ from onboard_arguments import (
     _check_migration_context,
     add_cleanup_legacy_parser,
     add_migration_parser,
+    add_retirement_options,
     add_recovery_parser,
     add_upgrade_parser,
     validate_cleanup_legacy_args,
@@ -49,6 +49,7 @@ from onboard_arguments import (
 from onboard_contracts import canonical_json_bytes
 from sbtd_external_notices import SUPPLEMENTS, copy_notices, notice_overlay
 from sbtd_project import StateInspection, TaskDataError, inspect_project_state
+from sbtd_retirement_paths import HISTORY_DIRS, HISTORY_IGNORE_PROBES
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 SKILL_ENTRY_DIR = Path(__file__).absolute().parents[1]
@@ -1507,7 +1508,7 @@ def check_react_bits_project(project_root: Path) -> dict[str, object]:
 
 
 def build_project_check(
-    project_root: Path, skip_agents: bool = False
+    project_root: Path, skip_agents: bool = False, *, migration_context: tuple[Path, Path] | None = None
 ) -> dict[str, object]:
     from sbtd_language_tooling import detect_project_languages
 
@@ -1515,18 +1516,30 @@ def build_project_check(
         "projectRoot": str(project_root),
         "playwright": check_playwright_project(project_root),
         "reactBits": check_react_bits_project(project_root),
-        "sbtd": inspect_project_setup(project_root, skip_agents),
+        "sbtd": inspect_project_setup(project_root, skip_agents, migration_context=migration_context),
         "languages": detect_project_languages(project_root),
     }
 
 
 def build_projects_check_results(args: argparse.Namespace) -> dict[str, object]:
     project_roots = resolve_project_roots(args, required=True)
+    manifest = getattr(args, "migration_manifest", None)
+    receipt = getattr(args, "migration_apply_receipt", None)
+    context = None
+    if manifest is not None or receipt is not None:
+        if not manifest or not receipt:
+            raise SystemExit("check-projects requires both migration evidence paths")
+        raw_root = Path(args.projects_root)
+        if len(project_roots) != 1 or not raw_root.is_absolute() or str(raw_root) != str(project_roots[0]):
+            raise SystemExit("migration check-projects requires one canonical project root")
+        if getattr(args, "skip_project_agents", False):
+            raise SystemExit("migration check-projects cannot skip project rules")
+        context = (Path(manifest), Path(receipt))
     return {
         "mode": "check-projects",
         "projects": [
             build_project_check(
-                project_root, bool(getattr(args, "skip_project_agents", False))
+                project_root, bool(getattr(args, "skip_project_agents", False)), migration_context=context
             )
             for project_root in project_roots
         ],
@@ -2189,8 +2202,6 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
                 item["maintenanceBlockedReason"] = maintenance["blockedReason"]
 
     tools = [check_cli_tool(spec) for spec in CLI_TOOLS]
-    graft_check = check_graft()
-    tools.append(graft_check)
     java_check = check_java_for_maestro()
     maestro_check = check_maestro_cli(java_check)
     tools.append(java_check)
@@ -2238,7 +2249,6 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
             ),
         },
         "runtime": runtime,
-        "graft": graft_check,
         "tools": tools,
         "skills": skills,
         "manualChecks": manual_checks,
@@ -2481,21 +2491,10 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
                 print(f"  project: {item['projectInstall']}")
             print(f"  advice: {item['advice']}")
 
-    graft = results["graft"]
-    assert isinstance(graft, dict)
-    print("\nOptional Graft CLI:")
-    print(f"- graft: {graft['status']}")
-    if graft.get("reason"):
-        print(f"  reason: {graft['reason']}")
-    if graft.get("nextStep"):
-        print(f"  next: {graft['nextStep']}")
-    wiring = results.get("graftWiring")
-    if isinstance(wiring, dict):
-        print(f"\nGraft wiring: {wiring.get('status')}")
-        if wiring.get("reason"):
-            print(f"  reason: {wiring['reason']}")
-        if wiring.get("nextStep"):
-            print(f"  next: {wiring['nextStep']}")
+    if "graftRetirement" in results:
+        from sbtd_onboard_retirement import print_report
+
+        print_report(results)
 
     print("\nSkills:")
     for item in results["skills"]:
@@ -2548,7 +2547,7 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
         if missing["skills"]:
             print("- skills: " + ", ".join(missing["skills"]))
         print(
-            "Resolve prerequisites for the selected operation only; missing npm and optional Graft do not block unrelated safe work."
+            "Resolve prerequisites for the selected operation only; missing npm does not block unrelated safe work."
         )
     else:
         print("\nMissing summary: none")
@@ -2763,10 +2762,7 @@ GITIGNORE_MUST_IGNORE_PROBES = (
     "ai/tasks/archive/2026-Q1/example/reports/raw.json",
     "ai/tasks/archive/undated/example/reports",
     "ai/tasks/archive/undated/example/reports/raw.json",
-    "graft",
-    "graft/index.json",
-    ".graft",
-    ".graft/state.json",
+    *HISTORY_IGNORE_PROBES,
     ".env",
     ".env.local",
     ".impeccable/config.local.json",
@@ -6191,7 +6187,7 @@ def project_scaffold_conflict(project_root: Path, skip_agents: bool) -> str | No
             )
         )
         existing: list[str] = []
-        for relative in (".sbtd", "docs/handoffs", "graft", ".graft"):
+        for relative in (".sbtd", "docs/handoffs", *HISTORY_DIRS):
             if f"/{relative}" not in missing:
                 continue
             if "/" in relative:
@@ -6221,8 +6217,10 @@ def project_scaffold_conflict(project_root: Path, skip_agents: bool) -> str | No
     return None
 
 
-def inspect_project_setup(project_root: Path, skip_agents: bool) -> StateInspection:
-    inspection = inspect_project_state(project_root)
+def inspect_project_setup(
+    project_root: Path, skip_agents: bool, *, migration_context: tuple[Path, Path] | None = None
+) -> StateInspection:
+    inspection = inspect_project_state(project_root, migration_context=migration_context)
     if inspection["status"] == "success":
         conflict = project_scaffold_conflict(project_root, skip_agents)
         if conflict:
@@ -6808,8 +6806,6 @@ def build_plan_payload(
     if global_skills_dir and mode in {"plan", "init", "reset"}:
         payload["cavemanMaintenance"] = caveman_maintenance_plan(global_skills_dir)
         payload["contentAlignment"] = check_content_alignment(global_skills_dir)
-    if mode != "init-projects":
-        payload["graft"] = check_graft()
     return payload
 
 
@@ -6822,25 +6818,10 @@ def print_plan(payload: dict[str, object]) -> None:
         print(f"Skills-only content alignment: {payload['contentAlignment']['status']}")
         if payload["contentAlignment"]["status"] != "aligned":
             print("  Existing valid Skills may be retained; use upgrade for confirmed content alignment.")
-    for label, key in (("Optional Graft CLI", "graft"), ("Graft wiring", "graftWiring")):
-        details = payload.get(key)
-        if isinstance(details, dict):
-            print(f"{label}: {details.get('status')}")
-            if details.get("reason"):
-                print(f"  reason: {details['reason']}")
-            if details.get("nextStep"):
-                print(f"  next: {details['nextStep']}")
-            if key == "graftWiring" and details.get("status") == "planned":
-                for operation in details.get("sharedOperations", []):
-                    print(f"  host resource: {operation['target']}")
-                if details.get("retireLegacy"):
-                    print("  retire only exact owned fixed-root MCP entries for:")
-                    for root in details.get("roots", []):
-                        print(f"    {root}")
-                    for binding in details.get("bindings", []):
-                        if "legacy" in binding:
-                            print(f"  approved old runtime: {json.dumps(binding['legacy'], sort_keys=True)}")
-                    print("  preserve originals; no runtime-directory or backup deletion")
+    if "graftRetirement" in payload:
+        from sbtd_onboard_retirement import print_report
+
+        print_report(payload)
     for item in payload["operations"]:
         if item["sameLocation"]:
             exists = "same source and target"
@@ -7044,30 +7025,23 @@ def run(mode: str, args: argparse.Namespace) -> int:
 
         return run_cleanup_legacy(args)
     if mode in {"init", "init-projects"} and getattr(args, "migration_manifest", None):
-        from sbtd_graft_deployment import run_migration_init
+        from sbtd_deployment import run_migration_init
 
         return run_migration_init(mode, args)
     if mode == "check":
         results = build_check_results(args)
-        if (
-            getattr(args, "platform", None) in {"codex", "omp", "oh-my-pi"}
-            or getattr(args, "graft_hooks", False)
-            or getattr(args, "graft_retire_legacy", False)
-            or getattr(args, "graft_legacy_bindings", None)
-        ):
-            from sbtd_graft_deployment import plan_normal_wiring
+        from sbtd_onboard_retirement import preview
 
-            results["graftWiring"] = plan_normal_wiring(
-                mode, args,
-                installation_targets=[
-                    op.target for op in build_operations(mode, args) if not op.same_location
-                ],
-            )
+        retirement, _ = preview(
+            args, action="check", operations=(), skills_root=scoped_skills_root(args),
+            home=user_home(), environ=os.environ, plan_entries=(),
+        )
+        results["graftRetirement"] = retirement
         developer_plan = build_developer_plan(args)
         if developer_plan is not None:
             results["developerPlan"] = developer_plan
         print_check_results(results, args.json)
-        if cast(dict[str, object], results.get("graftWiring", {})).get("status") == "blocked":
+        if retirement["blocked"]:
             return 2
         if developer_plan is not None:
             if not args.json:
@@ -7113,17 +7087,6 @@ def run(mode: str, args: argparse.Namespace) -> int:
         return install_agent_cli(args)
     if mode == "install-rtk":
         return install_rtk(args)
-    if mode == "install-graft":
-        payload, code = install_graft(
-            confirmed=bool(args.yes),
-            telemetry_only=bool(args.telemetry_only),
-        )
-        if args.json:
-            print(json.dumps(payload, indent=2, ensure_ascii=False))
-        else:
-            print("Graft installation:")
-            print(json.dumps(payload, indent=2, ensure_ascii=False))
-        return code
     if mode == "install-caveman":
         return install_caveman(args)
     if mode == "install-java":
@@ -7170,14 +7133,21 @@ def run(mode: str, args: argparse.Namespace) -> int:
     )
     if mode == "plan":
         plan_payload["plannedAction"] = planned_action
-    from sbtd_graft_deployment import plan_normal_wiring
+    retirement = execution = None
+    if mode in {"plan", "reset"}:
+        from sbtd_onboard_retirement import preview
 
-    wiring_plan = plan_normal_wiring(
-        planned_action, args,
-        installation_targets=[op.target for op in operations if not op.same_location],
-    )
-    if wiring_plan["status"] != "skipped":
-        plan_payload["graftWiring"] = wiring_plan
+        retirement, execution = preview(
+            args, action=planned_action, operations=operations, skills_root=global_skills_dir,
+            home=user_home(), environ=os.environ, plan_entries=plan_payload["operations"],
+        )
+        plan_payload["graftRetirement"] = retirement
+        retained = set(retirement.get("skipTemplateWrites", ()))
+        if retained:
+            operations = [op for op in operations if str(op.target) not in retained]
+            plan_payload["operations"] = [
+                row for row in plan_payload["operations"] if row["target"] not in retained
+            ]
     developer_plan = build_developer_plan(args)
     if developer_plan is not None:
         plan_payload["developerPlan"] = developer_plan
@@ -7203,14 +7173,14 @@ def run(mode: str, args: argparse.Namespace) -> int:
             print_developer_plan(developer_plan)
     if mode == "plan":
         emit_plan_json()
-        if wiring_plan["status"] == "blocked":
+        if retirement and retirement["blocked"]:
             return 2
         if developer_plan is not None:
             return developer_plan_exit_code(developer_plan)
         return 0
 
     ensure_confirmed(args, mode)
-    if wiring_plan["status"] == "blocked":
+    if retirement and retirement["blocked"]:
         emit_plan_json()
         return 2
     if developer_plan is not None:
@@ -7271,18 +7241,18 @@ def run(mode: str, args: argparse.Namespace) -> int:
             )
             emit_plan_json()
             return 4
-        from sbtd_graft_deployment import legacy_bindings_unchanged
+        if mode == "reset" and retirement is not None:
+            confirmation = getattr(args, "confirm_retirement", None)
+            if execution is not None or confirmation is not None:
+                from sbtd_onboard_retirement import apply_reset
 
-        if not legacy_bindings_unchanged(wiring_plan):
-            plan_payload["graftWiring"] = {
-                **wiring_plan,
-                "status": "blocked",
-                "reason": "the approved legacy bindings changed before installation",
-            }
-            plan_payload["backups"] = []
-            emit_plan_json()
-            print("Legacy binding approval changed; no installation writes were performed.", file=sys.stderr)
-            return 2
+                result, code = apply_reset(retirement, execution, confirmation)
+                plan_payload["retirementResult"] = result
+                if not args.json:
+                    print("Retirement: " + json.dumps(result, ensure_ascii=False))
+                if code:
+                    emit_plan_json()
+                    return code
         external_install = install_required_external_skills(
             args, overwrite=mode == "reset"
         )
@@ -7469,21 +7439,9 @@ def run(mode: str, args: argparse.Namespace) -> int:
             print_caveman_maintenance_details(caveman_maintenance)
 
     sbtd_report = build_sbtd_project_setup(mode, args)
-    from sbtd_graft_deployment import execute_normal_wiring
-
-    wiring_result, wiring_exit = execute_normal_wiring(
-        wiring_plan, template_written=not bool(getattr(args, "skip_project_agents", False)),
-    )
     language_tooling = run_language_tooling_step(mode, args)
     if language_tooling is not None:
         plan_payload["languageTooling"] = language_tooling
-    if wiring_plan["status"] != "skipped":
-        plan_payload["graftWiring"] = wiring_result
-        if wiring_exit:
-            wiring_status = "blocked" if wiring_exit == 2 else "failed"
-            for project in cast(list[dict[str, object]], sbtd_report["projects"]):
-                project.update(status=wiring_status, reason="host wiring did not complete", nextStep="Inspect the preserved wiring results and originals.")
-            sbtd_report["status"] = wiring_status
     if args.json:
         # One run, one root object. The plan was held back above so it can be
         # merged here; flushing it earlier made stdout two concatenated
@@ -7512,15 +7470,8 @@ def run(mode: str, args: argparse.Namespace) -> int:
         )
     else:
         print_sbtd_project_setup_report(sbtd_report)
-        if wiring_plan["status"] != "skipped":
-            print("Host wiring: " + str(wiring_result["status"]))
-            if wiring_result.get("hooks") == "configured-needs-host-trust":
-                print("Hooks configured only: enable supported Codex hooks and trust their exact hashes in the host before use.")
-            print("Host-event acceptance is separate from file and graph verification.")
         if language_tooling is not None:
             print_language_tooling(language_tooling)
-    if wiring_exit:
-        return wiring_exit
     setup_exit = project_status_exit_code(sbtd_report["status"])
     if setup_exit:
         return setup_exit
@@ -7564,6 +7515,7 @@ def build_parser() -> argparse.ArgumentParser:
                 "--action", choices=("init", "reset"), action=SingleValueAction,
                 help="Preview targets for this action without writing (default: init).",
             )
+        add_retirement_options(sub, mode)
         if mode in {"init", "init-projects"}:
             _add_migration_context(sub)
             sub.add_argument(
@@ -7571,21 +7523,6 @@ def build_parser() -> argparse.ArgumentParser:
                 action="store_true",
                 help="Apply the displayed omp LSP/ast-grep configuration writes after user confirmation; without it they are reported and skipped.",
             )
-        sub.add_argument("--graft-hooks", action="store_true", help="Separately authorize the displayed Codex hooks; does not grant host trust.")
-        sub.add_argument(
-            "--no-mcp", action="store_true",
-            help="Skip user-level Graft MCP wiring; selected project graph setup remains local.",
-        )
-        sub.add_argument(
-            "--graft-retire-legacy",
-            action="store_true",
-            help="Explicitly replace exact owned fixed-project MCP entries for the selected roots; retain originals. Does not authorize environment or backup deletion.",
-        )
-        sub.add_argument(
-            "--graft-legacy-bindings",
-            action=SingleValueAction,
-            help="Private version-1 JSON contract naming observed old runtime paths for --graft-retire-legacy across runtime changes.",
-        )
         sub.add_argument(
             "--projects-root",
             required=mode == "init-projects",
@@ -7601,7 +7538,7 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument(
             "--skip-project-agents",
             action="store_true",
-            help="Skip the project AGENTS template; explicitly selected Graft wiring still maintains its managed fence.",
+            help="Skip the project AGENTS template.",
         )
         sub.add_argument(
             "--global-agents-path", help="Override Codex global AGENTS.md path."
@@ -7634,19 +7571,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Exclude project AGENTS.md from installation-target checks.",
     )
-    graft_install = subparsers.add_parser("install-graft")
-    graft_install.add_argument(
-        "--yes", action="store_true",
-        help="Confirm the pinned global package/native-script and telemetry-disable plan.",
+    project_check.add_argument(
+        "--migration-manifest", action=SingleValueAction,
+        help="Read-only deployment smoke: exact private manifest (requires --migration-apply-receipt).",
     )
-    graft_install.add_argument(
-        "--telemetry-only", action="store_true",
-        help="Persist only telemetry opt-out; refuse package installation if the verified CLI is no longer present.",
+    project_check.add_argument(
+        "--migration-apply-receipt", action=SingleValueAction,
+        help="Read-only deployment smoke: successful apply receipt for that manifest and selected project.",
     )
-    graft_install.add_argument(
-        "--json", action="store_true", help="Print one machine-readable installation result."
-    )
-
 
     install = subparsers.add_parser("install-external-skills")
     install.add_argument(

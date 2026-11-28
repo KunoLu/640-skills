@@ -1,6 +1,6 @@
 # SBTD v2 支持的工作路径
 
-现行主线是 Codex / OMP + `sbtd-task` + 按需 Graft。本文描述用户任务的路由，不是新调度器；具体模式、状态及方法合同以[任务 Skill](../../sbtd-workflow-onboard/templates/skills/sbtd-task/SKILL.md)为准。安装与升级示例见[中文 README](../../README.zh.md#onboard-prompts)和[英文 README](../../README.md#onboard-prompts)。
+现行主线是 Codex / OMP + `sbtd-task`。本文描述用户任务的路由，不是新调度器；具体模式、状态及方法合同以[任务 Skill](../../sbtd-workflow-onboard/templates/skills/sbtd-task/SKILL.md)为准。安装与升级示例见[中文 README](../../README.zh.md#onboard-prompts)和[英文 README](../../README.md#onboard-prompts)。
 
 ## 先路由，再选择方法
 
@@ -54,7 +54,7 @@ flowchart TD
 | 安装、升级、项目初始化 | `sbtd-workflow-onboard`；先确认精确源版本、目标及只读计划 | init保留合法壳，reset可无备份覆盖bundled；版本对齐用upgrade，旧数据用migration，各阶段独立授权 |
 | 需求、规格与工单 | 按需 `grill-with-docs` / `grilling`、`domain-modeling`，明确交付时用 `to-spec` / `to-tickets` | 不把普通问答变成完整访谈；工单发布另行确认 |
 | 原因不明的故障 | `diagnosing-bugs`，从实际失败建立反馈回路 | 先区分产品、测试、环境和契约；不凭猜测修改 |
-| 结构定位 | 按需 Graft 的已验证结构能力；不可用时使用实际源码/LSP/契约 | 只在授权单仓根，DNT且禁LLM/cloud；不对父目录联邦查询，不因空图/exit0认定无影响 |
+| 结构定位 | 实际源码、LSP 与契约；已有时使用 `ast-grep` 或 `rg` | 只读已授权单仓根；不上传代码、diff 或作者信息，不启用 LLM／cloud；不对父目录联邦；空结果或 exit 0 不证明无影响 |
 | 持久数据、迁移和恢复 | `book-ddia-data-design`；strict命中时before-dev | 原件、所有权、回执、漂移和恢复边界有真实证明；不把文件恢复当旧运行时恢复 |
 | 既有行为与重构 | 按触发使用 `book-legacy-change-safety`、`book-refactoring-pass` | 先保留行为证据；safety-seam-only不是行为修改豁免 |
 | 用户可见行为 | `gherkin-bdd`及项目现有规范/测试 | 缺契约不编造；本配置源仓不生成.feature，真实业务项目按自己的规范 |
@@ -73,7 +73,7 @@ flowchart TD
 ## 执行与权限边界
 
 - 当前宿主的原生执行能力负责工作；目录中出现某平台资产不自动选择宿主或启动第二套调度器。一个职责一个writer、一个验证环境一个controller。
-- Trellis/GitNexus旧数据仅作为明确迁移或清理输入；不运行旧任务调度、旧Channel或Trellis初始化来启动v2任务。Graft安装和接线不由普通分析请求授权。
+- Trellis/GitNexus旧数据仅作为明确迁移或清理输入；不运行旧任务调度、旧Channel或Trellis初始化来启动v2任务。普通分析请求不授权安装、接线或退役。
 - 方法/工具不可用须区分required blocked与无关可选能力的安全fallback，不安装邻近工具伪造通过。完整grill后的DDD和strict必需门不得绕过。
 - task、active、index和handoff职责不同：task拥有mode/status，active仅引用，index导航，handoff快照。跨分支需要明确裁决，不自动stash、checkout或rebind。
 - 发布、workflow sync、真实迁移/部署、旧资产清理和备份销毁是不同权限。任务done不授权下一阶段；公开报告还需脱敏及明确发布位置。

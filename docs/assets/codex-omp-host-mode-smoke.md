@@ -1,6 +1,7 @@
 # Codex / OMP 三模式 host smoke 验证手册
 
 本手册区分现行验证原则、P1-15旧执行器和P3实际观察。行为要求以[主PRD的验收条件](../prd/sbtd-workflow-v2-trellis-removal-graft-migration-prd.md#15-可检验验收条件)及[任务Skill](../../sbtd-workflow-onboard/templates/skills/sbtd-task/SKILL.md)为准；历史P1-15结果见[阶段记录](../prd/sbtd-workflow-v2-host-mode-smoke.md)，不由任务done推定所有host/方法通过。
+现行边界：rc.3 已从工作流移除 Graft。历史 P1-15／P3 观察保留，不改写成通过，也不新报未执行的能力测试。通用宿主探针保留：安装器 parser capability probe，以及 `upgrade verify --probe`。它们不启动 Graft，也不等于宿主验收。旧部署 `migration verify` 保持只读，不重跑 smoke。新的迁移 deploy／reconcile 不运行 Graft CLI；执行代码实际做本地部署检查时，那是可信的只读 `check-projects` 加密封目标复核，不是业务 API、宿主或模型验收。本手册不宣称该检查已通过。
 
 ## 先核验认证与隔离
 

@@ -1295,56 +1295,27 @@ def _followup_outcome_chain(
     return chain
 
 
-def _check_configure_graft_outcome(
-    operation: Mapping[str, Any], target: Path, anchors: Collection[str]
-) -> dict[str, Any]:
-    """Gate a completed configure-graft outcome by managed-section ownership.
-
-    The host runtime legitimately extends these files outside the
-    graft-owned section, so whole-file equality cannot gate them; the
-    sealed chain never carries launch bindings, so ownership is proven by
-    the managed argv/fence shapes instead of recomputed bytes. A missing
-    or unparseable file, or any drift inside the managed section, fails
-    closed; drift outside it does not block. Returns the live target state
-    so followup before-requirements seal the current bytes. ``anchors``
-    are the chain's deploy-phase directory outcomes still present on disk
-    (retired cleanup targets never anchor); Codex launchers must live
-    inside one.
-    """
-    selector = operation["selector"]
-    roots = operation["dependent_projects"]
-    state = snapshot(target)
-    if state["type"] != "file":
+def _reject_graft_operations(operations: Sequence[Mapping[str, Any]]) -> None:
+    """Refuse a sealed Graft operation before any followup write."""
+    if any(
+        operation.get("change", {}).get("kind") in {"build-graft", "configure-graft"}
+        or operation.get("selector")
+        in {"graft-agents", "graft-mcp", "graft-hooks", "graft-omp-mcp"}
+        for operation in operations
+    ):
         _fail(
-            "state-conflict",
-            "a completed batch outcome no longer matches the current state",
+            "unsupported-in-rc.3",
+            "a sealed plan still contains Graft operations; regenerate the plan",
         )
-    raw = read_file(target, state)
-    if selector == "graft-omp-mcp":
-        from sbtd_omp_wiring import verify_owned_omp_mcp_section
 
-        verify_owned_omp_mcp_section(raw, roots)
-    elif selector == "graft-mcp":
-        from sbtd_codex_wiring import verify_owned_mcp_section
 
-        verify_owned_mcp_section(raw, roots, anchors)
-    elif selector == "graft-hooks":
-        from sbtd_codex_wiring import verify_owned_hooks_section
-
-        verify_owned_hooks_section(raw, roots, anchors)
-    elif selector == "graft-agents":
-        from sbtd_codex_wiring import verify_owned_agents_fence
-
-        verify_owned_agents_fence(raw)
-    else:
-        _fail("state-conflict", "unknown Graft configuration selector")
-    return state
 
 
 def _check_followup_predecessor_outcomes(
     chain: Sequence[tuple[Mapping[str, Any], Mapping[str, Mapping[str, Any]]]],
     *,
     overwritten: Collection[str],
+    bind_historical: bool = False,
 ) -> dict[str, Any]:
     """Require current predecessor outcomes; exempt followup-overwritten targets.
 
@@ -1354,10 +1325,8 @@ def _check_followup_predecessor_outcomes(
     the carried copy then holds the proof. The latest proven after-state
     per target is the live expectation unless the followup batch
     legitimately rewrites that target, in which case the followup's own
-    concrete before-requirement and receipts carry the proof. Directory
-    and other whole-resource targets pin the recorded historical
-    after-state; configure-graft targets prove their managed section and
-    map the current live snapshot.
+    concrete before-requirement and receipts carry the proof. Read-only
+    historical verify binds predecessor Graft operations. Mutation rejects them.
     """
     declared: list[tuple[int, Mapping[str, Any], bool]] = []
     latest: dict[
@@ -1369,6 +1338,16 @@ def _check_followup_predecessor_outcomes(
             for project in manifest["payload"]["projects"]
             for operation in project["private_operations"]
         ] + list(manifest["payload"]["shared_operations"])
+        if bind_historical:
+            from sbtd_deployment import (
+                graft_operation,
+                validate_archived_graft_declarations,
+            )
+
+            if any(graft_operation(operation) for operation in operations):
+                validate_archived_graft_declarations(manifest["payload"])
+        else:
+            _reject_graft_operations(operations)
         for operation in operations:
             proven = False
             results = stage_results.get(operation["phase"])
@@ -1405,25 +1384,12 @@ def _check_followup_predecessor_outcomes(
                 "the completed batch history cannot prove every declared resource",
             )
     outcomes = {target: item[1]["after"] for target, item in latest.items()}
-    # Anchors prove path containment only, so every live directory
-    # deployment outcome qualifies — including trees the followup
-    # overwrites, whose content stays pinned by the sealed
-    # before-requirement and is re-measured before any write at execute.
-    # Retired trees (cleanup removals, after absent) never anchor: their
-    # paths no longer prove anything about the bytes that were deployed.
-    anchors = [
-        target
-        for target, (_key, result, operation) in latest.items()
-        if operation["phase"] == "deploy"
-        and operation["change"]["kind"] != "remove"
-        and operation["owner_kind"] == "directory"
-        and result["after"]["type"] == "directory"
-    ]
-    configure: list[tuple[str, Mapping[str, Any]]] = []
     for target, (_key, result, operation) in latest.items():
-        if operation["change"]["kind"] == "configure-graft":
-            configure.append((target, operation))
-            continue
+        if bind_historical:
+            from sbtd_deployment import graft_operation
+
+            if graft_operation(operation):
+                continue
         if target in overwritten:
             continue
         if snapshot(Path(target)) != result["after"]:
@@ -1431,13 +1397,6 @@ def _check_followup_predecessor_outcomes(
                 "state-conflict",
                 "a completed batch outcome no longer matches the current state",
             )
-    for target, operation in configure:
-        # Managed-section outcomes are proven even when the followup batch
-        # rewrites the target, and the mapping carries the live state so the
-        # followup's sealed before-requirement matches the current bytes.
-        outcomes[target] = _check_configure_graft_outcome(
-            operation, Path(target), anchors
-        )
     return outcomes
 
 
@@ -1448,6 +1407,7 @@ def validate_legacy_inputs(
     resolve_original: ResolveOriginal | None = None,
     stage_results: Mapping[str, Mapping[str, Any]] | None = None,
     cleanup_only: bool = False,
+    readonly_legacy: bool = False,
 ) -> list[dict[str, Any]] | None:
     """Re-validate the complete legacy closure of a sealed manifest.
 
@@ -1497,13 +1457,8 @@ def validate_legacy_inputs(
             for project in payload["projects"]
             for operation in project["private_operations"]
         ] + list(payload["shared_operations"])
-        if any(
-            operation["selector"] == "graft-hooks" for operation in followup_operations
-        ):
-            _fail(
-                "semantic-violation",
-                "a followup batch does not authorize hooks",
-            )
+        if not readonly_legacy:
+            _reject_graft_operations(followup_operations)
         if any(
             operation["before_requirement"]["kind"] != "state"
             for operation in followup_operations
@@ -1570,6 +1525,7 @@ def validate_legacy_inputs(
                 prev_manifest, prev_apply, prev_deployment, prev_cleanup, ancestors
             ),
             overwritten=overwritten,
+            bind_historical=readonly_legacy,
         )
         for operation in followup_operations:
             target = operation["target"]
@@ -1582,7 +1538,7 @@ def validate_legacy_inputs(
                     "a followup before-state differs from its proven predecessor outcome",
                 )
         _validate_shared_operations(payload, followup_roots, resolve_original)
-        from sbtd_graft_deployment import validate_deployment_declarations
+        from sbtd_deployment import validate_deployment_declarations
 
         ignored = validate_deployment_declarations(
             payload,
@@ -1592,6 +1548,7 @@ def validate_legacy_inputs(
                 if result["status"] == "succeeded" and result["after"] is not None
             },
             cleanup_only=cleanup_only,
+            readonly_legacy=readonly_legacy,
         )
         _bind_approved_routing(
             payload, [Path(root) for root in followup_roots], bind_live=False
@@ -1714,9 +1671,11 @@ def validate_legacy_inputs(
                     "a completed batch outcome no longer matches the current state",
                 )
         _validate_shared_operations(payload, successor_roots, resolve_original)
-        from sbtd_graft_deployment import validate_deployment_declarations
+        from sbtd_deployment import validate_deployment_declarations
 
-        ignored = validate_deployment_declarations(payload, cleanup_only=cleanup_only)
+        ignored = validate_deployment_declarations(
+            payload, cleanup_only=cleanup_only, readonly_legacy=readonly_legacy
+        )
         _bind_approved_routing(
             payload, [Path(root) for root in successor_roots], bind_live=False
         )
@@ -1795,10 +1754,13 @@ def validate_legacy_inputs(
     _validate_shared_operations(
         payload, sorted(str(root) for root in roots), resolve_original
     )
-    from sbtd_graft_deployment import validate_deployment_declarations
+    from sbtd_deployment import validate_deployment_declarations
 
     ignored = validate_deployment_declarations(
-        payload, stage_results=stage_results, cleanup_only=cleanup_only
+        payload,
+        stage_results=stage_results,
+        cleanup_only=cleanup_only,
+        readonly_legacy=readonly_legacy,
     )
     _bind_approved_routing(payload, roots, bind_live=False)
     return ignored
@@ -2383,7 +2345,7 @@ def _approved_routing_operations(
             or not candidate_path.is_relative_to(vault)
             or snapshot(candidate_path) != candidate.get("state")
         ):
-            _fail("state-conflict", "an approved routing candidate changed")
+            _fail("approved-routing-drift", "an approved routing candidate changed")
         raw = read_file(candidate_path, candidate["state"])
         if not raw.startswith(pause):
             _fail(
@@ -2519,6 +2481,21 @@ def _routing_key(
     ).decode("utf-8")
 
 
+def project_approved_body(candidate: Mapping[str, Any]) -> bytes:
+    """Pause-stripped body of one signed candidate. Read-only."""
+    raw = read_file(Path(candidate["path"]), candidate["state"])
+    pause = read_file(_PAUSE_ASSET)
+    if not raw.startswith(pause):
+        _fail(
+            "candidate-conflict",
+            "an approved routing candidate lacks the pause block",
+        )
+    body = raw[len(pause) :]
+    if body.startswith(b"\n"):
+        body = body[1:]
+    return body
+
+
 def approved_agents_provenance(
     manifest: Mapping[str, Any],
 ) -> tuple[Mapping[str, Any], dict[str, bytes]]:
@@ -2548,22 +2525,12 @@ def approved_agents_provenance(
         return origin, {}
     roots = [Path(project["root"]) for project in payload["projects"]]
     _bind_approved_routing(payload, roots, bind_live=False)
-    pause = read_file(_PAUSE_ASSET)
     bodies: dict[str, bytes] = {}
     for _place, _root, operation in _routing_rows(payload):
         if operation["ownership"].get("role") != "demo-project":
             continue
         candidate = operation["change"]["source_ref"]
-        raw = read_file(Path(candidate["path"]), candidate["state"])
-        if not raw.startswith(pause):
-            _fail(
-                "candidate-conflict",
-                "an approved routing candidate lacks the pause block",
-            )
-        body = raw[len(pause) :]
-        if body.startswith(b"\n"):
-            body = body[1:]
-        bodies[operation["target"]] = body
+        bodies[operation["target"]] = project_approved_body(candidate)
     return origin, bodies
 
 
@@ -3444,7 +3411,7 @@ def _plan_successor(
             "apply_results": embedded,
         },
     }
-    from sbtd_graft_deployment import attach_deployment
+    from sbtd_deployment import attach_deployment
 
     attach_deployment(
         payload,
@@ -3668,7 +3635,7 @@ def _plan_followup(
             },
         },
     }
-    from sbtd_graft_deployment import attach_deployment
+    from sbtd_deployment import attach_deployment
 
     attach_deployment(
         payload,
@@ -4803,11 +4770,7 @@ def plan_migration(
         _fail("invalid-argument", "a custodian is required")
     if (
         not isinstance(tool_versions, Mapping)
-        or set(tool_versions)
-        != {
-            "onboard",
-            "graft",
-        }
+        or set(tool_versions) != {"onboard"}
         or any(
             not isinstance(value, str) or not value.strip()
             for value in tool_versions.values()
@@ -4815,7 +4778,7 @@ def plan_migration(
     ):
         _fail(
             "invalid-argument",
-            "tool versions must name the actual onboard and graft builds",
+            "new migration plans must identify the installed Onboard build",
         )
     roots = [_physical_root(value) for value in project_roots]
     if len(set(roots)) != len(roots):
@@ -5094,7 +5057,7 @@ def plan_migration(
         "deployment": None,
     }
     if deployment_mode is not None:
-        from sbtd_graft_deployment import attach_deployment
+        from sbtd_deployment import attach_deployment
 
         attach_deployment(
             payload,

@@ -1,18 +1,10 @@
-"""Approved project AGENTS deployment fidelity lifecycle regressions.
+"""Approved project AGENTS deployment fidelity.
 
 A signature-approved project routing candidate holds the exact native pause
 block, one formatting blank line, then the user's unique rule body. Apply
-copies that candidate verbatim; deployment must preserve the approved body
-byte for byte (minus only the pause block and that one blank line) and add
-or refresh exactly the managed Graft fence. Ordinary init keeps explicit
-template replacement, followups keep merging proven live bytes, and a
-sealed no-touch project receives no AGENTS operation at all (covered by the
-existing followup/no-touch suites).
-
-Everything runs inside an isolated TemporaryDirectory HOME with a generated
-test approval key. Only the three native boundaries (verified runtime,
-project graph build, project smoke) are deterministic smoke-only doubles;
-they do not prove a real host deployment (合成夹具；不证明真实 host 部署。).
+copies that candidate verbatim. Deploy writes the pause-stripped body after
+preflight. The selector is ``approved-agents:<sha256>`` of that body. The
+sealed source is the signed candidate, not a vault copy.
 """
 
 from __future__ import annotations
@@ -33,20 +25,17 @@ sys.path.insert(0, str(SCRIPTS))
 import onboard_contracts as contracts
 from onboard import GLOBAL_AGENTS_TEMPLATE
 from onboard_contracts import ContractError, canonical_json_bytes
-from sbtd_codex_wiring import project_agents_candidate
-from sbtd_graft_deployment import execute_migration_deployment, load_deployment_context
+from sbtd_deployment import execute_migration_deployment, load_deployment_context
 from sbtd_migration import apply_migration, runtime_versions
 from sbtd_migration_files import read_file, save_document, snapshot
 from sbtd_migration_plan import plan_migration
 from sbtd_migration_verify import verify_migration
 from sbtd_recovery import apply_recovery, plan_recovery
 
-from tests.test_sbtd_followup_batch import _graph_fixture, _synthetic_smoke
 from tests.test_sbtd_migration_apply import legacy_project
 
 _PAUSE_ASSET = SCRIPTS.parents[0] / "assets" / "migration-paused-agents.txt"
 _PROJECT_TEMPLATE = SCRIPTS.parents[0] / "templates" / "agents" / "AGENTS.project.md"
-_RUNTIME = {"node": "/fixture/node", "cli": "/fixture/cli.js", "python": "/fixture/python"}
 
 # Unique user rule bytes: no template, pause asset, or fence body carries
 # this text, so its byte-exact survival is observable end to end.
@@ -157,7 +146,7 @@ class _SignedBatch:
             ).encode("utf-8")
         )
         _sign_existing_approval(self.approval)
-        self.projection = project_agents_candidate(body)
+        self.projection = body
 
     def plan(self, **kwargs):
         with mock.patch.dict(os.environ, self.environment):
@@ -186,26 +175,10 @@ class _SignedBatch:
         output_path,
         *,
         previous_path=None,
-        rebuild_graph=True,
         block_shared_home=False,
     ):
         """Real load_deployment_context + execute_migration_deployment."""
-        document = json.loads(manifest_path.read_bytes())
-        graph = (
-            _graph_fixture
-            if rebuild_graph
-            else AssertionError("completed graph must not be rebuilt")
-        )
-        patches = [
-            mock.patch(
-                "sbtd_graft_deployment.verified_runtime", return_value=dict(_RUNTIME)
-            ),
-            mock.patch("sbtd_graft_deployment.build_project_graph", side_effect=graph),
-            mock.patch(
-                "sbtd_graft_deployment.run_project_smoke",
-                side_effect=_synthetic_smoke(document),
-            ),
-        ]
+        patches = []
         if block_shared_home:
             original_mkdir = Path.mkdir
             shared_home = self.home / ".codex"
@@ -241,14 +214,32 @@ class _SignedBatch:
 
 
 def _assert_projected_agents(case, agents, projection, body):
-    """Deployed bytes: exact approved body plus only the managed fence."""
+    """Deployed bytes are the pause-stripped approved body. No fence."""
     raw = agents.read_bytes()
     case.assertEqual(raw, projection)
-    case.assertIn(body, raw)
+    case.assertEqual(raw, body)
     case.assertNotIn(_PAUSE_ASSET.read_bytes(), raw)
-    case.assertEqual(raw.count(b"<!-- graft:start -->"), 1)
-    case.assertEqual(raw.count(b"<!-- graft:end -->"), 1)
+    case.assertNotIn(b"<!-- graft:start -->", raw)
     case.assertEqual(snapshot(agents), _file_state(projection))
+
+
+def _assert_real_smoke(case, result):
+    """Success needs real sealed reports. An empty receipt is not acceptance."""
+    payload = result["deploymentEvidence"]["evidence"]["payload"]
+    case.assertEqual(payload["status"], "succeeded")
+    case.assertTrue(payload["projects"])
+    for project in payload["projects"]:
+        refs = project["report_refs"]
+        case.assertTrue(refs, project["root"])
+        for ref in refs:
+            path = Path(ref["path"])
+            case.assertTrue(path.is_file(), path)
+            case.assertGreater(path.stat().st_size, 0, path)
+
+
+def _assert_verified(case, manifest_path, apply_path, deployment_path):
+    verified, code = verify_migration(manifest_path, apply_path, deployment_path)
+    case.assertEqual((code, verified["status"]), (0, "verified"), verified)
 
 
 class ApprovedAgentsDeploymentTests(unittest.TestCase):
@@ -264,6 +255,27 @@ class ApprovedAgentsDeploymentTests(unittest.TestCase):
                 if operation["selector"] == "approved-routing-replacement"
             ]
             self.assertEqual(len(routing), 1)
+            from sbtd_deployment import approved_agents_selector
+
+            deployed = [
+                operation
+                for operation in manifest["payload"]["projects"][0]["private_operations"]
+                if isinstance(operation.get("selector"), str)
+                and operation["selector"].startswith("approved-agents:")
+            ]
+            self.assertEqual(len(deployed), 1)
+            self.assertEqual(
+                deployed[0]["selector"], approved_agents_selector(batch.body)
+            )
+            self.assertEqual(deployed[0]["change"]["kind"], "ensure-file-block")
+            self.assertEqual(
+                deployed[0]["change"]["source_ref"]["path"], str(batch.candidate)
+            )
+            self.assertEqual(
+                deployed[0]["ownership"]["reference"],
+                deployed[0]["change"]["source_ref"],
+            )
+            self.assertFalse((batch.vault / "approved-agents").exists())
             manifest_path = batch.write_manifest(manifest, "manifest.json")
             _receipt, apply_path = batch.apply(
                 manifest_path, routing_approvals=batch.approval
@@ -273,6 +285,7 @@ class ApprovedAgentsDeploymentTests(unittest.TestCase):
             deployment_path = batch.evidence / "deployment.json"
             result, code = batch.execute(manifest_path, apply_path, deployment_path)
             self.assertEqual(code, 0, result)
+            _assert_real_smoke(self, result)
             _assert_projected_agents(self, batch.agents, batch.projection, batch.body)
             resource = contracts.resource_id("markdown", str(batch.agents))
             outcomes = {
@@ -283,10 +296,7 @@ class ApprovedAgentsDeploymentTests(unittest.TestCase):
             self.assertEqual(outcomes[resource]["after"], _file_state(batch.projection))
 
             with mock.patch.dict(os.environ, batch.environment):
-                verified, verify_code = verify_migration(
-                    manifest_path, apply_path, deployment_path
-                )
-            self.assertEqual(verify_code, 0, verified)
+                _assert_verified(self, manifest_path, apply_path, deployment_path)
 
     def test_signed_original_deploy_retry_preserves_body_and_recovers_raw(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -381,15 +391,13 @@ class ApprovedAgentsDeploymentTests(unittest.TestCase):
                 apply_path,
                 retry_path,
                 previous_path=blocked_path,
-                rebuild_graph=False,
+
             )
             self.assertEqual(code, 0, result)
+            _assert_real_smoke(self, result)
             _assert_projected_agents(self, batch.agents, batch.projection, batch.body)
             with mock.patch.dict(os.environ, batch.environment):
-                verified, verify_code = verify_migration(
-                    manifest_path, apply_path, retry_path
-                )
-            self.assertEqual(verify_code, 0, verified)
+                _assert_verified(self, manifest_path, apply_path, retry_path)
 
     def test_signed_successor_deploy_preserves_approved_body_through_verify(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -431,12 +439,12 @@ class ApprovedAgentsDeploymentTests(unittest.TestCase):
                 successor_path, successor_apply_path, deployment_path
             )
             self.assertEqual(code, 0, result)
+            _assert_real_smoke(self, result)
             _assert_projected_agents(self, batch.agents, batch.projection, batch.body)
             with mock.patch.dict(os.environ, batch.environment):
-                verified, verify_code = verify_migration(
-                    successor_path, successor_apply_path, deployment_path
+                _assert_verified(
+                    self, successor_path, successor_apply_path, deployment_path
                 )
-            self.assertEqual(verify_code, 0, verified)
 
     def test_successor_global_replacement_deploys_template_and_verifies(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -472,33 +480,23 @@ class ApprovedAgentsDeploymentTests(unittest.TestCase):
             _successor_receipt, successor_apply_path = batch.apply(
                 successor_path, no_routing_approvals=True
             )
+            project_after_apply = batch.agents.read_bytes()
 
             deployment_path = batch.evidence / "successor-deployment.json"
             result, code = batch.execute(
                 successor_path, successor_apply_path, deployment_path
             )
             self.assertEqual(code, 0, result)
-            # The successor legitimately supersedes the paused global
-            # candidate with the canonical global template; the project
-            # AGENTS has no signed provenance and stays an ordinary
-            # template replacement.
+            _assert_real_smoke(self, result)
             global_template = read_file(GLOBAL_AGENTS_TEMPLATE)
             self.assertEqual(batch.approved.read_bytes(), global_template)
             self.assertNotEqual(batch.approved.read_bytes(), batch.paused)
-            project_template = read_file(_PROJECT_TEMPLATE)
-            self.assertEqual(
-                batch.agents.read_bytes(),
-                project_agents_candidate(project_template),
-            )
-            # Acceptance must not raw-assert the predecessor's approved
-            # global candidate against its legitimately deployed template
-            # outcome; only declared deployed demo-project AGENTS targets
-            # carry the rendered approved projection check.
+            self.assertEqual(batch.agents.read_bytes(), project_after_apply)
+            self.assertNotIn(b"<!-- graft:start -->", batch.agents.read_bytes())
             with mock.patch.dict(os.environ, batch.environment):
-                verified, verify_code = verify_migration(
-                    successor_path, successor_apply_path, deployment_path
+                _assert_verified(
+                    self, successor_path, successor_apply_path, deployment_path
                 )
-            self.assertEqual(verify_code, 0, verified)
 
     def test_drifted_approved_candidate_refuses_deploy_without_touching_agents(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -560,10 +558,6 @@ class ApprovedAgentsDeploymentTests(unittest.TestCase):
             )
             with (
                 mock.patch.dict(os.environ, batch.environment),
-                mock.patch(
-                    "sbtd_graft_deployment.verified_runtime",
-                    return_value=dict(_RUNTIME),
-                ),
                 self.assertRaises(ContractError) as failure,
             ):
                 context = load_deployment_context(
@@ -582,7 +576,7 @@ class ApprovedAgentsDeploymentTests(unittest.TestCase):
                 (batch.evidence / "successor-deployment.json").exists()
             )
 
-    def test_ordinary_init_deploy_still_replaces_agents_with_template(self):
+    def test_ordinary_init_deploy_preserves_foreign_project_bytes(self):
         with tempfile.TemporaryDirectory() as directory:
             batch = _SignedBatch(Path(directory).resolve())
             with mock.patch.dict(os.environ, batch.environment):
@@ -610,13 +604,12 @@ class ApprovedAgentsDeploymentTests(unittest.TestCase):
             deployment_path = batch.evidence / "deployment.json"
             result, code = batch.execute(manifest_path, apply_path, deployment_path)
             self.assertEqual(code, 0, result)
-            template = read_file(_PROJECT_TEMPLATE)
-            expected = project_agents_candidate(template)
+            _assert_real_smoke(self, result)
             raw = batch.agents.read_bytes()
-            self.assertEqual(raw, expected)
-            self.assertNotIn(b"Foreign project rule.", raw)
+            self.assertEqual(raw, batch.foreign)
+            self.assertNotEqual(raw, read_file(_PROJECT_TEMPLATE))
+            self.assertNotIn(b"<!-- graft:start -->", raw)
             self.assertNotIn(_UNIQUE_BODY, raw)
-            self.assertEqual(raw.count(b"<!-- graft:start -->"), 1)
 
 
 if __name__ == "__main__":
