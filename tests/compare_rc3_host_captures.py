@@ -27,8 +27,21 @@ def compare(directory: Path, host: str, action: str, baselines: tuple[str, str])
             raise ValueError("unexpected rc.2 tool inventory")
         old["tools"].remove(tool)
     retirement = new.pop("graftRetirement")
-    if retirement["blocked"] or retirement["items"] or retirement["targetsToRetire"]:
-        raise ValueError("empty fixture yielded a retirement target or blocker")
+    expected_report = {
+        "schema": "sbtd-retirement/1", "status": "reported", "items": [], "errors": [],
+        "manual": [
+            {"kind": "npm", "path": "<npm root -g>/@nanonets/graft",
+             "command": "npm uninstall -g @nanonets/graft"},
+            {"kind": "telemetry", "path": "~/.graft/telemetry.json",
+             "command": 'rm -i -- "$HOME/.graft/telemetry.json"'},
+        ],
+        "proof_gap": None, "evidence_descriptor": None, "retiring_launchers": [],
+        "mode_scope": "lstat-imode", "blocked": False, "reason": None, "globalEffects": [],
+        "targetsToRetire": [], "directoryOverlaps": [], "skipTemplateWrites": [],
+        "confirmationId": None,
+    }
+    if json.dumps(retirement, sort_keys=True) != json.dumps(expected_report, sort_keys=True):
+        raise ValueError(f"{host} {action}: unexpected retirement disclosure for empty fixture")
     for capture, expected in zip((old, new), baselines, strict=True):
         # Content alignment hashes package bytes, including the removed runtime.
         if not re.fullmatch(r"sha256:[a-f0-9]{64}", expected):

@@ -861,7 +861,7 @@ def _validate_scope(
         # expected_after a successful vendor transition recorded for them.
         completed = done.get(path)
         if completed is not None:
-            _retired_matches(completed, check_mode=not legacy_retry)
+            _retired_matches(completed, check_mode=not legacy_retry or "mode_after" in completed)
             continue
         if candidate["kind"] == "trellis-uninstall":
             _preflight_vendor(candidate, vault, legacy_retry=legacy_retry)

@@ -204,7 +204,7 @@ def required_native_cases(target, identities):
         required.update(WINDOWS_CASES)
         required.update((
             case_sensitive,
-            "test_sbtd_upgrade_hosts.ShellResourceTests.test_windows_unicode_profile_is_not_executed_by_probe",
+            "test_sbtd_upgrade_hosts.ShellResourceTests.test_selected_profile_is_neither_read_nor_executed_in_probe",
             "test_sbtd_upgrade_hosts.ShellResourceTests.test_windows_profile_is_not_rewritten_by_upgrade",
         ))
         required.update(identity for identity in identities
@@ -347,8 +347,9 @@ def main():
                 "scope": sorted(case.id() for case in cases), "selected": [case.id() for case in selected],
                 "unweighted": unweighted(cases, weights) if args.shards > 1 else []}
     required = required_native_cases(args.platform, manifest["scope"])
-    if required - set(manifest["scope"]):
-        parser.error("Required native cases are missing from discovery")
+    missing = required - set(manifest["scope"])
+    if missing:
+        parser.error(f"Required native cases missing from discovery: {sorted(missing)}")
     prefix.with_suffix(".inventory.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     if args.list:
         print(json.dumps(manifest, indent=2))

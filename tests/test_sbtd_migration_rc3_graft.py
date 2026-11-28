@@ -34,7 +34,7 @@ from onboard_contracts import (
     resource_id,
     seal_document,
 )
-from sbtd_deployment import legacy_graft_operations
+from sbtd_deployment import legacy_graft_operations, validate_deployment_declarations
 from sbtd_migration import (
     _CURRENT_RUNTIME_FILES,
     _HISTORICAL_RUNTIME_FILES,
@@ -620,6 +620,107 @@ def _verify(built: dict):
         )
 
 
+class ArchivedDeclarationTests(unittest.TestCase):
+    def test_shared_graft_declarations_match_sealed_rc2_host(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            built = build_completed_historical(base, drift=False)
+            payload = json.loads(built["manifest_path"].read_bytes())["payload"]
+            dependents = sorted(project["root"] for project in payload["projects"])
+            codex_home, other_codex, omp_home = (
+                base / name for name in ("archived-codex", "other-codex", "archived-omp")
+            )
+            agent = omp_home / "profiles/historical/agent"
+            absent = {"type": "absent", "checksum": None}
+            discovery = [
+                {"path": str(agent / name), "state": absent}
+                for name in ("config.yml", "config.yaml", ".mcp.json")
+            ]
+
+            def scope(kind, path):
+                return {"kind": kind, "path": str(path), "dependent_projects": dependents}
+
+            def configure(path, owner, selector):
+                return {
+                    **_graft_operation(
+                        built["roots"][0], path, owner, selector, "configure-graft", [],
+                        package=built["old_package"],
+                    ),
+                    "dependent_projects": dependents,
+                }
+
+            mcp = configure(codex_home / "config.toml", "toml", "graft-mcp")
+            other_mcp = configure(other_codex / "config.toml", "toml", "graft-mcp")
+            hooks = configure(codex_home / "hooks.json", "json", "graft-hooks")
+            omp_mcp = configure(agent / "mcp.json", "json", "graft-omp-mcp")
+            wrong_omp = configure(omp_home / "agent/mcp.json", "json", "graft-omp-mcp")
+            rules = configure(codex_home / "AGENTS.md", "markdown", "global-rules")
+            source = contracts.archived_file_reference(
+                built["old_package"], "templates/agents/AGENTS.global.md"
+            )
+            rules["change"] = {"kind": "copy-file", "source_ref": source}
+            rules["ownership"] = {"kind": "template-source", "reference": source}
+            custom_rules = {
+                **rules,
+                "before_requirement": {
+                    "kind": "state",
+                    "state": {"type": "file", "checksum": "f" * 64},
+                },
+            }
+
+            def sealed(platform, operations, *, bindings=None, extra_scope=()):
+                return seal_document("manifest", {
+                    **payload,
+                    "deployment": {
+                        "mode": "init",
+                        "platform": platform,
+                        "inputs": discovery if bindings is None and platform == "omp" else bindings or [],
+                    },
+                    "shared_operations": list(operations),
+                    "shared_roots": [
+                        scope("codex-home", codex_home), scope("omp-home", omp_home), *extra_scope,
+                    ],
+                    "projects": [{
+                        **project,
+                        "shared_operation_ids": sorted(op["operation_id"] for op in operations),
+                    } for project in payload["projects"]],
+                })["payload"]
+
+            before = snapshot(base)
+            with (
+                mock.patch("onboard.default_codex_home", side_effect=AssertionError("live Codex HOME")),
+                mock.patch("sbtd_omp_sources.discover_omp_sources", side_effect=AssertionError("live OMP inputs")),
+                mock.patch("sbtd_deployment._installation_templates", side_effect=AssertionError("live templates")),
+            ):
+                for valid in (
+                    sealed("codex", (mcp, rules)),
+                    sealed("codex", (mcp, hooks, rules)),
+                    sealed("omp", (omp_mcp, rules)),
+                ):
+                    validate_deployment_declarations(valid, readonly_legacy=True)
+                for invalid, error, reason in (
+                    (sealed("codex", (rules,)), "semantic-violation", "one complete MCP resource"),
+                    (
+                        sealed(
+                            "codex", (mcp, other_mcp, rules),
+                            extra_scope=(scope("codex-home", other_codex),),
+                        ),
+                        "semantic-violation", "one complete MCP resource",
+                    ),
+                    (sealed("codex", (mcp, omp_mcp, rules)), "scope-conflict", "sealed platform"),
+                    (sealed("omp", (omp_mcp, hooks, rules)), "scope-conflict", "sealed platform"),
+                    (sealed("omp", (omp_mcp, wrong_omp, rules)), "semantic-violation", "one complete MCP resource"),
+                    (sealed("omp", (wrong_omp, rules)), "scope-conflict", "sealed OMP agent directory"),
+                    (sealed("omp", (omp_mcp, rules), bindings=[]), "scope-conflict", "seal one agent directory"),
+                    (sealed("codex", (mcp, custom_rules)), "ownership-conflict", "unrecognized customized content"),
+                ):
+                    with self.subTest(reason=reason, platform=invalid["deployment"]["platform"]):
+                        with self.assertRaisesRegex(ContractError, reason) as rejected:
+                            validate_deployment_declarations(invalid, readonly_legacy=True)
+                        self.assertEqual(rejected.exception.code, error)
+            self.assertEqual(snapshot(base), before)
+
+
 class PublicVerifyTests(unittest.TestCase):
     def test_public_verify_records_three_states_and_does_not_authorize_writes(self):
         from sbtd_migration import cleanup_migration
@@ -786,6 +887,7 @@ class PublicVerifyTests(unittest.TestCase):
             variants = (
                 {key: value for key, value in entry.items() if key != "observed_at"},
                 late,
+                {**entry, "signature": "!"},
                 {**entry, "signature": lineage["signature"]},
             )
             for variant in variants:
@@ -852,7 +954,11 @@ class PublicVerifyTests(unittest.TestCase):
             with self.assertRaises(ContractError) as equal:
                 _verify(build_completed_historical(base / "equal", predecessor=current))
             self.assertEqual(equal.exception.code, "version-conflict")
-            built = build_completed_historical(base / "bad")
+            built = build_completed_historical(base / "bad", drift=False)
+            pair = json.loads(built["pair"].read_bytes())
+            accepted, code = _verify(built)
+            self.assertEqual(code, 2, accepted)
+            self.assertEqual(accepted["status"], "not-verified")
             other = "runtime-sha256:" + "44" * 32
             documents = {
                 "wrong-successor": (
@@ -882,10 +988,11 @@ class PublicVerifyTests(unittest.TestCase):
                     with self.assertRaises(ContractError) as failure:
                         _verify(built)
                     self.assertEqual(failure.exception.code, "version-conflict")
-            unsigned = json.loads(built["pair"].read_text())
-            unsigned.pop("signature", None)
-            built["pair"].write_text(json.dumps(unsigned))
-            with self.assertRaises(ContractError) as unsigned_error:
+            unsigned = {key: value for key, value in pair.items() if key != "signature"}
+            built["pair"].write_bytes(canonical_json_bytes(unsigned))
+            with self.assertRaisesRegex(
+                ContractError, "the runtime lineage pair is not authorized"
+            ) as unsigned_error:
                 _verify(built)
             self.assertEqual(unsigned_error.exception.code, "version-conflict")
             tampered = {
@@ -933,6 +1040,23 @@ class PublicVerifyTests(unittest.TestCase):
                 ):
                     verify_migration(built["manifest_path"], built["apply_path"], path)
                 self.assertEqual(raised.exception.code, "binding-violation", status)
+
+    def test_non_graft_apply_drift_is_not_skipped(self):
+        with tempfile.TemporaryDirectory() as directory:
+            built = build_completed_historical(Path(directory).resolve(), drift=False)
+            alpha, beta = built["roots"]
+            developer = alpha / ".sbtd" / "developer"
+            self.assertEqual(developer.read_bytes(), b"name=dev01\n")
+            developer.write_bytes(b"name=another\n")
+            envelope, code = _verify(built)
+            self.assertEqual(code, 3, envelope)
+            payload = envelope["migration"]["verification"]["payload"]
+            self.assertEqual(
+                {row["root"]: row["status"] for row in payload["projects"]},
+                {str(alpha): "failed", str(beta): "not-verified"},
+            )
+            self.assertEqual(len(payload["legacy_resources"]), 4)
+            self.assertTrue(all(row["bytes"] == "match" for row in payload["legacy_resources"]))
 
     def test_a_failed_report_is_not_skipped(self):
         with tempfile.TemporaryDirectory() as directory:

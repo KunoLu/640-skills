@@ -69,21 +69,47 @@ def legacy_graft_operations(payload: Mapping[str, Any]) -> list[Mapping[str, Any
     return found
 
 
+def _deployment_platform(declaration: Mapping[str, Any], *, shared: bool) -> str:
+    expected_mode = "init" if shared else "init-projects"
+    if declaration["mode"] != expected_mode:
+        _fail("scope-conflict", "the deployment mode does not match its operation set")
+    platform = declaration["platform"]
+    if platform not in {"codex", "omp"}:
+        _fail(
+            "invalid-argument", "the deployment platform must be explicitly supported"
+        )
+    if platform == "codex" and declaration["inputs"]:
+        _fail(
+            "scope-conflict",
+            "the sealed deployment does not match the Codex producer",
+        )
+    return platform
+
+
 def validate_archived_graft_declarations(payload: Mapping[str, Any]) -> None:
     """Read-only structural check. Does not write and does not grant execution.
 
-    The private deploy set is exactly ``root/graft`` ``build-graft``
-    ``whole-resource``, plus ``root/AGENTS.md`` ``configure-graft``
-    ``graft-agents`` unless ``agents_no_touch``. Graft operations bind a
-    single frozen archive identity without reading or executing the source.
+    Project graphs and fences bind the frozen policy. Shared configuration
+    binds the recorded host scope and discovery paths, not the current host.
     """
-    policy = contracts.archived_graft_policy_for(payload)
+    declaration = payload["deployment"]
+    if declaration is None:
+        _fail(
+            "semantic-violation",
+            "deployment operations require an explicit deployment declaration",
+        )
+    shared = [
+        operation for operation in payload["shared_operations"]
+        if operation["phase"] == "deploy"
+    ]
+    platform = _deployment_platform(declaration, shared=bool(shared))
     operations = legacy_graft_operations(payload)
     if not operations:
         _fail(
             "semantic-violation",
             "archived Graft validation requires the sealed Graft deploy set",
         )
+    policy = contracts.archived_graft_policy_for(payload)
     for operation in operations:
         if operation.get("phase") != "deploy":
             _fail(
@@ -107,7 +133,7 @@ def validate_archived_graft_declarations(payload: Mapping[str, Any]) -> None:
                     "graft-agents",
                 )
             )
-        actual = {
+        actual = [
             (
                 operation.get("target"),
                 (operation.get("change") or {}).get("kind"),
@@ -115,12 +141,72 @@ def validate_archived_graft_declarations(payload: Mapping[str, Any]) -> None:
             )
             for operation in project.get("private_operations", ())
             if operation.get("phase") == "deploy"
-        }
-        if actual != expected:
+        ]
+        if len(actual) != len(expected) or set(actual) != expected:
             _fail(
                 "semantic-violation",
                 "the complete private deployment set is missing or altered",
             )
+    if not shared:
+        if declaration["inputs"]:
+            _fail("scope-conflict", "project-only deployment does not discover host inputs")
+        return
+    roots = sorted(project["root"] for project in payload["projects"])
+    if any(operation["dependent_projects"] != roots for operation in shared):
+        _fail(
+            "scope-conflict", "shared deployment requires the complete selected batch"
+        )
+    codex = platform == "codex"
+    mcp_selector = "graft-mcp" if codex else "graft-omp-mcp"
+    mcp, hooks = [], []
+    for operation in shared:
+        if not graft_operation(operation):
+            continue
+        selector = operation["selector"]
+        if operation["change"]["kind"] == "configure-graft":
+            if selector == mcp_selector:
+                mcp.append(operation["target"])
+                continue
+            if codex and selector == "graft-hooks":
+                hooks.append(operation["target"])
+                continue
+        _fail("scope-conflict", "shared Graft resources do not match the sealed platform")
+    if len(mcp) != 1:
+        _fail(
+            "semantic-violation",
+            f"shared {'Codex' if codex else 'OMP'} deployment requires one complete MCP resource",
+        )
+    if codex:
+        homes = [
+            Path(record["path"]) for record in payload["shared_roots"]
+            if record["kind"] == "codex-home"
+        ]
+        if len(homes) != 1 or mcp[0] != str(homes[0] / "config.toml"):
+            _fail("scope-conflict", "the MCP resource must bind one sealed Codex HOME")
+        if len(hooks) > 1 or (hooks and hooks[0] != str(homes[0] / "hooks.json")):
+            _fail("scope-conflict", "at most one hook resource may bind the sealed Codex HOME")
+    else:
+        # rc.2 always sealed both provider settings and the alternate MCP
+        # file beside mcp.json, even when those read-only inputs were absent.
+        inputs = {Path(reference["path"]) for reference in declaration["inputs"]}
+        agents = {
+            path.parent for path in inputs
+            if path.name == ".mcp.json"
+            and path.with_name("config.yml") in inputs
+            and path.with_name("config.yaml") in inputs
+        }
+        if len(agents) != 1:
+            _fail("scope-conflict", "the archived OMP inputs must seal one agent directory")
+        agent = agents.pop()
+        if mcp[0] != str(agent / "mcp.json") or not any(
+            record["kind"] == "omp-home" and agent.is_relative_to(Path(record["path"]))
+            for record in payload["shared_roots"]
+        ):
+            _fail("scope-conflict", "the MCP resource leaves the sealed OMP agent directory")
+
+    # Validate the recorded installation sources without reading an old package.
+    package = Path(policy["path"]).parent.parent
+    tuple(contracts.archived_installation_references(payload, package))
 
 
 def reject_legacy_execution(payload: Mapping[str, Any]) -> None:
@@ -887,6 +973,49 @@ def _check_approved_agents_declarations(payload: Mapping[str, Any]) -> None:
             )
 
 
+def _check_installation_prestate(
+    payload: Mapping[str, Any],
+    operation: Mapping[str, Any],
+    successor_embedded: Mapping[str, Any],
+    followup_owned: Mapping[str, Any],
+) -> None:
+    target, resource = operation["target"], operation["resource_id"]
+    paused = [
+        earlier
+        for earlier in payload["shared_operations"]
+        if earlier["phase"] == "apply"
+        and earlier["target"] == target
+        and earlier["selector"] == "pause-legacy-routing"
+    ]
+    requirement = operation["before_requirement"]
+    if paused or successor_embedded.get(resource) is not None:
+        if len(paused) > 1 or requirement != {
+            "kind": "phase-after",
+            "phase": "apply",
+            "resource_id": resource,
+        }:
+            _fail(
+                "ownership-conflict",
+                "global routing must follow its exact paused predecessor",
+            )
+    elif followup_owned.get(resource) is not None:
+        # A followup batch can replace only the proven predecessor outcome.
+        if requirement != {"kind": "state", "state": followup_owned[resource]}:
+            _fail(
+                "ownership-conflict",
+                "a followup replacement must start from the exact "
+                "predecessor deployment outcome",
+            )
+    elif requirement["kind"] != "state" or requirement["state"] not in (
+        _ABSENT,
+        operation["change"]["source_ref"]["state"],
+    ):
+        _fail(
+            "ownership-conflict",
+            "an installation target has unrecognized customized content",
+        )
+
+
 def validate_deployment_declarations(
     payload: Mapping[str, Any],
     *,
@@ -948,24 +1077,16 @@ def validate_deployment_declarations(
             "semantic-violation",
             "a deployment declaration requires declared deployment operations",
         )
-    expected_mode = "init" if shared_deploy else "init-projects"
-    if declaration["mode"] != expected_mode:
-        _fail("scope-conflict", "the deployment mode does not match its operation set")
-    platform = declaration["platform"]
-    if platform not in {"codex", "omp"}:
-        _fail(
-            "invalid-argument", "the deployment platform must be explicitly supported"
-        )
-    if platform == "codex" and declaration["inputs"]:
-        _fail(
-            "scope-conflict",
-            "the sealed deployment does not match the Codex producer",
-        )
-    if legacy_graft_operations(payload):
-        if not readonly_legacy:
-            reject_legacy_execution(payload)
+    legacy = legacy_graft_operations(payload)
+    if legacy and readonly_legacy:
         validate_archived_graft_declarations(payload)
+        for operation in shared_deploy:
+            if not graft_operation(operation):
+                _check_installation_prestate(payload, operation, successor_embedded, followup_owned)
         return ignored if cleanup_only else None
+    platform = _deployment_platform(declaration, shared=bool(shared_deploy))
+    if legacy:
+        reject_legacy_execution(payload)
     # Empty successor deployments must still prove no signed project writes
     # were dropped. They do not grant authority over unsigned project rules.
     _check_approved_agents_declarations(payload)
@@ -1041,51 +1162,7 @@ def validate_deployment_declarations(
                 "ownership-conflict",
                 "an installation deployment source is not canonical",
             )
-        paused = [
-            earlier
-            for earlier in payload["shared_operations"]
-            if earlier["phase"] == "apply"
-            and earlier["target"] == target
-            and earlier["selector"] == "pause-legacy-routing"
-        ]
-        requirement = operation["before_requirement"]
-        expected = {
-            "kind": "phase-after",
-            "phase": "apply",
-            "resource_id": operation["resource_id"],
-        }
-        if paused:
-            if len(paused) != 1 or requirement != expected:
-                _fail(
-                    "ownership-conflict",
-                    "global routing must follow its exact paused predecessor",
-                )
-        elif successor_embedded.get(operation["resource_id"]) is not None:
-            if requirement != expected:
-                _fail(
-                    "ownership-conflict",
-                    "global routing must follow its exact paused predecessor",
-                )
-        elif followup_owned.get(operation["resource_id"]) is not None:
-            # A followup batch replaces a predecessor-owned target only from
-            # that exact proven deployment outcome, sealed as concrete state.
-            if requirement != {
-                "kind": "state",
-                "state": followup_owned[operation["resource_id"]],
-            }:
-                _fail(
-                    "ownership-conflict",
-                    "a followup replacement must start from the exact "
-                    "predecessor deployment outcome",
-                )
-        elif requirement["kind"] != "state" or requirement["state"] not in (
-            _ABSENT,
-            source["state"],
-        ):
-            _fail(
-                "ownership-conflict",
-                "an installation target has unrecognized customized content",
-            )
+        _check_installation_prestate(payload, operation, successor_embedded, followup_owned)
     return ignored if cleanup_only else None
 
 

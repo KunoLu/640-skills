@@ -1103,8 +1103,10 @@ def _retained_server_would_launch(host: Mapping[str, Any], project: Path) -> boo
             (project / "hooks.json", "codex-hooks"),
         )
     else:
+        config = Path(host["config"])
         paths = (
-            (Path(host["config"]), "omp-mcp"),
+            (config, "omp-mcp"),
+            (config.with_name(".mcp.json"), "omp-mcp"),
             (project / ".codex" / "config.toml", "codex-mcp"),
             (project / ".omp" / "mcp.json", "omp-mcp"),
             (project / ".omp" / ".mcp.json", "omp-mcp"),
@@ -1431,7 +1433,7 @@ def _host_entry(
     protocol_ok = evidence["exit"] == 0
     skill_status: dict[str, Any] = {
         "status": "verified" if skills_ok else "failed",
-        "skills": list(evidence["found"] if skills_ok else evidence["expected"]),
+        "skills": list(evidence["found"]),
     }
     if not skills_ok:
         skill_status["expected"] = list(evidence["expected"])

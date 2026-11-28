@@ -1331,7 +1331,9 @@ class FollowupOperationTamperingTests(unittest.TestCase):
                 self.assertEqual(error.exception.code, code)
 
             historical = variant(legacy_project_wiring)
-            sbtd_deployment.validate_archived_graft_declarations(historical["payload"])
+            with self.assertRaises(ContractError) as missing_shared_mcp:
+                sbtd_deployment.validate_archived_graft_declarations(historical["payload"])
+            self.assertEqual(missing_shared_mcp.exception.code, "semantic-violation")
             historical_path = fixture.followup_evidence / "rc2-followup.json"
             save_document(historical_path, historical, private_root=fixture.followup_evidence)
             before = snapshot(fixture.base)

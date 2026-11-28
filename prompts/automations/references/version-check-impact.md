@@ -53,17 +53,17 @@
 
 - 升级对齐与 init/reset/migration 分开：核对 `upgrade --phase plan|apply|verify` 和 `recovery --upgrade-*` 的实际CLI、两安装器转发、完整catalog载荷比较、未知漂移显式决定及身份冲突拒绝。plan/verify默认只读；保存计划、应用、恢复、host probe各有显式范围与确认。只读成功不等于真实宿主已加载，保留例外不等于完全对齐；逐配置域报告磁盘、协议、宿主和清理。自升级必须从独立校验副本执行；部分失败保留实测后态和原件；备份不自动销毁。九个 GitNexus Skills 只按闭集身份由现有 cleanup 独立处置，不得扩大为前缀删除。
 
-- 升级修复边界：Codex 目标绑定实际 `config_home/config.toml`；UTF-16 profile 与不可表达的 PATH 项写前拒绝；Skills 物理别名与决定键一致，父目录只做逐组件 no-follow 检查、不扫描无关兄弟。Shell 以真实交互条件／优先级检查命令，npm shim 仅证明受限字面相对 CLI 指向，不执行未知包装器或伪称 Node 证明；OMP 以成功 RPC 响应的结构化工具注册表为据，prompt URI 不是工具证据。RPC 写入／读取共用期限并验证自有子进程收尾。
+- Codex 只读核对所选 `config_home/config.toml`；OMP 按实际选择的 agent、profile 与项目核对有效注册文件。退役检查不赋予接线权限，upgrade 不新建 MCP、PATH 或 profile。Skills 物理别名与决定键一致，父目录只做逐组件 no-follow 检查、不扫描无关兄弟。不得执行未知包装器。OMP 以成功 RPC 响应的结构化工具注册表为据，prompt URI 不是工具证据。RPC 写入／读取共用期限并验证自有子进程收尾。
 
-- 复核写后失败是否返回 failed／exit 3 与绑定本批的 checkpoint、备份及实测／unknown 状态，不因证据再次读取失败而冒称零写入；blocked 优先于 drift，合法无关 MCP 不误报非法配置。保留选中缺失 host 的安装语义、受支持的分阶段嵌套安装／规范已安装副本续作、restore intent 后 absent 窗口和 OMP user-wide probe 范围，不把这些既有契约改成额外禁令或新部署能力。
+- 复核写后失败是否返回 failed／exit 3 与绑定本批的 checkpoint、备份及实测／unknown 状态，不因证据再次读取失败而冒称零写入；blocked 优先于 drift，合法无关 MCP 不误报非法配置。选中缺失 host 不授权安装宿主或补建接线。保留已批准的 Skills／Onboard 分阶段安装、规范已安装副本续作、restore intent 后 absent 窗口和 OMP user-wide probe 范围。
 
-- 升级物理身份不可用平台字符串折叠代替：核对冲突目标别名与继承输入重叠在目标写入前拒绝，大小写敏感目录的选择、摘要缓存和包含关系保持独立，既有非 Skill／Onboard 子目录别名绑定规范选择。封存 blocked 优先于 host 语义比较。首行 UTF-8 BOM 识别与重写保留；新建空 PowerShell profile 兼容旧宿主 Unicode 解码；登录 profile 与 rc 的探测模式分开。method 回复不可消费 OMP 式 data 替代 result，MCP 初始化版本须在明确支持集合内，异常／强制关闭不报 verified；method-not-found 脱敏归为 unsupported。CLI 早期拒绝满足 failureDocument，home 展开错误由输入边界收口。仅静态评估或隔离验证，不扩大部署授权。
+- 升级物理身份不可用平台字符串折叠代替：核对冲突目标别名与继承输入重叠在目标写入前拒绝，大小写敏感目录的选择、摘要缓存和包含关系保持独立，既有非 Skill／Onboard 子目录别名绑定规范选择。封存 blocked 优先于 host 语义比较。已有 profile 原字节保留（含 BOM 与非 ASCII 内容），缺失 profile 不创建，probe 不加载 profile。method 回复不可消费 OMP 式 data 替代 result，异常／强制关闭不报 verified；method-not-found 脱敏归为 unsupported。CLI 早期拒绝满足 failureDocument，home 展开错误由输入边界收口。仅静态评估或隔离验证，不扩大部署授权。
 
 - 升级恢复的历史权威为操作人选定且独占管理的私有 vault；hash 只证明一致性，不宣称防御具备 vault 写权限者整组伪造历史。来源未知时停止自动恢复；仍须验证当前受信包、scope-derived资源、完整恢复资格/status/reason与当前漂移。不同执行包的旧计划安全拒绝，不自动执行历史暂存代码；空父目录保留，缓存不归本批新增所有权。
 
-- 恢复归属复核不能以现场字节匹配覆盖明确的未写入回执，也不能用旧 pending checkpoint 忽略较新的未写入证据；intent 对应的未知现场须阻断，不报空恢复完成。核对缺失 Unicode 规范化别名、Shell 命令依赖与混合域决定键。Codex 隔离探针不得因信任真实项目而加载未选项目配置；只验证受管投影。既有 PowerShell profile 原字节保留、Unicode PATH 编码安全、探针输出编码明确；合法字面 shim 标点和路径 Unicode 分隔符不误拒绝。OMP legacy 只消费有效启用来源，非文件 unknown，unsupported 汇总不丢失。静态评估不等于真实宿主验证。
+- 恢复归属复核不能以现场字节匹配覆盖明确的未写入回执，也不能用旧 pending checkpoint 忽略较新的未写入证据；intent 对应的未知现场须阻断，不报空恢复完成。核对缺失 Unicode 规范化别名与混合域决定键。Codex 隔离探针不得因信任真实项目而加载未选项目配置；只验证受管投影。既有 PowerShell profile 原字节保留，探针输出编码明确。OMP legacy 只消费有效启用来源，非文件 unknown，unsupported 汇总不丢失。静态评估不等于真实宿主验证。
 
-- 核对 POSIX 新 PATH 赋值不携带 CR、原 profile 字节保留、Windows POSIX 别名匹配完整所选目录；非 ASCII PowerShell shim 证明必须考虑实际引擎解码。直接 MCP 要求 JSON-RPC 2.0 envelope，Boolean ID 不等于 Number，Codex 无版本回显与 OMP 独立 envelope 不受误伤。OMP 发现／分析未完成时不能凭空报告 legacy none，也不得为补证扫描未选 provider。
+- 核对 POSIX、Windows 上既有 PATH 与 profile 均不因升级新增写入，所选路径别名不改变读取范围。直接 MCP 协议若适用，要求 JSON-RPC 2.0 envelope 和受支持的初始化版本，Boolean ID 不等于 Number；Codex 无版本回显与 OMP 独立 envelope 不受误伤。OMP 发现／分析未完成时不能凭空报告 legacy none，也不得为补证扫描未选 provider。
 
 <a id="migration"></a>
 ## 迁移、现态调和、清理与保留
@@ -83,7 +83,7 @@
 
 - 现态接受的最终顺序应为较重语义／来源链验证在先、纯快照复核在后；固定来源引用可再验而无需重读并解析整个祖先链。核对目标、原件、报告、来源及absent观测的末端刷新，不把这种有界检查称作跨进程CAS，也不通过反复交换检查顺序掩盖另一侧的实际漂移回归。
 
-- 清理扩展模块 `sbtd_cleanup_targets.py`、`sbtd_cleanup_legacy.py` 与 vendor 卸载适配器 `sbtd_trellis_uninstall.py` 仅可读取评估：核对 `cleanup-legacy --phase plan|apply` 接线、私有备份根封存/消费 plan 与累计回执、`--confirm-cleanup` 等于当前 plan_id、apply 重检测范围漂移即 blocked、plan 可选 `--global-skills-dir`（仅 plan 阶段）且选定 Skills 根封存进计划、apply 只消费封存根且无根参数/不受环境重定向、migration 批次参数不变、plan/apply 在任何目标写入前拒绝相等或互相嵌套的候选路径、OMP 检测含 `active_omp_paths` 按相对 `PI_CONFIG_DIR` 与 `OMP_PROFILE` 优先于 `PI_PROFILE` 解析的有效配置、同一目录项的路径拼写别名去重而不同硬链接目录项分开处理、计划时封存完整 vendor 足迹且执行前私有备份全部足迹、部分失败按实测逐项记录且调和前阻断重试、fail-stop、重试不重放；不把合法 fixture 当作清理已实现，不执行真实清理，不写真实 HOME/live automation。
+- 清理扩展模块 `sbtd_cleanup_targets.py`、`sbtd_cleanup_legacy.py` 与 vendor 卸载适配器 `sbtd_trellis_uninstall.py` 仅可读取评估：核对 `cleanup-legacy --phase plan|apply|rollback`。私有备份根封存计划与累计回执；apply 与 rollback 的 `--confirm-cleanup` 必须等于当前 plan_id，rollback 另需匹配回执及未漂移的写后态。apply 重检测范围漂移即 blocked；`--global-skills-dir` 仅可用于 plan，后续只消费封存根，不受环境重定向。迁移批次参数不变。写入前拒绝相等或嵌套候选；OMP 检测按 `active_omp_paths`、相对 `PI_CONFIG_DIR`、`OMP_PROFILE` 优先于 `PI_PROFILE` 解析有效配置。目录项的路径拼写别名去重，不同硬链接目录项分开。计划封存完整 vendor 足迹，执行前私有备份全部足迹，部分失败按实测逐项记录；调和前阻断重试，不重放已证实操作。不执行真实清理，不写真实 HOME/live automation。
 
 - 复核清理安全修复时，检查实际 Skills 根的逻辑绑定在物理共享根合并后仍存在、退役目标只允许其直接子目录；检查 vendor 在备份完成后复验 `skipped_missing` 仍为 absent；检查重试只继承已成功且与封存预期相符的 vendor after-state 和原件备份；同一确认流程内，仅减少由绑定回执证明已完成的项且其余目标/效果不变时不重复询问，新增或改变效果仍要确认。以上仅静态评估或隔离验证，不执行真实清理。
 

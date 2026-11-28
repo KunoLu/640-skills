@@ -378,7 +378,7 @@ class Rc3DeployCutoverTests(unittest.TestCase):
         from sbtd_deployment_smoke import run_project_smoke
 
         with tempfile.TemporaryDirectory() as directory:
-            base = Path(directory)
+            base = Path(directory).resolve()
             root = base / "project"
             evidence = base / "evidence"
             root.mkdir(mode=0o700)

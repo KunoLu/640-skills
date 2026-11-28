@@ -2193,6 +2193,27 @@ class RetirementArtifactTests(unittest.TestCase):
         self.assertIn(b"# own rules", cleaned)
         self.assertNotIn(b"TRELLIS:START", cleaned)
 
+    @unittest.skipUnless(os.name == "posix", "POSIX mode fixture")
+    def test_legacy_plan_retry_preserves_recorded_permissions(self):
+        fixture = self.fixture
+        plan, _ = fixture.prepare()
+        payload = json.loads(plan.read_bytes())["payload"]
+        payload.pop("graftRetirement")
+        _write_sealed(plan, payload, "plan_id")
+        plan_id = json.loads(plan.read_bytes())["plan_id"]
+        applied, code = fixture.apply(plan, plan_id)
+        self.assertEqual(code, 0, applied)
+        receipt = applied["cleanup_legacy"]
+        agents = fixture.project / "AGENTS.md"
+        row = next(r for r in receipt["receipt"]["payload"]["results"] if r["path"] == str(agents))
+        changed = int(row["mode_after"], 8) ^ 0o020
+        agents.chmod(changed)
+        before = snapshot(fixture.project)
+        refused, code = fixture.apply(plan, plan_id, Path(receipt["receipt_path"]))
+        self.assertEqual((code, refused["status"]), (2, "blocked"), refused)
+        self.assertEqual(agents.stat().st_mode & 0o7777, changed)
+        self.assertEqual(snapshot(fixture.project), before)
+
     def test_backup_mode_drift_blocks_before_any_restore(self):
         from sbtd_cleanup_legacy import rollback_cleanup_legacy
 

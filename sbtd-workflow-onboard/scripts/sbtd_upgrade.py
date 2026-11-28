@@ -46,9 +46,9 @@ Security semantics, by design:
   a measured after-state and an immutable cumulative receipt. Original
   backups are never destroyed by the engine.
 - Retry skips only resources whose live state matches the prior receipt's
-  recorded after-state. An interruption between a write and its receipt
-  is reconciled from the persisted intent and the measured live state,
-  never claimed unwritten; unknown live state is rejected.
+  recorded after-state. For Skill and AGENTS writes, interruption reconciliation
+  uses the persisted intent and live state. For retirement, only a bound
+  completed receipt proves the write; an intent and matching bytes do not.
 - Recovery covers only resources this batch actually changed, re-seals
   the current after-state, requires its own confirmation, refuses live
   drift (unknown changes are never overwritten) and restores backups
@@ -2109,22 +2109,18 @@ def _reconcile_resource(
         ) != resource["desired"]:
             _fail("corrupt-evidence", "a vault intent contradicts the sealed plan")
         if live == resource["desired"]:
+            if permissions:
+                _fail("state-conflict", "an interrupted retirement has no proven outcome")
             if mechanical != intent.get("mechanical_desired"):
                 _fail("state-conflict", "an interrupted target contains unmeasured changes")
-            if permissions and prior["result"] != "pending" and prior.get("mutated") is not True:
-                _fail("state-conflict", "an interrupted retirement has no attributable outcome")
             backup_ref = intent.get("backup_ref")
-            if not permissions and backup_ref is not None and (
-                snapshot(Path(backup_ref["path"])) != backup_ref["state"]
-            ):
+            if backup_ref is not None and snapshot(Path(backup_ref["path"])) != backup_ref["state"]:
                 _fail(
                     "preservation-failed",
                     "an original backup no longer matches its recorded state",
                     exit_code=3,
                 )
             row = _result_row(resource, "reconciled", live, backup_ref, intent.get("created_parents", []))
-            if permissions and not _matches_binding(row, permissions):
-                _fail("state-conflict", "interrupted retirement permissions differ from the intent")
             return {"verb": "record", "row": row}
         if live != resource["before"]:
             _fail(
@@ -2548,9 +2544,12 @@ def verify_upgrade(
     saved = snapshot(stored)["type"] != "absent"
     if saved:
         _require_saved(stored, plan)
-    if receipt is None and saved and any(
+    if saved and any(
         row["kind"] == "retirement" and row["decision"] in _WRITABLE for row in payload["resources"]
     ):
+        if receipt is not None:
+            _bound_upgrade_receipt(plan, receipt, vault)
+        # A pre-write checkpoint may predate a durable retirement outcome.
         receipt = _latest_receipt(vault, "upgrade-receipt-", "plan_id", plan_id, None, _validate_upgrade_receipt)
     receipt_rows: dict[str, dict[str, Any]] = {}
     receipt_id: str | None = None
@@ -3015,22 +3014,29 @@ def _recovery_rows(
         vault, "upgrade-receipt-", "plan_id", plan["plan_id"],
         dict(receipt), _validate_upgrade_receipt,
     )
+    if latest is not None and latest != receipt:
+        _bound_upgrade_receipt(plan, latest, vault)
     latest_rows = {
         row["id"]: row for row in latest["payload"]["resources"]
     } if latest is not None else {}
     rows: list[dict[str, Any]] = []
     for original in receipt["payload"]["resources"]:
         row = dict(original)
+        resource = resources.get(row["id"])
         intent = intents.get(row["id"])
         later = latest_rows.get(row["id"])
         if (
-            row["result"] == "pending" and later is not None
-            and later["result"] != "pending" and later.get("mutated") is False
+            row["result"] == "pending" and later is not None and later["result"] != "pending"
+            and (
+                later.get("mutated") is False or (
+                    resource is not None and resource["kind"] == "retirement"
+                    and later["result"] in _COMPLETED_TOKENS
+                )
+            )
         ):
             rows.append(dict(later))
             continue
         if row["result"] == "pending" and intent is not None:
-            resource = resources.get(row["id"])
             if resource is None or row["target"] != resource["target"] or any(
                 intent.get(key) != resource.get(key) for key in ("target", "before", "desired")
             ) or intent.get("plan_id") != plan["plan_id"]:
@@ -3040,12 +3046,10 @@ def _recovery_rows(
             if permissions:
                 _check_retirement_intent(resource, intent, permissions, plan["plan_id"])
             measured = _retirement_file_state(target) if permissions else snapshot(target)
-            observed = measured == intent["mechanical_desired"] and (
-                not permissions or _retirement_permissions_match(
-                    target, measured, permissions["mode_after"], permissions.get(_WINDOWS_ACL_AFTER),
-                )
-            )
-            if observed or (observed_ids is not None and row["id"] in observed_ids):
+            if not permissions and (
+                measured == intent["mechanical_desired"]
+                or (observed_ids is not None and row["id"] in observed_ids)
+            ):
                 row.update({
                     "result": "reconciled", "after": resource["desired"],
                     "mutated": True,
@@ -3377,6 +3381,8 @@ def _apply_recovery_local(
         "runner": str(Path(__file__).resolve()),
         "package_state": None,
     }
+    # Restore the payloads before reactivating any of their retired callers.
+    actions.sort(key=lambda action: action["step"]["kind"] == "retirement")
     for action in actions:
         _record_result(results, _step_row(action["step"], "pending", None))
     try:

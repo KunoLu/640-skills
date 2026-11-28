@@ -111,7 +111,7 @@ class DeveloperIdentityTests(unittest.TestCase):
         self.assertEqual(local.read_bytes(), b"name=Invalid_Name\n")
 
     def test_missing_git_is_unknown_not_permission_to_create_identity(self) -> None:
-        with mock.patch.dict(os.environ, {"PATH": ""}):
+        with mock.patch("sbtd_task_state.native_git_argv", side_effect=FileNotFoundError):
             resolved = DeveloperStore(self.root).resolve()
         self.assertEqual(resolved.status, "blocked")
         self.assertEqual(resolved.topology, "unknown")

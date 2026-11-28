@@ -544,6 +544,35 @@ class IsolatedProbeProtocolTests(_LinksCase):
         self.assertEqual(rig.host_spawns(), [])
         self.assertEqual(json.loads(config.read_text(encoding="utf-8")), document)
 
+    def test_omp_probe_checks_alternate_registration_only_in_selected_agent(self) -> None:
+        root = self.base / "skills"
+        _write_skill(root, "alpha")
+        project = self.base / "project"
+        project.mkdir()
+        host = _omp_host(self.base, _runtime(self.base), root, project)
+        unselected = Path(host["config"]).with_name(".mcp.json")
+        selected = Path(host["config_home"]) / "profiles" / "selected" / "agent" / ".mcp.json"
+        host["config"] = str(selected.with_name("mcp.json"))
+        scope = {"hosts": [host], "skills_roots": [str(root)]}
+        document = b'{"mcpServers":{"sbtd-graft":{"command":"fixture-only"}}}'
+        unselected.parent.mkdir(parents=True)
+        unselected.write_bytes(document)
+        rig = _Rig(self, ["alpha"]).install()
+
+        (entry,) = hosts.verify_hosts(scope, probe=True)["hosts"]
+        self.assertEqual(entry["status"], "pass", entry)
+        self.assertEqual(len(rig.spawns), 1)
+
+        selected.parent.mkdir(parents=True)
+        selected.write_bytes(document)
+        (entry,) = hosts.verify_hosts(scope, probe=True)["hosts"]
+        self.assertEqual(entry["status"], "fail", entry)
+        self.assertEqual(entry["host"]["checks"]["host_load"]["reason"], "unsafe-registered-server")
+        self.assertEqual(len(rig.spawns), 1)
+        self.assertEqual(selected.read_bytes(), document)
+        self.assertEqual(unselected.read_bytes(), document)
+
+
 
     def test_codex_failure_envelope_cannot_supply_result_evidence(self) -> None:
         scope = self._scope()
@@ -1661,6 +1690,7 @@ class UpgradeEngineLinkTests(_LinksCase):
         self.assertEqual(result["status"], "aligned", result["payload"]["hosts"])
         skills = result["payload"]["hosts"]["hosts"][0]["host"]["checks"]["skills"]
         self.assertEqual(skills["status"], "verified", skills)
+        self.assertEqual(skills["skills"], ["alpha", "linked-skill", "sbtd-workflow-onboard"])
         evidence = skills["link_authorizations"]
         self.assertEqual(len(evidence), 1)
         self.assertEqual(evidence[0]["authorization_id"], document["authorization_id"])
@@ -1673,6 +1703,19 @@ class UpgradeEngineLinkTests(_LinksCase):
         import jsonschema
 
         jsonschema.validate(result, SCHEMA)
+
+        rig.expected_skills.remove("linked-skill")
+        failed = sbtd_upgrade.verify_upgrade(plan, probe=True, link_authorizations=[document])
+        self.assertEqual(failed["status"], "drift", failed)
+        (report,) = failed["payload"]["hosts"]["hosts"]
+        checks = report["host"]["checks"]
+        self.assertEqual(checks["protocol"]["status"], "verified")
+        self.assertEqual(checks["host_load"]["reason"], "skills-evidence-mismatch")
+        self.assertEqual(checks["skills"]["status"], "failed")
+        self.assertEqual(checks["skills"]["skills"], ["alpha", "sbtd-workflow-onboard"])
+        self.assertEqual(checks["skills"]["expected"], ["alpha", "linked-skill", "sbtd-workflow-onboard"])
+        self.assertEqual(checks["skills"]["link_authorizations"], evidence)
+        jsonschema.validate(failed, SCHEMA)
 
 
 # ---------------------------------------------------------------------------

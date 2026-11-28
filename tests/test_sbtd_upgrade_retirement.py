@@ -287,6 +287,7 @@ class EvidenceScopeTests(unittest.TestCase):
 
 def _codex_retirement_fixture(
     base: Path, *, remove_file: bool = False, vault: Path | None = None, host_id: str = "codex",
+    onboard: Path | None = None,
 ):
     home = base / ".codex"
     home.mkdir(parents=True)
@@ -307,7 +308,7 @@ def _codex_retirement_fixture(
             historical / f"{host_id}-config.toml",
             private_root=vault,
         )
-    launcher = base / "old-onboard" / "scripts" / "sbtd_graft_entry.py"
+    launcher = (onboard or base / "old-onboard") / "scripts" / "sbtd_graft_entry.py"
     arguments = [
         "-E", "-s", str(launcher), "mcp", "--node",
         str(base / "old-node"), "--entry", str(base / "old-cli.js"),
@@ -474,6 +475,50 @@ class RealRetirementUpgradeTests(unittest.TestCase):
             self.assertEqual(agents.read_bytes(), original_agents)
             self.assertFalse(global_rules.exists())
 
+    def test_recovery_restores_skill_before_reactivating_host_config(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            onboard = base / "skills" / "sbtd-workflow-onboard"
+            scope, vault, config, launcher, installed = _codex_retirement_fixture(
+                base, remove_file=True, onboard=onboard,
+            )
+            launcher.parent.mkdir(parents=True)
+            original_launcher = b"# Original fixture launcher\n"
+            launcher.write_bytes(original_launcher)
+            (onboard / "SKILL.md").write_bytes(b"---\nname: sbtd-workflow-onboard\n---\nold\n")
+            scope["skills_roots"] = [str(onboard.parent)]
+            scope["decisions"] = {str(onboard): "replace"}
+
+            plan = sbtd_upgrade.plan_upgrade(scope, vault)
+            receipt = sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"])
+            self.assertEqual(receipt["status"], "complete")
+            self.assertEqual(receipt["payload"]["resources"][0]["target"], str(config))
+            self.assertFalse(config.exists())
+            self.assertFalse(launcher.exists())
+
+            recovery = sbtd_upgrade.plan_recovery(plan, receipt)
+            with mock.patch.object(
+                sbtd_upgrade, "restore_directory_reference",
+                side_effect=ContractError("write-failed", "fixture stopped at Skill restore"),
+            ):
+                failed = sbtd_upgrade._apply_recovery_local(
+                    recovery, confirmed=recovery["recovery_id"], receipt=None, package_root=None,
+                )
+            outcomes = {row["target"]: row for row in failed["payload"]["steps"]}
+            self.assertEqual(outcomes[str(onboard)]["result"], "failed")
+            self.assertEqual(outcomes[str(config)]["result"], "pending")
+            self.assertFalse(config.exists())
+            self.assertFalse(launcher.exists())
+
+            restored = sbtd_upgrade.apply_recovery(
+                recovery, confirmed=recovery["recovery_id"], receipt=failed,
+            )
+            self.assertEqual(restored["status"], "complete")
+            order = [row["target"] for row in restored["payload"]["steps"]]
+            self.assertLess(order.index(str(onboard)), order.index(str(config)))
+            self.assertEqual(launcher.read_bytes(), original_launcher)
+            self.assertEqual(config.read_bytes(), installed)
+
     def test_partial_apply_retries_only_with_bound_removed_file_outcome(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
@@ -499,12 +544,25 @@ class RealRetirementUpgradeTests(unittest.TestCase):
             removed = rows[str(config)]
             self.assertEqual(removed["result"], "succeeded")
             self.assertEqual(Path(removed["backup_ref"]["path"]).read_bytes(), installed)
-            verify = sbtd_upgrade.verify_upgrade(plan, receipt=partial)
+            checkpoints = (
+                json.loads(path.read_text(encoding="utf-8"))
+                for path in vault.glob("upgrade-receipt-*.json")
+            )
+            pending = next(
+                document for document in checkpoints
+                if all(row["result"] == "pending" for row in document["payload"]["resources"])
+            )
+            verify = sbtd_upgrade.verify_upgrade(plan, receipt=pending)
+            self.assertEqual(verify["payload"]["receipt_id"], partial["receipt_id"])
             self.assertEqual(verify["status"], "drift")
             self.assertEqual(
                 {row["target"]: row["result"] for row in verify["payload"]["resources"]},
                 {str(config): "aligned", str(agents): "drift"},
             )
+            recovery = sbtd_upgrade.plan_recovery(plan, pending)
+            self.assertEqual(recovery["payload"]["status"], "planned")
+            (step,) = recovery["payload"]["steps"]
+            self.assertEqual((step["target"], step["status"]), (str(config), "actionable"))
 
             intent = next(
                 path for path in (vault / "intents").glob("intent-*.json")
@@ -517,7 +575,7 @@ class RealRetirementUpgradeTests(unittest.TestCase):
                         if phase == "apply":
                             sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"], receipt=partial)
                         else:
-                            sbtd_upgrade.verify_upgrade(plan, receipt=partial)
+                            sbtd_upgrade.verify_upgrade(plan, receipt=pending)
                     self.assertEqual(missing.exception.code, "intent-missing")
                     self.assertFalse(config.exists())
                     self.assertEqual(agents.read_bytes(), original_agents)
@@ -533,7 +591,7 @@ class RealRetirementUpgradeTests(unittest.TestCase):
             self.assertEqual(verification["payload"]["receipt_id"], retry["receipt_id"])
 
     @unittest.skipUnless(os.name == "posix", "POSIX file permissions")
-    def test_interrupted_posix_retirement_requires_live_sealed_mode(self) -> None:
+    def test_interrupted_posix_retirement_without_completion_stays_unproven(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             scope, vault, config, _, installed = _codex_retirement_fixture(Path(directory).resolve())
             plan = sbtd_upgrade.plan_upgrade(scope, vault)
@@ -572,15 +630,16 @@ class RealRetirementUpgradeTests(unittest.TestCase):
             self.assertEqual(config.stat().st_mode & 0o777, 0o644)
 
             config.chmod(0o600)
-            recovery = sbtd_upgrade.plan_recovery(plan, pending)
-            (step,) = recovery["payload"]["steps"]
-            self.assertEqual((step["status"], step["mode_before"], step["mode_after"]), ("actionable", "0600", "0600"))
-            retry = sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"], receipt=pending)
-            self.assertEqual(retry["payload"]["resources"][0]["result"], "reconciled")
-            self.assertEqual(sbtd_upgrade.verify_upgrade(plan, receipt=retry)["status"], "aligned")
-            restored = sbtd_upgrade.apply_recovery(recovery, confirmed=recovery["recovery_id"])
-            self.assertEqual(restored["status"], "complete")
-            self.assertEqual(config.read_bytes(), installed)
+            with self.assertRaises(ContractError) as retry:
+                sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"], receipt=pending)
+            self.assertEqual(retry.exception.code, "state-conflict")
+            with self.assertRaises(ContractError) as verify:
+                sbtd_upgrade.verify_upgrade(plan, receipt=pending)
+            self.assertEqual(verify.exception.code, "plan-stale")
+            with self.assertRaises(ContractError) as recovery:
+                sbtd_upgrade.plan_recovery(plan, pending)
+            self.assertEqual(recovery.exception.code, "plan-stale")
+            self.assertEqual(config.read_bytes(), retired)
             self.assertEqual(config.stat().st_mode & 0o777, 0o600)
 
     def test_verify_rejects_a_plan_omitting_a_disclosed_retirement(self) -> None:

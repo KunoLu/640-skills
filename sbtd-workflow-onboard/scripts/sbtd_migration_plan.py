@@ -3540,9 +3540,8 @@ def _plan_successor(
         successor_pauses=successor_pauses,
     )
     for project in payload["projects"]:
-        if any(
-            operation["phase"] == "apply"
-            for operation in project["private_operations"]
+        if any(operation["phase"] == "apply" for operation in project["private_operations"]) or (
+            deployment_mode == "init" and _ignore_operation(Path(project["root"])) is not None
         ):
             _fail(
                 "successor-conflict",
