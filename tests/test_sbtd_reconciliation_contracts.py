@@ -51,7 +51,7 @@ def reconciliation_metadata(manifest: dict, apply_receipt: dict) -> dict:
             "path": MISSING_PATH,
             "state": dict(fixtures.ABSENT),
         },
-        "runtime_versions": {"onboard": ONBOARD_SHA, "graft": GRAFT_PIN},
+        "runtime_versions": {"onboard": ONBOARD_SHA},
     }
 
 

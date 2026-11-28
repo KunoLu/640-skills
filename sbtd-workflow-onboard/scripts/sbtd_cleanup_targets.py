@@ -440,9 +440,8 @@ def _toml_server_present(path: Path, key: str) -> list[str]:
     return _gitnexus_names(servers, key)
 
 
-def detect_mcp_targets(
-    *, environ: Mapping[str, str], key: str = "gitnexus"
-) -> dict[str, Any]:
+def legacy_mcp_locations(environ: Mapping[str, str]):
+    """Known legacy cleanup locations, including ones already cleaned."""
     from sbtd_omp_sources import active_omp_paths
 
     home = _home(environ)
@@ -487,11 +486,17 @@ def detect_mcp_targets(
             probes.append(
                 ("omp", profile / "agent" / "mcp.json", "json", _json_server_present)
             )
+    return probes
+
+
+def detect_mcp_targets(
+    *, environ: Mapping[str, str], key: str = "gitnexus"
+) -> dict[str, Any]:
     candidates: list[dict[str, Any]] = []
     blocked: list[dict[str, Any]] = []
     seen: set[str] = set()
     seen_locations: set[tuple[int, int, str]] = set()
-    for host, path, fmt, probe in probes:
+    for host, path, fmt, probe in legacy_mcp_locations(environ):
         identity = str(path)
         if identity in seen:
             continue

@@ -40,10 +40,125 @@ from typing import Any, NoReturn
 SCHEMA_VERSION = 1
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "onboard-contracts.schema.json"
 SCHEMA_ID = "urn:sbtd:onboard-contracts:schema:1"
-GRAFT_BUILD_POLICY_PATH = SCHEMA_PATH.parent / "assets" / "graft-build-policy.json"
+_GRAFT_POLICY_RELATIVE = "assets/graft-build-policy.json"
+GRAFT_BUILD_POLICY_PATH = SCHEMA_PATH.parent / _GRAFT_POLICY_RELATIVE
 GRAFT_BUILD_POLICY_SHA256 = (
     "70e8ae90acf7c01b7a67baf5aa3b3971472f99a090e30a26a376cf3979cb34d4"
 )
+ARCHIVED_GRAFT_PIN = "0.29.0"
+
+# Frozen release files and template trees from v2.2.0-rc.2 (d8b2191204e3).
+# Tree digests use the original migration snapshot format, not Git tree IDs.
+_ARCHIVED_FILES = {
+    _GRAFT_POLICY_RELATIVE: GRAFT_BUILD_POLICY_SHA256,
+    "assets/migration-local-ignore.txt": "0503af004d4bb2ba82cd08091e6f3eb92be1a950764d27c71f2f576f8db2df72",
+    "assets/migration-paused-agents.txt": "854a681d0849eeeaf9d01fb185d6d5005f74ce8e2c7fec867848dcd632886297",
+    "templates/agents/AGENTS.global.md": "d897ec732d1e3e162bf6bc78b402a2b38f10c3b8ff5eb85e69d32f0659de3a96",
+    "templates/agents/AGENTS.project.md": "1351fffc9a181b349fafb95b48baaf42d2d8437163812e423b71667cde469f5d",
+}
+_ARCHIVED_SKILL_TREES = {
+    "book-ddd-distilled-modeling": "213c41746d0809f21dcd1ba7e7254f760e9b3e28710ff3a1c69952338ffa1c5a",
+    "book-ddia-data-design": "b657c59e83cd3bfe703da014959acdf5c546c4b8ba667f447f5b96721ac5e1b9",
+    "book-legacy-change-safety": "f58fd36728f4d9d09c17c81bfaa883f39c337582a8c78e021c7c3fa4e94cef1b",
+    "book-refactoring-pass": "d96e9093bda6dc882a63c31f4225e38888235b693e07d76e25645058e9bc9af4",
+    "book-release-readiness": "f174a33a0b105253c292b6f802170f1d5ecd87a446d8494172a23bc026f103eb",
+    "gherkin-bdd": "12956e678986d6e86b2acbd2f8a6adbdc820f6f691bc15852afbb5cee9ee0a89",
+    "knowledge-base-integration": "6da927e1fbd478adbf25180c7f24e0587b287f6f1958a31702c98e45b202207b",
+    "lessons-record": "162cda273de51bb67ec90db1861b635a087edd5c172f1bdeae97dc801b6a0e73",
+    "maestro-mobile-e2e": "b0667e042962b3bf1bcb59097a0d8dc9aa70fd37875b832d7e2fa3cfa41e81e4",
+    "project-validation": "628946301ab15a41891412312503f85b34fe5b989807c9bb8b4b4392e2b1b54b",
+    "sbtd-task": "349acec3b24d30426696edcc993cca7bddd42aa80a9f8b1cdf8b529f9efacbae",
+    "sbtd-workflow-onboard": "0e1b96a32008746061b099a31dcb916c281521a04f1baf7cbc3aeead81e0520c",
+    "seo-geo": "e260954825eb7ea9239861e2271714bd6072202c263aa5bc2fbe825380ba0865",
+    "web-ui-autotest-generator": "373c2aab3b64e777a1575c14dd986cb9207d7843aa4150acccba15add607321c",
+}
+
+
+def archived_graft_policy() -> dict[str, Any]:
+    """Historical policy identity. Does not read or require the live file."""
+    return {
+        "path": str(GRAFT_BUILD_POLICY_PATH),
+        "state": {"type": "file", "checksum": GRAFT_BUILD_POLICY_SHA256},
+    }
+
+
+def archived_file_reference(package: Path, relative: str) -> dict[str, Any]:
+    """Resolve a frozen file identity, not a live source or execution privilege."""
+    return {
+        "path": str(package / relative),
+        "state": {"type": "file", "checksum": _ARCHIVED_FILES[relative]},
+    }
+
+
+def _archived_policy_package(reference: Mapping[str, Any]) -> Path | None:
+    raw = reference["path"]
+    path = Path(raw)
+    if (
+        not path.is_absolute()
+        or str(path) != raw
+        or ".." in path.parts
+        or path.parts[-2:] != Path(_GRAFT_POLICY_RELATIVE).parts
+        or len(path.parts) <= 3
+    ):
+        return None
+    package = path.parent.parent
+    return package if reference == archived_file_reference(package, _GRAFT_POLICY_RELATIVE) else None
+
+
+def archived_graft_policy_for(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Bind all retired policy claims to one recorded package-relative path."""
+    operations = [
+        operation for operation in _manifest_operations(payload)
+        if operation["change"]["kind"] in {"build-graft", "configure-graft"}
+    ]
+    if not operations:
+        _fail("semantic-violation", "the historical Graft policy is missing")
+    package = _archived_policy_package(operations[0]["change"]["source_ref"])
+    if package is None:
+        _fail("ownership-conflict", "the historical policy has no recorded package root")
+    policy = archived_file_reference(package, _GRAFT_POLICY_RELATIVE)
+    if any(
+        operation["change"]["source_ref"] != policy
+        or operation["ownership"] != {"kind": "template-source", "reference": policy}
+        for operation in operations
+    ):
+        _fail("ownership-conflict", "the historical policy is not the archived policy")
+    return policy
+
+
+def archived_installation_references(
+    payload: Mapping[str, Any], package: Path
+) -> Iterator[Mapping[str, Any]]:
+    """Bind historical installation sources to frozen catalog roles and bytes."""
+    for operation in payload["shared_operations"]:
+        kind = operation["change"]["kind"]
+        if operation["phase"] != "deploy" or kind == "configure-graft":
+            continue
+        target = Path(operation["target"])
+        if (
+            kind == "copy-file"
+            and operation["selector"] == "global-rules"
+            and operation["owner_kind"] == "markdown"
+            and target.name == "AGENTS.md"
+        ):
+            expected = archived_file_reference(package, "templates/agents/AGENTS.global.md")
+        elif kind == "copy-directory" and target.name in _ARCHIVED_SKILL_TREES:
+            source = (
+                package if target.name == "sbtd-workflow-onboard"
+                else package / "templates" / "skills" / target.name
+            )
+            expected = {
+                "path": str(source),
+                "state": {"type": "directory", "checksum": _ARCHIVED_SKILL_TREES[target.name]},
+            }
+        else:
+            _fail("ownership-conflict", "a historical installation source is not in the archived catalog")
+        if (
+            operation["change"]["source_ref"] != expected
+            or operation["ownership"] != {"kind": "template-source", "reference": expected}
+        ):
+            _fail("ownership-conflict", "a historical installation does not bind its archived template")
+        yield expected
 
 # kind -> (schema $def name, payload digest key or None)
 _DOCUMENT_KINDS: dict[str, tuple[str, str | None]] = {
@@ -68,6 +183,7 @@ _PHASE_RECEIPTS = {phase: kind for kind, phase in _STAGE_RECEIPT_PHASES.items()}
 
 _PHASE_ORDER = {"apply": 0, "deploy": 1, "cleanup": 2}
 _INVERSE_PHASE_ORDER = {"cleanup": 0, "deploy": 1, "apply": 2}
+_VERIFY_STATUS_PRIORITY = ("failed", "blocked", "not-verified")
 
 _BINDABLE_KINDS = frozenset(
     {
@@ -102,7 +218,7 @@ _ENVELOPE_PROJECT_STATUSES = {
         {"applied", "already-complete", "blocked", "failed"}
     ),
     ("migration", "reconcile"): frozenset({"reconciled", "blocked", "failed"}),
-    ("migration", "verify"): frozenset({"verified", "blocked", "failed"}),
+    ("migration", "verify"): frozenset({"verified", "not-verified", "blocked", "failed"}),
     ("migration", "cleanup"): frozenset(
         {"cleaned", "already-complete", "blocked", "failed"}
     ),
@@ -653,13 +769,8 @@ def _check_operation(operation: Mapping[str, Any]) -> None:
             and config_owners.get(operation["selector"]) != operation["owner_kind"]
         ):
             _fail("semantic-violation", "unknown Graft configuration selector or type")
-        if operation["change"]["source_ref"] != {
-            "path": str(GRAFT_BUILD_POLICY_PATH),
-            "state": {"type": "file", "checksum": GRAFT_BUILD_POLICY_SHA256},
-        }:
-            _fail(
-                "semantic-violation", "Graft builds require the installed pinned policy"
-            )
+        if _archived_policy_package(operation["change"]["source_ref"]) is None:
+            _fail("semantic-violation", "Graft builds require the pinned archived policy")
         if operation["ownership"] != {
             "kind": "template-source",
             "reference": operation["change"]["source_ref"],
@@ -745,6 +856,19 @@ def _manifest_operations(payload: Mapping[str, Any]) -> Iterator[Mapping[str, An
     for project in payload["projects"]:
         yield from project["private_operations"]
     yield from payload["shared_operations"]
+
+
+def _is_zero_write_project_successor(payload: Mapping[str, Any]) -> bool:
+    """Structural eligibility only; runtime rederives the inherited scope."""
+    deployment = payload["deployment"]
+    return (
+        deployment is not None
+        and payload.get("successor") is not None
+        and deployment["mode"] == "init-projects"
+        and not deployment["inputs"]
+        and not payload["shared_operations"]
+        and not any(operation["phase"] == "deploy" for operation in _manifest_operations(payload))
+    )
 
 
 def _manifest_input_references(
@@ -885,7 +1009,7 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
                 "deployment operations require an explicit deployment declaration",
             )
     else:
-        if not deploy_operations:
+        if not deploy_operations and not _is_zero_write_project_successor(payload):
             _fail(
                 "semantic-violation",
                 "a deployment declaration requires declared deployment operations",
@@ -1513,12 +1637,56 @@ def _check_verification_payload(payload: Mapping[str, Any]) -> None:
                 )
             check_retention(candidate)
     statuses = [project["status"] for project in payload["projects"]]
-    expected = _aggregate(statuses, ("failed", "blocked"), "verified", None)
+    expected = _aggregate(
+        statuses, _VERIFY_STATUS_PRIORITY, "verified", None
+    )
     if payload["status"] != expected:
         _fail(
             "semantic-violation",
             "verification status does not match the priority aggregation of project statuses",
         )
+    legacy_rows = payload.get("legacy_resources") or ()
+    if legacy_rows and "verified" in statuses:
+        _fail(
+            "semantic-violation",
+            "historical Graft verification does not authorize cleanup",
+        )
+    if len({row["resource_id"] for row in legacy_rows}) != len(legacy_rows) or (
+        _paths_identify_same([row["target"] for row in legacy_rows])
+    ):
+        _fail("semantic-violation", "duplicate historical Graft resource")
+    for row in legacy_rows:
+        if not row["reason"].strip():
+            _fail(
+                "semantic-violation",
+                "a historical Graft resource needs a readable reason",
+            )
+        byte_state, mode_state = row["bytes"], row["mode"]
+        if (mode_state == "absent") != (row["mode_source"] is None) or (
+            byte_state == "unreadable" and mode_state != "absent"
+        ):
+            _fail(
+                "semantic-violation",
+                "historical mode requires a readable resource and a trusted source",
+            )
+        if byte_state == "differ" or mode_state == "differ":
+            verdict = "drifted"
+        elif byte_state == "match" and mode_state == "match":
+            verdict = "verified"
+        else:
+            verdict = "not-verified"
+        if row["status"] != verdict:
+            _fail("semantic-violation", "historical verdict differs from its bytes or mode")
+        if verdict == "drifted" and payload["status"] != "failed":
+            _fail("semantic-violation", "historical drift requires a failed verification")
+    for project in payload["projects"]:
+        if project["status"] == "not-verified" and (
+            not project["reason"].strip() or not project["nextStep"].strip()
+        ):
+            _fail(
+                "semantic-violation",
+                "a not-verified project needs a readable reason and nextStep",
+            )
 
 
 def _check_recovery_plan_payload(payload: Mapping[str, Any]) -> None:
@@ -1848,6 +2016,8 @@ def _check_envelope(value: Mapping[str, Any], kind: str) -> None:
         _fail("semantic-violation", "duplicate project root in envelope")
     allowed = _ENVELOPE_PROJECT_STATUSES[(mode, phase)]
     severity = {"blocked": 1, "failed": 2}
+    if (mode, phase) == ("migration", "verify"):
+        severity = {status: index for index, status in enumerate(reversed(_VERIFY_STATUS_PRIORITY))}
     envelope_severity = severity.get(value["status"], 0)
     for project in value["projects"]:
         if project["status"] not in allowed:
@@ -1965,7 +2135,7 @@ def _check_envelope(value: Mapping[str, Any], kind: str) -> None:
                     "semantic-violation", "project summary masks the artifact's outcome"
                 )
 
-    if value["status"] in ("blocked", "failed") and (
+    if value["status"] in ("blocked", "failed", "not-verified") and (
         not value["reason"].strip() or not value["nextStep"].strip()
     ):
         _fail(
@@ -2518,7 +2688,7 @@ def _bind_reconciliation(
     supply both cannot bind the record, and a digest mismatch rejects
     corrupted or substituted inputs.
     """
-    if metadata["runtime_versions"]["graft"] != manifest_payload["tool_versions"].get("graft"):
+    if metadata["runtime_versions"].get("graft") != manifest_payload["tool_versions"].get("graft"):
         _fail(
             "binding-violation",
             "reconciliation cannot change the manifest's pinned Graft version",
@@ -2548,6 +2718,53 @@ def _bind_reconciliation(
                 "reconciliation input reference does not match the supplied raw bytes",
                 exit_code=3,
             )
+
+
+def _bind_legacy_verification(
+    manifest_payload: Mapping[str, Any],
+    payload: Mapping[str, Any],
+    deploy_results: Mapping[str, Any] | None,
+) -> None:
+    if "legacy_resources" not in payload:
+        # Pre-D7 receipts remain readable history; write paths reject Graft.
+        return
+    declared = {
+        operation["resource_id"]: operation
+        for operation in _manifest_operations(manifest_payload)
+        if operation["change"]["kind"] in {"build-graft", "configure-graft"}
+    }
+    rows = {row["resource_id"]: row for row in payload["legacy_resources"]}
+    if rows.keys() != declared.keys():
+        _fail("binding-violation", "historical rows differ from the manifest Graft resources")
+    projects = {project["root"]: project for project in payload["projects"]}
+    for rid, row in rows.items():
+        operation = declared[rid]
+        target = operation["target"]
+        if row["target"] != target:
+            _fail("binding-violation", "historical row target differs from its manifest resource")
+        for root in operation["dependent_projects"]:
+            project = projects[root]
+            if row["status"] == "drifted" and project["status"] != "failed":
+                _fail("binding-violation", "project status masks historical resource drift")
+            observed = next(
+                (asset["state"] for asset in project["retained_assets"] if asset["path"] == target),
+                None,
+            )
+            if row["bytes"] == "unreadable":
+                if observed is not None:
+                    _fail("binding-violation", "unreadable historical resource has a retained state")
+                continue
+            if observed is None:
+                if row["mode"] != "absent":
+                    _fail("binding-violation", "an absent historical resource has a mode verdict")
+                observed = {"type": "absent", "checksum": None}
+            if deploy_results is not None:
+                matches = observed == deploy_results[rid]["after"]
+                if (row["bytes"] == "match") != matches:
+                    _fail(
+                        "binding-violation",
+                        "historical byte verdict differs from the retained state and deployment",
+                    )
 
 
 def _bind_verification(
@@ -2591,6 +2808,7 @@ def _bind_verification(
         _fail(
             "binding-violation", "verification project scope differs from the manifest"
         )
+    _bind_legacy_verification(manifest_payload, payload, stage_results.get("deploy"))
 
     def check_candidate(
         candidate: Mapping[str, Any],

@@ -671,7 +671,9 @@ def _guard(
         ) from None
 
 
-def inspect_project_state(project_root: Path) -> StateInspection:
+def inspect_project_state(
+    project_root: Path, *, migration_context: tuple[Path, Path] | None = None
+) -> StateInspection:
     """Inspect one project's optional SBTD state without modifying anything.
 
     Always returns a dict with ``status`` (success, blocked, needs-user or
@@ -698,7 +700,24 @@ def inspect_project_state(project_root: Path) -> StateInspection:
         )
     else:
         legacy_present = True
-    if legacy_present:
+    if migration_context is not None:
+        from onboard_contracts import ContractError
+        from sbtd_deployment_smoke import bound_retained_tree
+
+        try:
+            expected = bound_retained_tree(root_real, *migration_context)
+        except (ContractError, OSError, ValueError, RuntimeError):
+            return _result(
+                "blocked", "migration evidence does not prove this project's retained state",
+                "preserve originals and recheck the manifest, apply receipt and project",
+                legacy_present=legacy_present,
+            )
+        if legacy_present != (expected is not None):
+            return _result(
+                "blocked", "migration legacy state changed during inspection",
+                _REPAIR_NEXT, legacy_present=legacy_present,
+            )
+    elif legacy_present:
         return _result(
             "needs-user",
             "legacy .trellis state is present and was retained without being read",
@@ -706,6 +725,15 @@ def inspect_project_state(project_root: Path) -> StateInspection:
             "the legacy runtime and never modifies retained state",
             legacy_present=True,
         )
+    result = _inspect_task_records(root_real)
+    if legacy_present:
+        result["legacyPresent"] = True
+        if result["status"] == "success":
+            result["reason"] = "task state passed inspection; the recorded legacy directory is retained pending separate cleanup"
+    return result
+
+
+def _inspect_task_records(root_real: Path) -> StateInspection:
 
     problems: list[TaskDataError] = []
     active_task: TaskSummary | None = None

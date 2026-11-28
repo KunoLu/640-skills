@@ -13,14 +13,18 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "sbtd-workflow-onboard/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from onboard_contracts import ContractError, operation_id, resource_id, seal_document
+from sbtd_deployment import validate_archived_graft_declarations
+from sbtd_migration import apply_migration, runtime_versions
+from sbtd_migration_files import save_document, snapshot
 from sbtd_migration_plan import plan_migration, validate_legacy_inputs
 
+from tests.onboard_contract_fixtures import legacy_graft_operation, legacy_graft_versions
 from tests.test_sbtd_migration_apply import file_contents, legacy_project
 from tests.test_sbtd_migration_plan import _reader
 
 
 class CodexDeploymentPlanTests(unittest.TestCase):
-    def test_project_only_deploy_resources_are_frozen_before_apply(self):
+    def test_project_only_plan_cannot_authorize_new_graph_writes(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             root = legacy_project(base, "project")
@@ -40,35 +44,43 @@ class CodexDeploymentPlanTests(unittest.TestCase):
                     vault,
                     "fixture",
                     None,
-                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    tool_versions=runtime_versions(),
                     deployment_mode="init-projects",
                 )
                 validate_legacy_inputs(manifest, _reader)
                 self.assertEqual(file_contents(base), before)
                 payload = manifest["payload"]
-                self.assertEqual(
-                    payload["deployment"],
-                    {"mode": "init-projects", "platform": "codex", "inputs": []},
-                )
-                operations = payload["projects"][0]["private_operations"]
-                self.assertEqual(
-                    {
-                        operation["target"]
-                        for operation in operations
-                        if operation["phase"] == "deploy"
-                    },
-                    {str(root / "AGENTS.md"), str(root / "graft")},
-                )
+                self.assertIsNone(payload["deployment"])
+                self.assertFalse(any(
+                    op["phase"] == "deploy" for op in payload["projects"][0]["private_operations"]
+                ))
                 self.assertEqual(payload["shared_operations"], [])
-                broken = copy.deepcopy(payload)
-                broken["projects"][0]["private_operations"] = [
-                    operation
-                    for operation in broken["projects"][0]["private_operations"]
-                    if operation["change"]["kind"] != "build-graft"
-                ]
-                with self.assertRaises(ContractError):
-                    validate_legacy_inputs(seal_document("manifest", broken), _reader)
-                self.assertEqual(file_contents(base), before)
+                from tests.test_sbtd_migration_rc3_graft import RC2_ONBOARD
+
+                archived = copy.deepcopy(payload)
+                archived["deployment"] = {"mode": "init-projects", "platform": "codex", "inputs": []}
+                archived["tool_versions"] = legacy_graft_versions(RC2_ONBOARD)
+                archived["projects"][0]["private_operations"].extend((
+                    legacy_graft_operation(
+                        target=str(root / "graft"), owner_kind="directory", selector="whole-resource",
+                        kind="build-graft", dependents=[str(root)],
+                    ),
+                    legacy_graft_operation(
+                        target=str(root / "AGENTS.md"), owner_kind="markdown", selector="graft-agents",
+                        kind="configure-graft", dependents=[str(root)], before=snapshot(root / "AGENTS.md"),
+                    ),
+                ))
+                historical = seal_document("manifest", archived)
+                validate_archived_graft_declarations(historical["payload"])
+                evidence = base / "evidence"
+                evidence.mkdir(mode=0o700)
+                manifest_path = evidence / "rc2-manifest.json"
+                save_document(manifest_path, historical, private_root=evidence)
+                unchanged = snapshot(base)
+                with self.assertRaises(ContractError) as failure:
+                    apply_migration(manifest_path, confirmed=True, no_routing_approvals=True)
+                self.assertEqual(failure.exception.code, "unsupported-in-rc.3")
+                self.assertEqual(snapshot(base), unchanged)
 
     def test_resealed_shared_host_root_cannot_replace_the_active_codex_home(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -90,7 +102,7 @@ class CodexDeploymentPlanTests(unittest.TestCase):
                     vault,
                     "fixture",
                     None,
-                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    tool_versions=runtime_versions(),
                     deployment_mode="init",
                 )
                 validate_legacy_inputs(manifest, _reader)
@@ -99,15 +111,10 @@ class CodexDeploymentPlanTests(unittest.TestCase):
                 for shared_root in payload["shared_roots"]:
                     if shared_root["kind"] == "codex-home":
                         shared_root["path"] = str(forged)
-                for operation in payload["shared_operations"]:
-                    if operation["selector"] == "graft-mcp":
-                        operation["target"] = str(forged / "config.toml")
-                        operation["resource_id"] = resource_id(
-                            "toml", operation["target"]
-                        )
-                        operation["operation_id"] = operation_id(
-                            "deploy", operation["resource_id"], "graft-mcp"
-                        )
+                rules = next(op for op in payload["shared_operations"] if op["target"] == str(active / "AGENTS.md"))
+                rules["target"] = str(forged / "AGENTS.md")
+                rules["resource_id"] = resource_id(rules["owner_kind"], rules["target"])
+                rules["operation_id"] = operation_id("deploy", rules["resource_id"], rules["selector"])
                 payload["projects"][0]["shared_operation_ids"] = sorted(
                     operation["operation_id"]
                     for operation in payload["shared_operations"]
@@ -143,32 +150,14 @@ class CodexDeploymentPlanTests(unittest.TestCase):
                     vault,
                     "fixture",
                     None,
-                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    tool_versions=runtime_versions(),
                     deployment_mode="init",
                 )
                 payload = copy.deepcopy(manifest["payload"])
-                policy = next(
-                    operation["change"]["source_ref"]
-                    for operation in payload["shared_operations"]
-                    if operation["selector"] == "graft-mcp"
+                operation = legacy_graft_operation(
+                    target=str(home / ".omp/agent/mcp.json"), owner_kind="json",
+                    selector="graft-omp-mcp", kind="configure-graft", dependents=[str(root)],
                 )
-                target = str(home / ".omp/agent/mcp.json")
-                resource = resource_id("json", target)
-                operation = {
-                    "phase": "deploy",
-                    "resource_id": resource,
-                    "operation_id": operation_id("deploy", resource, "graft-omp-mcp"),
-                    "owner_kind": "json",
-                    "target": target,
-                    "selector": "graft-omp-mcp",
-                    "change": {"kind": "configure-graft", "source_ref": policy},
-                    "ownership": {"kind": "template-source", "reference": policy},
-                    "before_requirement": {
-                        "kind": "state",
-                        "state": {"type": "absent", "checksum": None},
-                    },
-                    "dependent_projects": [str(root)],
-                }
                 payload["shared_roots"].append(
                     {
                         "kind": "omp-home",

@@ -83,10 +83,10 @@ python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.t
 | 目标 | 选择 | 含义 |
 |---|---|---|
 | 检查而不安装 | `check` / `plan` | 只读盘点和拟执行内容，不代表已完成初始化 |
-| 首次完整初始化 | `init` | 安装缺失／无效 Skill；保留合法 Skill 壳，不保证其内容最新；默认不写全局 Graft MCP |
+| 首次完整初始化 | `init` | 安装缺失／无效 Skill；保留合法 Skill 壳，不保证其内容最新；不安装也不退役受管宿主条目 |
 | 只追加项目 | `init-projects` | 项目 AGENTS／ignore 与适用本地资产；不做全局安装或用户级 MCP／hooks 写入 |
 | 对齐已有环境 | `upgrade` | 固定基线的 plan/apply/verify，显式裁决漂移，保留备份与恢复入口 |
-| 明确要求重装 | `reset` | **不备份**覆盖 bundled Skills，重装 required external Skills；不是带恢复保证的升级流程 |
+| 明确要求重装 | `reset` | **不备份**覆盖 bundled Skills，重装 required external Skills；不是带恢复保证的升级流程，也不是按名称删除全部匹配宿主条目的授权 |
 | 迁移旧数据 | `migration` | 批准投影、保留原件和验证回执；部署另行授权；中断未保存的部署证据只按当前状态调和，绝不回填伪造 |
 | 退役已检测旧资产 | `cleanup-legacy` | 展示实际候选，再单独确认执行 |
 | 恢复已授权批次 | `recovery` | 根据可信批次证据计划并确认恢复，不是通用撤销命令 |
@@ -95,19 +95,54 @@ python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.t
 <details>
 <summary><strong>旧项目：移除 Graft 是不兼容改动（breaking change）</strong></summary>
 
-移除 `sbtd-graft` 后，项目不能再通过这个 MCP 连接查询代码图；移除对应的 Codex hook 处理器，也会停止由这些事件触发的更新。AST 检索只替代结构搜索，不替代全部图查询或 hook。**升级不等于同意退役 Graft。**
+rc.3 从工作流移除 Graft。没有 `install-graft`，也没有 `--graft-*`。替换 Onboard，包括 `npx skills add`，可能留下仍指向已删除启动器的 Codex 或 OMP 条目。宿主启动时可能告警。告警不致命，也不是删除该条目的同意。本节不宣称你的环境已升级、宿主已验收，也不宣称支持 Antigravity CLI。
 
-普通 `init` 和默认 `check`/`plan` 不改全局 Graft MCP 或 hook 配置。显式项目根仍保留项目本地围栏和图；图存在不证明宿主已接线。`reset`、显式 `--graft-hooks` / `--graft-retire-legacy` 和密封迁移部署保持各自的接线契约。若升级计划选中了该宿主并列出配置变更，另行确认的 `upgrade --phase apply` 可以写入受管 MCP 配置。查找升级前的原件，应使用计划的 `payload.backup_root` 和回执的 `backup_ref`。`cleanup-legacy` 和 `--graft-retire-legacy` 都不会卸载当前全局连接；后者用于把旧的固定根绑定切换到当前接线。
+`check`、`plan` 和 `reset` 对选定配置域报告 `graftRetirement`。`status: dangling` 表示识别到的条目所引用的启动器已缺失，**不代表 Onboard 拥有条目**。只有绑定的写入回执与当前字节匹配，才是 `verification: proven`。归属未证实或已漂移的条目保留；若指向缺失或即将被替换的启动器，reset 和 upgrade 停止。退役已证明归属的条目仍须确认和私有备份。全局宿主变更影响使用该配置域的所有项目。
 
-1. **先验证替代能力。** 在选定宿主中批准一次对已知夹具的只读检索，核对实际命中，并确认未放行的工具不能执行。如果项目仍依赖图查询或 hook，保留 Graft。
-2. **证明具体条目是谁写的。** 确定 Codex `mcp_servers.sbtd-graft`、OMP `mcpServers.sbtd-graft` 或单个 Codex hook 处理器。普通接线／重装核对计划和 `graftWiring.operationResults`；迁移核对 manifest 和部署证据；升级核对升级计划和 apply 回执。把成功写入结果对应到具体条目；文件被改过，不代表其中所有条目都属于 SBTD。
-   - **替换已有文件：** 核验记录的原件备份，与记录的写后状态比对，确认实际变更。
-   - **新建文件：** 须有 `before.type=absent`，并有该操作成功创建目标且其中含此条目的记录。原先没有文件可备份；单凭 `backup_ref=null` 不能证明新建。
-   - 两种情况都须核对当前文件仍与记录的写后状态一致。来源不明或之后已被编辑的条目保留。
-3. **记录切换现场。** 列明精确条目、共用连接的项目及恢复路径，另取确认并停止并发写入。在私有位置备份**仍有接线**的文件及权限。仅移除获准条目，保留无关条目和用户的 hook 文件。每次变更后、继续下一项前，记录目标路径和是否存在；若存在，再记录内容摘要及权限，并关联到对应的退役前备份。不能记录就停止。验证替代检索可用，且第二次执行无额外写入。
-4. **按该记录回退。** 逐项比对当前目标与记录的退役后存在性、内容摘要和权限。匹配才从已核验的退役前备份恢复，再核验恢复后的字节及权限。记录缺失或目标已变化时，保留现场和备份，不得覆盖后续编辑。宿主加载另行检查。隔离夹具验证的是文件恢复，不是生产卸载命令。
+**同意 `reset` 不等于同意清理。** 用相同平台、项目根和选项执行 `plan --action reset`。退役还须提供已显示的 `--confirm-retirement` 摘要、`--yes` 及位于全部安装目标之外的既有私有 `--retirement-backup-root`。`--retirement-evidence` 描述符须在该 vault 内。替换既有启动器前，先选择受影响的 Codex 或 OMP 配置域。项目规则围栏归属已证实时，reset 只退役围栏，跳过模板覆盖。另一项写入会覆盖归属未证实的内容时，reset 停止；排除该目标后重新预览。
 
-[现行接线、备份位置与旧绑定切换说明](sbtd-workflow-onboard/REFERENCE.md#codex-and-omp-wiring-and-deployment)
+根安装器不会自行同意退役。需要退役时，安装器停止并指向上述 plan/confirm 序列。`--no-mcp` 只跳过安装器的通用 MCP 菜单，不转发给 Onboard，也不是宿主接线。
+
+Windows 文件带有命名数据流时不作为退役候选：普通字节备份无法恢复该数据流。安装源版本过旧、不支持显式退役确认时，安装器在初始化之前拒绝执行。
+
+在已安装的 Onboard 目录执行 plan 并检查 JSON。确认目标后，才将 `PLAN_PATH` 设为 `cleanup_legacy.plan_path`、`PLAN_ID` 设为顶层 `plan_id`。
+
+```bash
+python scripts/onboard.py cleanup-legacy --phase plan \
+  --projects-root /abs/project --backup-root /abs/private-vault \
+  --retirement-evidence /abs/private-vault/evidence.json --json
+```
+
+执行已批准的计划：
+
+```bash
+python scripts/onboard.py cleanup-legacy --phase apply \
+  --plan "${PLAN_PATH:?}" --confirm-cleanup "${PLAN_ID:?}" --json
+```
+
+单独决定回退时，将 `RECEIPT_PATH` 设为上述 apply 返回的 `cleanup_legacy.receipt_path`：
+
+```bash
+python scripts/onboard.py cleanup-legacy --phase rollback --plan "${PLAN_PATH:?}" \
+  --cleanup-receipt "${RECEIPT_PATH:?}" --confirm-cleanup "${PLAN_ID:?}" --json
+```
+
+`--retirement-evidence` 只在 plan 可选，且必须位于所选 vault 内。apply 重试还可传入此前的 `--cleanup-receipt`。rollback 只在当前字节和权限仍与记录的退役后状态一致时恢复该资源。没有 `restore-retirement` 命令。
+
+下列对象不自动删除：项目 `graft/` 与 `.graft`、用户遥测文件，以及全局 npm 包。报告列出已存在的项目目录和手工命令，其中包括 `npm uninstall -g @nanonets/graft`。由你决定。
+
+升级计划包含同一份 `graftRetirement` 披露。用既有升级确认来确认那份已显示的计划。升级成功不是清理同意。升级没有 `--retirement-evidence` 参数。退役只通过升级 scope 里的 `retirement_evidence` 回执绑定声明，并使用普通的单一私有 `backup_root`。不要传递未注册的参数。通用 `upgrade verify --probe` 和安装器能力探针保留；它们不启动 Graft，也不是宿主验收。
+
+仍含 `build-graft` 或 `configure-graft` 的密封迁移计划以 `unsupported-in-rc.3` fail-closed。重新生成计划。历史 `migration verify` 只在已安装签名把该精确前驱绑定到当前执行后继时读取旧回执。签名缺失或错误为 `version-conflict`。verify 保持只读，不重跑 smoke，也不启动 Graft。它比对记录的字节和已签名的写后模式。字节或可信模式不一致为 `drifted`；两者都匹配为 `verified`；字节匹配但没有可信写后权限证据为 `not-verified`。其他资源继续核验。这些结果都不授予写入权。曾经成功的 rc.2 部署，不能仅凭当时成功就视为可核验。新的迁移 deploy 和 reconcile 不运行 Graft CLI。执行代码实际做本地部署检查时，那是可信的只读 `check-projects`，外加对密封目标的复核。它不是业务 API、宿主或模型验收。本节不宣称该检查已通过。
+
+`migration --phase verify --post-write-attestation <private-file>` 只接受可信签发方针对该部署及资源的既有附证。签名绑定的写后模式、after 状态与 `observed_at` 必须对应原执行窗口；运行时沿革另行验签。操作人不得事后补签或传入自选信任公钥。rc.2 仅含字节的回执不能证明权限；字节匹配但缺可信权限证据时仍为 `not-verified`。任何核验结果都不授权写入。
+
+新迁移的部署检查只核对一个选定项目、原 manifest 和成功的 apply 回执。单独确认清理之前，现场与记录匹配的 `.trellis` 是应保留的原件；普通 onboarding 仍会被该目录阻断，其他项目状态异常仍会阻断迁移检查。
+
+
+结构检索使用实际源码、LSP 和契约。已有 `ast-grep` 或 `rg` 时可以使用。空结果或 exit 0 不证明无影响。
+
+[宿主接线与退役边界](sbtd-workflow-onboard/REFERENCE.md#codex-and-omp-wiring-and-deployment)
 
 </details>
 
@@ -145,7 +180,7 @@ python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.t
 请使用 sbtd-workflow-onboard 的 init-projects 模式处理 /abs/project，平台 omp。
 安装项目级 AGENTS.md。先执行 project-only 前置检查并展示本地写入范围，
 等待我批准后再写入。不要安装或修改全局工具、Skills、AGENTS、MCP 或 hooks。
-报告本地 Graft 图是已构建还是不可用。
+不要构建或删除历史项目目录。
 ```
 
 </details>
@@ -278,7 +313,7 @@ reset 不等于迁移、清理、全机升级，也不提供自动回滚保证�
 迁移器接受已刻画的 Trellis **0.6.15／0.6.17 数据布局**，不接受任意旧版本。用户内容的 hash 声明不是删除授权；批准缺失、任务关系矛盾或宿主配置不明仍会阻断。确实没有宿主配置的项目可保留空平台列表，不伪造宿主文件。vendor 卸载运行时仍独立钉版。
 
 旧模板登记 hash 过期时，只能用安装包内已审核的**精确路径／版本／内容钉**补足识别；迁移不刷新旧 hash 文件，也不在运行时下载模板。混合项目规则的 `AGENTS.md` 不是整份生成资产，其替换仍须已有签名批准，绑定实际前态和精确候选。识别成功不等于授权 apply 或清理。
-迁移部署保留已批准的项目规则正文，仅解除维护暂停前缀并追加受管 Graft 段，不静默换回通用模板。
+迁移部署保留已批准的项目规则正文，仅解除维护暂停前缀。不追加受管图围栏，也不静默换回通用模板。仍含 `build-graft` 或 `configure-graft` 的密封计划在重新生成前 fail-closed。
 OMP 部署也接受由绑定的成功迁移回执及完整原件证明的配置输入后态；未记录的漂移仍阻断，不豁免运行时版本检查，也不自动授权重试部署。
 
 中断而未保存证据的部署只按**当前状态**调和，绝不回填：`migration --phase reconcile` 要求完整成功的 apply 回执、真实缺失的历史证据路径、全新不覆盖的输出路径以及显式 `--yes`。它重新验证签名运行时血统、保留原件与封存资源，然后写入一份显式标记 `kind: current-state`／`historical_execution: unknown` 的新证据文档——每项结果的 before 由保留原件证明，after 为本次新鲜实测，不伪造历史退出码、成功事实或旧时间戳。接受只表示当前后置条件成立，不代表原进程 exit0 或发生新的目标写入；随后的标准 `verify` 报告 `acceptance_basis: current-state`。这不授权任何安装、部署重试或清理，常规 deploy/retry/recovery 各门禁不变。
@@ -420,16 +455,14 @@ Onboard 使用 **Ponytail skill-only provider**。官方 Ponytail plugin 已启�
 
 | 工具／层次 | 主责 | 不能证明 |
 |---|---|---|
-| Graft | 固定版本、明确范围的结构分析与影响辅助 | 编译器语义、业务正确性或宿主自动就绪 |
+| 结构证据 | 实际源码、LSP 与契约；已有时使用 `ast-grep` 或 `rg` | 编译器语义、业务正确性，或用空结果／exit 0 证明无影响 |
 | Chrome DevTools MCP | 浏览器运行时、console／network／performance 诊断 | 可重复 CI 回归 |
 | Playwright MCP | 页面探索与 locator 辅助 | 项目 Playwright suite 已通过 |
 | Playwright CLI | 项目级 Web 回归与 E2E | 只有 mock／contract 时的真实 full-stack 行为 |
 | Maestro CLI / MCP | Mobile／Hybrid flow、设备与 flow 诊断、可选 Web smoke | Web 回归主责或缺失设备上的真实行为 |
 | RTK / Caveman | 终端输出／对话压缩 | 测试执行、报告生成或工作流义务降低 |
 
-Graft 安装须单独确认，版本由[受管运行时](sbtd-workflow-onboard/scripts/graft_runtime.py)固定。普通 `init` 和默认 `check`/`plan` 不创建、更新或移除全局 `sbtd-graft` 连接；既有全局 Graft MCP/hook 配置保持原样。`reset` 和显式 `--graft-hooks` / `--graft-retire-legacy` 保持既有接线行为。显式项目根的项目设置会准备本地围栏和图；图存在不证明宿主已接线。全局连接已存在或经显式配置时，每个有效 Codex／OMP 配置域的一条连接按启动 cwd 锁定真实仓库／worktree。不做共同父目录多项目图、不隐式开启 cloud enrichment、不静默替换旧绑定。Codex hooks 单独 opt-in；OMP 初始化不写 hooks。[接线契约](sbtd-workflow-onboard/REFERENCE.md#codex-and-omp-wiring-and-deployment)
-
-即使本机安装了 Trail，受管 Graft 也保持 Graft 命令／工具合同：子进程禁用自动 Trail 切换并隔离继承的 Trail 配置。项目 `.trail` 笔记与原生图输入同样执行拒绝链接／特殊文件的范围检查。见 [pin 验收场景](sbtd-workflow-onboard/REFERENCE.md#graft-pin-acceptance-scenarios)。
+只读已授权的单仓根。不上传代码、diff 或作者信息，不启用 LLM／cloud。受管宿主条目的退役是另一次确认操作，见[旧项目：移除 Graft](#graft-retirement)。
 
 **只报告实际执行结果。** 报告型测试优先原生命令；保留失败轮次、命名后的 native／raw 报告及同 stem **中文**汇总。区分 `full-stack`、`contract-backed`、`mock-backed`／`app-mocked`、`backend-only`、`smoke-only` 和 `blocked`；报告已生成不等于测试通过。dirty 本地证据不代表精确 PR head 的 CI 证明。
 
@@ -537,7 +570,7 @@ Ignore 不会脱敏、不取消已有 tracked 状态，也不授权删除。任�
 
 源文件变化时，同轮评估两种语言的 README、[英文 CHANGELOG](CHANGELOG.md)、[中文变更日志](CHANGELOG.zh.md)和[版本化 automation prompt](prompts/automations/sbtd-workflow-tools-version-check.md)。两份变更日志逐条对应，版本、日期、顺序、事实、URL、提交SHA和代码标识相同，仅正文语言不同；同步更新最上方未发布章节，保留已发布历史。普通改动**不**同步已安装副本或 live automation。仓库维护 `sync`／`同步` 需要明确授权；`update`／`更新` 推进监控基线并归档已分析更新。它们不是 Onboard upgrade，也不是 BDD sync。
 
-版本检查自动化采用精简主prompt、每轮权限清单及按需影响检查。先核对Orca分配的工作区并保护已有改动，区分证据不可用与“没有更新”，官方工具始终以 `ENTRYPOINT.md` 为固定基线；Graft 不在监控范围内。原始tag与比较版本分别记录。没有已确认的未发布CHANGELOG章节时，发布条目建议留在 `UPDATE.md` 或本轮输出，不由自动化猜下一tag。修改这些源文件不会更新live automation，后者仍须明确 `sync`。
+版本检查自动化采用精简主prompt、每轮权限清单及按需影响检查。先核对Orca分配的工作区并保护已有改动，区分证据不可用与“没有更新”，官方工具始终以 `ENTRYPOINT.md` 为固定基线。原始tag与比较版本分别记录。没有已确认的未发布CHANGELOG章节时，发布条目建议留在 `UPDATE.md` 或本轮输出，不由自动化猜下一tag。修改这些源文件不会更新live automation，后者仍须明确 `sync`。
 
 原生全量命令仍为 `python -B -m unittest discover -s tests -p 'test_*.py'`。CI 自动发现完整 Linux 集合，按逐例实测耗时权重分为互不重叠的分片：无fixture的用例逐个分配，类级／模块级fixture保持同片，缺少权重的用例按中位数估算并在各分片清单中列出；Windows 将原生范围分片，消除 PowerShell／Unicode 选择器重叠；macOS 保留原生范围。既有检查名称聚合全部必需分片，任一失败、取消或缺失均不能通过。最低 TOML 编辑器检查使用不同依赖版本，仍独立保留，不当作重复。逐例耗时、skip 原因和中文结果摘要保存为 CI artifact。精确范围见 [workflow](.github/workflows/validation.yml) 与[运行器](tests/run_ci.py)。源码检查、安装副本检查、真实宿主加载与发布验收仍是不同层次的证据。
 

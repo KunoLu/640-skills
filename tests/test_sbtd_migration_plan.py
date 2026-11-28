@@ -197,7 +197,7 @@ class MigrationPlanTests(unittest.TestCase):
                     vault,
                     "fixture-custodian",
                     None,
-                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    tool_versions={"onboard": "fixture"},
                 )
                 with self.assertRaises(ContractError):
                     plan_migration(
@@ -205,7 +205,7 @@ class MigrationPlanTests(unittest.TestCase):
                         base / "missing-vault",
                         "fixture-custodian",
                         None,
-                        tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                        tool_versions={"onboard": "fixture"},
                     )
             operations = manifest["payload"]["projects"][0]["private_operations"]
             identities = [
@@ -463,7 +463,7 @@ def _plan(project, vault, decisions, home, roots=None):
             vault,
             "fixture-custodian",
             decisions,
-            tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+            tool_versions={"onboard": "fixture"},
         )
 
 
@@ -1495,7 +1495,7 @@ class MigrationPlanOfficialTemplateRecognitionTests(unittest.TestCase):
                     vault,
                     "fixture",
                     None,
-                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    tool_versions={"onboard": "fixture"},
                 )
             self.assertEqual(caught.exception.code, "ownership-conflict")
             self.assertEqual(_tree_bytes(base), before)
@@ -1620,7 +1620,7 @@ class MigrationPlanOfficialTemplateRecognitionTests(unittest.TestCase):
                         vault,
                         "fixture",
                         None,
-                        tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                        tool_versions={"onboard": "fixture"},
                     )
                 self.assertEqual(blocked.exception.code, "ownership-conflict")
                 # An approval signed by a foreign key is no approval.
@@ -1675,7 +1675,7 @@ class MigrationPlanOfficialTemplateRecognitionTests(unittest.TestCase):
                 manifest_path.write_bytes(canonical_json_bytes(manifest))
                 with mock.patch(
                     "sbtd_migration.runtime_versions",
-                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                    return_value={"onboard": "fixture"},
                 ):
                     response, code = apply_migration(
                         manifest_path,
@@ -1730,7 +1730,7 @@ class MigrationPlanOfficialTemplateRecognitionTests(unittest.TestCase):
                 _home_env(home),
                 mock.patch(
                     "sbtd_migration.runtime_versions",
-                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                    return_value={"onboard": "fixture"},
                 ),
                 self.assertRaises(ContractError) as apply_error,
             ):
@@ -2481,18 +2481,19 @@ class MigrationPlanVaultTests(unittest.TestCase):
                         base / "missing",
                         "c",
                         None,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
+                        tool_versions={"onboard": "f"},
                     )
                 self.assertFalse((base / "missing").exists())
                 loose = base / "loose"
-                loose.mkdir(mode=0o755)
+                loose.mkdir()
+                loose.chmod(0o755)
                 with self.assertRaises(ContractError):
                     plan_migration(
                         [project],
                         loose,
                         "c",
                         None,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
+                        tool_versions={"onboard": "f"},
                     )
                 link = base / "link"
                 real = base / "real"
@@ -2504,7 +2505,7 @@ class MigrationPlanVaultTests(unittest.TestCase):
                         link,
                         "c",
                         None,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
+                        tool_versions={"onboard": "f"},
                     )
                 inside = project / ".vault"
                 inside.mkdir(mode=0o700)
@@ -2514,7 +2515,7 @@ class MigrationPlanVaultTests(unittest.TestCase):
                         inside,
                         "c",
                         None,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
+                        tool_versions={"onboard": "f"},
                     )
             self.assertEqual(_tree_bytes(project), _tree_bytes(project))
 
@@ -2533,7 +2534,7 @@ class MigrationPlanVaultTests(unittest.TestCase):
                         vault,
                         "c",
                         None,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
+                        tool_versions={"onboard": "f"},
                     )
                 with self.assertRaises(ContractError):
                     plan_migration(
@@ -2541,7 +2542,7 @@ class MigrationPlanVaultTests(unittest.TestCase):
                         vault,
                         "c",
                         None,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
+                        tool_versions={"onboard": "f"},
                     )
 
     def test_decisions_document_must_live_inside_the_vault(self):
@@ -2560,7 +2561,7 @@ class MigrationPlanVaultTests(unittest.TestCase):
                     vault,
                     "c",
                     outside,
-                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                    tool_versions={"onboard": "f"},
                 )
             self.assertEqual(
                 _tree_bytes(base)[str(outside.relative_to(base))],
@@ -2632,7 +2633,7 @@ class MigrationPlanClosureTests(unittest.TestCase):
                     vault,
                     "c",
                     decisions,
-                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                    tool_versions={"onboard": "f"},
                 )
             # An unknown extra member is just as unacceptable.
             _write(candidate / "prd.md", b"# migrated prd\n")
@@ -2651,7 +2652,7 @@ class MigrationPlanClosureTests(unittest.TestCase):
                     vault,
                     "c",
                     decisions,
-                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                    tool_versions={"onboard": "f"},
                 )
 
     def test_missing_approval_never_substitutes_scan_results(self):
@@ -2666,7 +2667,7 @@ class MigrationPlanClosureTests(unittest.TestCase):
                         vault,
                         "c",
                         None,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
+                        tool_versions={"onboard": "f"},
                     )
                 # An approval that covers only the task is still incomplete.
                 items = []
@@ -2680,7 +2681,7 @@ class MigrationPlanClosureTests(unittest.TestCase):
                     vault2,
                     "c",
                     partial,
-                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                    tool_versions={"onboard": "f"},
                 )
 
     def test_private_only_cannot_cover_mandatory_projections(self):
@@ -2709,7 +2710,7 @@ class MigrationPlanClosureTests(unittest.TestCase):
                     vault,
                     "c",
                     decisions,
-                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                    tool_versions={"onboard": "f"},
                 )
 
     def test_malformed_scope_and_duplicate_candidates_rejected(self):
@@ -2726,7 +2727,7 @@ class MigrationPlanClosureTests(unittest.TestCase):
                     vault,
                     "c",
                     decisions,
-                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                    tool_versions={"onboard": "f"},
                 )
             document = json.loads(
                 _decisions(
@@ -2744,7 +2745,7 @@ class MigrationPlanClosureTests(unittest.TestCase):
                     vault,
                     "c",
                     decisions,
-                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                    tool_versions={"onboard": "f"},
                 )
 
     def test_unknown_legacy_content_and_platform_drift_rejected(self):
@@ -2758,7 +2759,7 @@ class MigrationPlanClosureTests(unittest.TestCase):
                     vault,
                     "c",
                     decisions,
-                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                    tool_versions={"onboard": "f"},
                 )
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
@@ -2787,7 +2788,7 @@ class MigrationPlanClosureTests(unittest.TestCase):
                     vault,
                     "c",
                     decisions,
-                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                    tool_versions={"onboard": "f"},
                 )
 
     def test_graph_conflicts_and_stale_targets_rejected(self):
@@ -2816,7 +2817,7 @@ class MigrationPlanClosureTests(unittest.TestCase):
                     vault,
                     "c",
                     decisions,
-                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                    tool_versions={"onboard": "f"},
                 )
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
@@ -2829,7 +2830,7 @@ class MigrationPlanClosureTests(unittest.TestCase):
                     vault,
                     "c",
                     decisions,
-                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                    tool_versions={"onboard": "f"},
                 )
 
     def test_existing_current_identity_precedes_legacy_identity(self):
@@ -2854,7 +2855,7 @@ class MigrationPlanClosureTests(unittest.TestCase):
                     vault,
                     "c",
                     decisions,
-                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                    tool_versions={"onboard": "f"},
                 )
 
 
@@ -2917,7 +2918,7 @@ class MigrationPlanPrivacyTests(unittest.TestCase):
                     vault,
                     "c",
                     decisions,
-                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                    tool_versions={"onboard": "f"},
                 )
 
     def test_shared_projection_never_embeds_private_digest_or_layout(self):
@@ -2959,7 +2960,7 @@ class MigrationPlanPrivacyTests(unittest.TestCase):
                     vault,
                     "c",
                     decisions,
-                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                    tool_versions={"onboard": "f"},
                 )
             # A candidate still pointing at the retired layout is not a safe
             # rewritten link either.
@@ -2978,7 +2979,7 @@ class MigrationPlanPrivacyTests(unittest.TestCase):
                     vault,
                     "c",
                     decisions,
-                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                    tool_versions={"onboard": "f"},
                 )
 
     def test_lessons_marker_preservation(self):
@@ -3002,7 +3003,7 @@ class MigrationPlanPrivacyTests(unittest.TestCase):
                     vault,
                     "c",
                     decisions,
-                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                    tool_versions={"onboard": "f"},
                 )
 
 
@@ -3041,7 +3042,7 @@ class MigrationPlanCurrentFindingsTests(unittest.TestCase):
                     vault,
                     "c",
                     decisions,
-                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                    tool_versions={"onboard": "f"},
                 )
             archive = project / "ai/tasks/archive/2026-Q3/alpha"
             for item in items:
@@ -3176,7 +3177,7 @@ class MigrationPlanCurrentFindingsTests(unittest.TestCase):
                     vault,
                     "c",
                     _decisions(vault, items),
-                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                    tool_versions={"onboard": "f"},
                 )
             self.assertEqual(caught.exception.code, "graph-conflict")
 
@@ -3506,7 +3507,7 @@ class MigrationPlanCurrentFindingsTests(unittest.TestCase):
                             vault,
                             "c",
                             update_spec(body),
-                            tool_versions={"onboard": "f", "graft": "0.18.0"},
+                            tool_versions={"onboard": "f"},
                         )
                     self.assertEqual(caught.exception.code, "target-conflict")
                     self.assertEqual(caught.exception.exit_code, 2)
@@ -3660,7 +3661,7 @@ def _plan_absorbed(project, vault, environment):
             vault,
             "fixture-custodian",
             None,
-            tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+            tool_versions={"onboard": "fixture"},
             deployment_mode="init",
         )
 
@@ -3814,7 +3815,7 @@ class MigrationPlanAbsorbedSkillsRootTests(unittest.TestCase):
                     vault,
                     "fixture-custodian",
                     None,
-                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    tool_versions={"onboard": "fixture"},
                 )
             payload = manifest["payload"]
             self.assertEqual(
@@ -4384,7 +4385,7 @@ def _plan_routing(project, vault, approval, environment):
             vault,
             "fixture",
             None,
-            tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+            tool_versions={"onboard": "fixture"},
             routing_approvals=approval,
         )
 
@@ -4456,7 +4457,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                         vault,
                         "fixture",
                         None,
-                        tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                        tool_versions={"onboard": "fixture"},
                     )
                 self.assertIn(blocked.exception.code, {"ownership-conflict", "semantic-violation"})
                 before_plan = live.read_bytes()
@@ -4465,7 +4466,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                     vault,
                     "fixture",
                     None,
-                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    tool_versions={"onboard": "fixture"},
                     routing_approvals=approval,
                 )
                 self.assertEqual(live.read_bytes(), before_plan)
@@ -4493,7 +4494,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                 manifest_path.write_bytes(canonical_json_bytes(manifest))
                 with mock.patch(
                     "sbtd_migration.runtime_versions",
-                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                    return_value={"onboard": "fixture"},
                 ):
                     response, code = apply_migration(
                         manifest_path,
@@ -4534,7 +4535,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
 
             manifest_path = evidence / "manifest.json"
             manifest_path.write_bytes(canonical_json_bytes(manifest))
-            versions = {"onboard": "fixture", "graft": "0.18.0"}
+            versions = {"onboard": "fixture"}
             with mock.patch.dict(os.environ, environment), mock.patch(
                 "sbtd_migration.runtime_versions", return_value=versions
             ):
@@ -4570,7 +4571,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
         predecessor = (
             "runtime-sha256:27e74bf511e8b62ad6dac07188933811bd429a84b38b8f01ae025e997fdd7750"
         )
-        sealed = {"onboard": predecessor, "graft": "0.18.0"}
+        sealed = {"onboard": predecessor}
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             project, home, vault, evidence, pause, environment = _routing_batch(base)
@@ -4606,7 +4607,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
             applied = live.read_bytes()
             receipt = response["migration"]["apply_receipt"]
             saved = evidence / f"apply-{receipt['apply_id']}.json"
-            unlisted = {"onboard": "runtime-sha256:unlisted-successor", "graft": "0.18.0"}
+            unlisted = {"onboard": "runtime-sha256:unlisted-successor"}
             with mock.patch.dict(os.environ, environment), mock.patch(
                 "sbtd_migration.runtime_versions", return_value=unlisted
             ):
@@ -4622,7 +4623,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
             from sbtd_migration import _verified_runtime_pair
 
             _predecessor, paired = _verified_runtime_pair()
-            successor = {"onboard": paired, "graft": "0.18.0"}
+            successor = {"onboard": paired}
             with mock.patch.dict(os.environ, environment), mock.patch(
                 "sbtd_migration.runtime_versions", return_value=successor
             ):
@@ -4703,7 +4704,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                     vault,
                     "fixture",
                     None,
-                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    tool_versions={"onboard": "fixture"},
                     routing_approvals=approval,
                 )
             self.assertEqual(error.exception.code, "candidate-conflict")
@@ -4793,7 +4794,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                     vault,
                     "fixture",
                     None,
-                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    tool_versions={"onboard": "fixture"},
                     routing_approvals=approval,
                 )
                 from sbtd_migration import _all_input_references, _original_reference
@@ -4844,7 +4845,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                 manifest_path.write_bytes(canonical_json_bytes(tampered))
                 with mock.patch(
                     "sbtd_migration.runtime_versions",
-                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                    return_value={"onboard": "fixture"},
                 ), self.assertRaises(ContractError):
                     apply_migration(manifest_path, confirmed=True)
                 self.assertEqual(live.read_bytes(), before_live)
@@ -4893,7 +4894,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                     vault,
                     "fixture",
                     None,
-                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    tool_versions={"onboard": "fixture"},
                     routing_approvals=approval,
                 )
             self.assertEqual(missing.exception.code, "ownership-conflict")
@@ -4911,7 +4912,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                     vault,
                     "fixture",
                     None,
-                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    tool_versions={"onboard": "fixture"},
                     routing_approvals=approval,
                 )
             self.assertEqual(wrong_path.exception.code, "approval-conflict")
@@ -4924,7 +4925,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                     vault,
                     "fixture",
                     None,
-                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    tool_versions={"onboard": "fixture"},
                 )
             self.assertEqual(blocked.exception.code, "ownership-conflict")
             _routing_approval(approval, "omp-global", live, candidate)
@@ -4968,7 +4969,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                 manifest_path.write_bytes(canonical_json_bytes(manifest))
                 with mock.patch(
                     "sbtd_migration.runtime_versions",
-                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                    return_value={"onboard": "fixture"},
                 ):
                     response, code = apply_migration(
                         manifest_path,
@@ -5029,7 +5030,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                     vault,
                     "fixture",
                     None,
-                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    tool_versions={"onboard": "fixture"},
                     routing_approvals=approval,
                 )
             self.assertEqual(outside.exception.code, "approval-conflict")
@@ -5042,7 +5043,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                     vault,
                     "fixture",
                     None,
-                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    tool_versions={"onboard": "fixture"},
                 )
             self.assertEqual(blocked.exception.code, "ownership-conflict")
             _routing_approval(approval, "demo-project", live, candidate)
@@ -5088,7 +5089,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                 manifest_path.write_bytes(canonical_json_bytes(manifest))
                 with mock.patch(
                     "sbtd_migration.runtime_versions",
-                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                    return_value={"onboard": "fixture"},
                 ):
                     response, code = apply_migration(
                         manifest_path,
@@ -5126,7 +5127,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                 with (
                     mock.patch(
                         "sbtd_migration.runtime_versions",
-                        return_value={"onboard": "fixture", "graft": "0.18.0"},
+                        return_value={"onboard": "fixture"},
                     ),
                     self.assertRaises(ContractError),
                 ):
@@ -5158,7 +5159,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                 mock.patch.dict(os.environ, environment),
                 mock.patch(
                     "sbtd_migration.runtime_versions",
-                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                    return_value={"onboard": "fixture"},
                 ),
                 self.assertRaises(ContractError),
             ):
@@ -5381,7 +5382,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                 mock.patch.dict(os.environ, environment),
                 mock.patch(
                     "sbtd_migration.runtime_versions",
-                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                    return_value={"onboard": "fixture"},
                 ),
                 self.assertRaises(ContractError) as error,
             ):
@@ -5396,7 +5397,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                 mock.patch.dict(os.environ, environment),
                 mock.patch(
                     "sbtd_migration.runtime_versions",
-                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                    return_value={"onboard": "fixture"},
                 ),
                 self.assertRaises(ContractError) as drifted,
             ):
@@ -5479,7 +5480,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                 mock.patch.dict(os.environ, environment),
                 mock.patch(
                     "sbtd_migration.runtime_versions",
-                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                    return_value={"onboard": "fixture"},
                 ),
                 mock.patch(
                     "sbtd_migration._render_resource",
@@ -5558,7 +5559,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                 mock.patch.dict(os.environ, environment),
                 mock.patch(
                     "sbtd_migration.runtime_versions",
-                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                    return_value={"onboard": "fixture"},
                 ),
                 mock.patch(
                     "sbtd_migration._render_resource",
@@ -5649,7 +5650,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                 mock.patch.dict(os.environ, environment),
                 mock.patch(
                     "sbtd_migration.runtime_versions",
-                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                    return_value={"onboard": "fixture"},
                 ),
                 mock.patch(
                     "sbtd_migration._render_resource",
@@ -5709,7 +5710,7 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
                     vault,
                     "fixture",
                     None,
-                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    tool_versions={"onboard": "fixture"},
                     routing_approvals=approval,
                     routing_approval_key=key_path,
                 )
@@ -6524,13 +6525,13 @@ class MigrationAgentsNoTouchTests(unittest.TestCase):
                     vault,
                     "fixture-custodian",
                     None,
-                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    tool_versions={"onboard": "fixture"},
                 )
             self.assertEqual(error.exception.code, "ownership-conflict")
             self.assertEqual(_tree_bytes(base), before)
 
 
-    def test_no_touch_project_deployment_declares_graph_build_only(self):
+    def test_no_touch_project_deployment_declares_no_private_writes(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             project, vault, home = self.fixture(base)
@@ -6541,12 +6542,12 @@ class MigrationAgentsNoTouchTests(unittest.TestCase):
                     vault,
                     "fixture-custodian",
                     None,
-                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    tool_versions={"onboard": "fixture"},
                     deployment_mode="init-projects",
                 )
             self.assertEqual(_tree_bytes(base), before)
             payload = manifest["payload"]
-            self.assertEqual(payload["deployment"]["mode"], "init-projects")
+            self.assertIsNone(payload["deployment"])
             payload_project = payload["projects"][0]
             self.assertIsNotNone(payload_project.get("agents_no_touch"))
             deploy = [
@@ -6554,17 +6555,18 @@ class MigrationAgentsNoTouchTests(unittest.TestCase):
                 for operation in payload_project["private_operations"]
                 if operation["phase"] == "deploy"
             ]
-            self.assertEqual(
-                [
-                    (operation["target"], operation["change"]["kind"])
-                    for operation in deploy
-                ],
-                [(str(project / "graft"), "build-graft")],
-            )
+            self.assertEqual(deploy, [])
             self.assertTrue(
                 all(
                     operation["target"] != str(project / "AGENTS.md")
                     for operation in payload_project["private_operations"]
+                )
+            )
+            self.assertFalse(
+                any(
+                    operation["change"]["kind"] in {"build-graft", "configure-graft"}
+                    for project_item in payload["projects"]
+                    for operation in project_item["private_operations"]
                 )
             )
             with _home_env(home):
@@ -6572,6 +6574,9 @@ class MigrationAgentsNoTouchTests(unittest.TestCase):
             self.assertEqual(_tree_bytes(base), before)
 
     def test_no_touch_successor_batch_carries_proof_and_omits_agents_write(self):
+        import copy
+
+        from sbtd_deployment import execute_migration_deployment, load_deployment_context
         from sbtd_migration import apply_migration, runtime_versions
 
         with tempfile.TemporaryDirectory() as directory:
@@ -6610,6 +6615,10 @@ class MigrationAgentsNoTouchTests(unittest.TestCase):
                 )
             payload_project = successor["payload"]["projects"][0]
             self.assertEqual(
+                successor["payload"]["deployment"],
+                {"mode": "init-projects", "platform": "codex", "inputs": []},
+            )
+            self.assertEqual(
                 payload_project.get("agents_no_touch"),
                 manifest["payload"]["projects"][0].get("agents_no_touch"),
             )
@@ -6621,7 +6630,7 @@ class MigrationAgentsNoTouchTests(unittest.TestCase):
             ]
             self.assertEqual(
                 [operation["change"]["kind"] for operation in deploy],
-                ["build-graft"],
+                [],
             )
             self.assertTrue(
                 all(
@@ -6632,6 +6641,50 @@ class MigrationAgentsNoTouchTests(unittest.TestCase):
             with _home_env(home):
                 self.assertIsNone(validate_legacy_inputs(successor, _reader))
             self.assertEqual((project / "AGENTS.md").read_bytes(), aligned)
+
+            successor_path = vault / "successor-manifest.json"
+            successor_path.write_bytes(contracts.canonical_json_bytes(successor))
+            with _home_env(home):
+                successor_applied, code = apply_migration(
+                    successor_path, confirmed=True, no_routing_approvals=True
+                )
+                self.assertEqual(code, 0, successor_applied)
+                successor_apply_path = vault / "successor-apply.json"
+                successor_apply_path.write_bytes(
+                    contracts.canonical_json_bytes(
+                        successor_applied["migration"]["apply_receipt"]
+                    )
+                )
+                context = load_deployment_context(
+                    successor_path,
+                    successor_apply_path,
+                    vault / "successor-deployment.json",
+                    previous_path=None,
+                    mode="init-projects",
+                    roots=[project],
+                    hooks_authorized=False,
+                )
+                project_before = _tree_bytes(project)
+                deployed, code = execute_migration_deployment(context)
+            self.assertEqual(code, 0, deployed)
+            self.assertEqual(deployed["operationResults"], [])
+            evidence = deployed["deploymentEvidence"]["evidence"]["payload"]
+            self.assertEqual(evidence["status"], "succeeded")
+            self.assertEqual(evidence["shared_results"], [])
+            self.assertEqual(evidence["projects"][0]["private_results"], [])
+            self.assertEqual(len(evidence["projects"][0]["report_refs"]), 2)
+            self.assertEqual(_tree_bytes(project), project_before)
+            self.assertEqual((project / "AGENTS.md").read_bytes(), aligned)
+
+            before = _tree_bytes(base)
+            without_proof = copy.deepcopy(successor["payload"])
+            del without_proof["projects"][0]["agents_no_touch"]
+            with _home_env(home), self.assertRaises(ContractError) as error:
+                validate_legacy_inputs(
+                    contracts.seal_document("manifest", without_proof), _reader
+                )
+            self.assertEqual(error.exception.code, "semantic-violation")
+            self.assertEqual(_tree_bytes(base), before)
 
     def test_successor_plan_rejects_resealed_predecessor_with_self_bound_agents_template(self):
         import copy
@@ -6733,8 +6786,6 @@ class MigrationAgentsNoTouchTests(unittest.TestCase):
     def test_injected_deployment_agents_op_with_no_touch_proof_is_rejected(self):
         import copy
 
-        from sbtd_graft_deployment import deployment_operations
-
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             project, vault, home = self.fixture(base)
@@ -6745,22 +6796,26 @@ class MigrationAgentsNoTouchTests(unittest.TestCase):
                     vault,
                     "fixture-custodian",
                     None,
-                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    tool_versions={"onboard": "fixture"},
                     deployment_mode="init-projects",
                 )
             payload = copy.deepcopy(manifest["payload"])
-            produced, _shared = deployment_operations(
-                [{"root": str(project), "private_operations": []}],
-                platform="codex",
+            template = payload["projects"][0]["agents_no_touch"]["template"]
+            agents_op = sbtd_migration_plan._operation(
+                "deploy",
+                "markdown",
+                project / "AGENTS.md",
+                "global-rules",
+                {"kind": "copy-file", "source_ref": copy.deepcopy(template)},
+                {"kind": "template-source", "reference": copy.deepcopy(template)},
+                {"kind": "state", "state": snapshot(project / "AGENTS.md")},
+                [str(project)],
             )
-            agents_op = next(
-                operation
-                for operation in produced[str(project)]
-                if operation["selector"] == "graft-agents"
-            )
-            # Normalize: the crafted injection replaces any same-target deploy
-            # operation so the resealed shape stays seal-coherent regardless
-            # of what the producer legitimately declared.
+            payload["deployment"] = {
+                "mode": "init-projects",
+                "platform": "codex",
+                "inputs": [],
+            }
             payload["projects"][0]["private_operations"] = [
                 operation
                 for operation in payload["projects"][0]["private_operations"]

@@ -70,6 +70,7 @@ class UpgradeCliTests(unittest.TestCase):
             scope = base / "scope.json"
             scope.write_text(json.dumps({
                 "schema_version": 1,
+                "agents_targets": [str(base / "AGENTS.md")],
                 "hosts": [{"id": "codex", "platform": "codex", "config": str(config),
                            "config_home": str(config.parent), "onboard_root": str(CLI.parents[1]),
                            "skills_roots": [], "project_roots": [], "runtime": runtime}],
@@ -119,7 +120,7 @@ class UpgradeCliTests(unittest.TestCase):
             )
             self.assertEqual(recovery.returncode, 0, recovery.stdout + recovery.stderr)
             recovery_plan = json.loads(recovery.stdout)["plan"]
-            vault_before, config_before = snapshot(vault), config.read_bytes()
+            vault_before, agents_before = snapshot(vault), (base / "AGENTS.md").read_bytes()
             (site_dir / "tomlkit").unlink()
             restored = subprocess.run(
                 [str(binary), "-B", str(CLI), "recovery", "--phase", "apply",
@@ -130,12 +131,12 @@ class UpgradeCliTests(unittest.TestCase):
             self.assertEqual(restored.returncode, 2, restored.stderr)
             self.assertEqual(json.loads(restored.stdout)["reason"], "isolated-dependencies-unavailable")
             self.assertEqual(snapshot(vault), vault_before)
-            self.assertEqual(config.read_bytes(), config_before)
+            self.assertEqual((base / "AGENTS.md").read_bytes(), agents_before)
+            self.assertFalse(config.exists())
 
     def test_shell_command_dependency_refuses_before_skill_replacement(self):
-        """U28: replacing a command's containing Skill must not partially commit."""
+        """A shell profile is not a graft PATH install and does not authorize a write."""
         import sbtd_upgrade
-        from onboard_contracts import ContractError
 
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary).resolve()
@@ -157,12 +158,10 @@ class UpgradeCliTests(unittest.TestCase):
             profile = base / ".bashrc"
             scope["shell_profiles"] = [{"path": str(profile), "shell": "bash", "bin": str(command.parent)}]
             plan = sbtd_upgrade.plan_upgrade(scope, vault)
-            with self.assertRaises(ContractError) as caught:
-                sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"])
-            self.assertEqual(caught.exception.code, "shell-dependency-conflict")
+            self.assertFalse(any(row["kind"] == "shell" for row in plan["payload"]["resources"]))
+            self.assertFalse(profile.exists())
             self.assertEqual((target / "SKILL.md").read_bytes(), original)
             self.assertEqual(command.read_bytes(), b"#!/bin/sh\nexit 0\n")
-            self.assertFalse(profile.exists())
 
     def _user_created_desired_after_intent(self):
         import sbtd_upgrade
@@ -303,7 +302,7 @@ class UpgradeCliTests(unittest.TestCase):
     def test_undecided_profile_stays_blocked_even_after_disk_alignment(self):
         """U19: sealed consent cannot be supplied by later matching bytes."""
         import sbtd_upgrade
-        import sbtd_upgrade_hosts
+        from onboard_contracts import ContractError
 
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary).resolve()
@@ -315,17 +314,13 @@ class UpgradeCliTests(unittest.TestCase):
                 "schema_version": 1,
                 "shell_profiles": [{"path": str(profile), "shell": "bash", "bin": str(base / "bin")}],
             }
-            plan = sbtd_upgrade.plan_upgrade(scope, vault)
-            self.assertEqual(plan["payload"]["status"], "blocked")
-            self.assertEqual(sbtd_upgrade.verify_upgrade(plan)["status"], "blocked")
-            resource = sbtd_upgrade_hosts.build_host_resources({
-                **scope, "decisions": {str(profile): "replace"},
-            })[0]
-            profile.write_bytes(sbtd_upgrade_hosts.render_resource(resource))
-            self.assertEqual(sbtd_upgrade.verify_upgrade(plan)["status"], "blocked")
+            with self.assertRaises(ContractError) as caught:
+                sbtd_upgrade.plan_upgrade(scope, vault)
+            self.assertEqual(caught.exception.code, "invalid-scope")
+            self.assertEqual(profile.read_bytes(), b"# user profile\n")
 
-    def test_inherited_provider_alias_refuses_before_any_target_write(self):
-        """U21: existing foreign-only Codex config aliases an OMP dependency."""
+    def test_foreign_only_provider_alias_is_not_rewritten(self):
+        """U21: a foreign-only Codex config is not a Graft write target."""
         from tests.test_sbtd_upgrade_inventory import case_variant
 
         with tempfile.TemporaryDirectory() as temporary:
@@ -360,6 +355,7 @@ class UpgradeCliTests(unittest.TestCase):
             scope = base / "scope.json"
             scope.write_text(json.dumps({
                 "schema_version": 1, "hosts": hosts,
+                "agents_targets": [str(base / "AGENTS.md")],
                 "decisions": {str(provider): "replace"},
             }), encoding="utf-8")
             vault = base / "vault"
@@ -373,15 +369,17 @@ class UpgradeCliTests(unittest.TestCase):
             )
             self.assertEqual(planned.returncode, 0, planned.stdout + planned.stderr)
             plan = json.loads(planned.stdout)["plan"]
+            self.assertFalse(any(
+                row["kind"] in {"mcp", "shell"} for row in plan["payload"]["resources"]
+            ))
             applied = subprocess.run(
                 [sys.executable, "-B", str(CLI), "upgrade", "--phase", "apply",
                  "--plan", str(plan_path), "--confirm-plan", plan["plan_id"], "--yes", "--json"],
                 capture_output=True, text=True, timeout=120, check=False,
             )
-            self.assertEqual(
-                json.loads(applied.stdout).get("reason"), "inherited-dependency-conflict",
-                applied.stdout + applied.stderr,
-            )
+            self.assertEqual(applied.returncode, 0, applied.stdout + applied.stderr)
+            self.assertEqual(json.loads(applied.stdout)["status"], "complete")
+            self.assertTrue((base / "AGENTS.md").is_file())
             self.assertEqual(provider.read_bytes(), original)
             self.assertFalse(consumer.exists())
 
@@ -698,9 +696,8 @@ class UpgradeCliTests(unittest.TestCase):
             installed = invoke(source, "upgrade", "--phase", "apply", "--plan", str(plan_path),
                                "--confirm-plan", plan["plan_id"], "--yes")
             self.assertEqual(installed["status"], "complete")
-            configured = config.read_text(encoding="utf-8")
-            self.assertIn(str(old / "scripts/sbtd_graft_entry.py").replace("\\", "\\\\"), configured)
-            self.assertNotIn(str(source), configured)
+            self.assertFalse(config.exists())
+            self.assertFalse(profile.exists())
             shutil.rmtree(source)  # Only the test-owned bootstrap, never user source.
             retry = invoke(old, "upgrade", "--phase", "apply", "--plan", str(plan_path),
                            "--confirm-plan", plan["plan_id"], "--yes",

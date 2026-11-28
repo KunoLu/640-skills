@@ -1040,10 +1040,10 @@ def _assign_items(
 
 
 def _validate_successor_project_operations(
-    root: Path, project: Mapping[str, Any]
+    root: Path, project: Mapping[str, Any], *, archived_package: Path | None = None
 ) -> None:
     """A successor project carries exactly its pending legacy retirement."""
-    _check_agents_no_touch_untouched(project)
+    _check_agents_no_touch_untouched(project, archived_package=archived_package)
     sources = project["sources"]
     if (
         len(sources) != 1
@@ -1295,56 +1295,53 @@ def _followup_outcome_chain(
     return chain
 
 
-def _check_configure_graft_outcome(
-    operation: Mapping[str, Any], target: Path, anchors: Collection[str]
-) -> dict[str, Any]:
-    """Gate a completed configure-graft outcome by managed-section ownership.
-
-    The host runtime legitimately extends these files outside the
-    graft-owned section, so whole-file equality cannot gate them; the
-    sealed chain never carries launch bindings, so ownership is proven by
-    the managed argv/fence shapes instead of recomputed bytes. A missing
-    or unparseable file, or any drift inside the managed section, fails
-    closed; drift outside it does not block. Returns the live target state
-    so followup before-requirements seal the current bytes. ``anchors``
-    are the chain's deploy-phase directory outcomes still present on disk
-    (retired cleanup targets never anchor); Codex launchers must live
-    inside one.
-    """
-    selector = operation["selector"]
-    roots = operation["dependent_projects"]
-    state = snapshot(target)
-    if state["type"] != "file":
+def _reject_graft_operations(operations: Sequence[Mapping[str, Any]]) -> None:
+    """Refuse a sealed Graft operation before any followup write."""
+    if any(
+        operation.get("change", {}).get("kind") in {"build-graft", "configure-graft"}
+        or operation.get("selector")
+        in {"graft-agents", "graft-mcp", "graft-hooks", "graft-omp-mcp"}
+        for operation in operations
+    ):
         _fail(
-            "state-conflict",
-            "a completed batch outcome no longer matches the current state",
+            "unsupported-in-rc.3",
+            "a sealed plan still contains Graft operations; regenerate the plan",
         )
-    raw = read_file(target, state)
-    if selector == "graft-omp-mcp":
-        from sbtd_omp_wiring import verify_owned_omp_mcp_section
 
-        verify_owned_omp_mcp_section(raw, roots)
-    elif selector == "graft-mcp":
-        from sbtd_codex_wiring import verify_owned_mcp_section
 
-        verify_owned_mcp_section(raw, roots, anchors)
-    elif selector == "graft-hooks":
-        from sbtd_codex_wiring import verify_owned_hooks_section
 
-        verify_owned_hooks_section(raw, roots, anchors)
-    elif selector == "graft-agents":
-        from sbtd_codex_wiring import verify_owned_agents_fence
 
-        verify_owned_agents_fence(raw)
-    else:
-        _fail("state-conflict", "unknown Graft configuration selector")
-    return state
+def _historical_followup_fence_before(
+    result: Mapping[str, Any] | None,
+) -> Mapping[str, Any]:
+    """Prove the old managed section from this followup's actual pre-write backup."""
+    from sbtd_retirement import _created_fence, _fence_span
+
+    if (
+        result is None or result["status"] != "succeeded"
+        or result["before"]["type"] != "file" or result["backup_ref"] is None
+        or result["backup_ref"]["state"] != result["before"]
+    ):
+        _fail("original-unavailable", "the historical followup lacks its retained AGENTS original", 3)
+    backup = result["backup_ref"]
+    try:
+        original = read_file(Path(backup["path"]), backup["state"]).decode("utf-8")
+    except UnicodeDecodeError:
+        _fail("ownership-conflict", "the historical followup AGENTS original is not UTF-8")
+    span = _fence_span(original)
+    if span is not None:
+        start, end = span
+        if _created_fence(original[start:end].removesuffix("\n") + "\n"):
+            return result["before"]
+    _fail("ownership-conflict", "the historical followup AGENTS original lacks its intact managed fence")
 
 
 def _check_followup_predecessor_outcomes(
     chain: Sequence[tuple[Mapping[str, Any], Mapping[str, Mapping[str, Any]]]],
     *,
     overwritten: Collection[str],
+    bind_historical: bool = False,
+    historical_deploy: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Require current predecessor outcomes; exempt followup-overwritten targets.
 
@@ -1354,11 +1351,22 @@ def _check_followup_predecessor_outcomes(
     the carried copy then holds the proof. The latest proven after-state
     per target is the live expectation unless the followup batch
     legitimately rewrites that target, in which case the followup's own
-    concrete before-requirement and receipts carry the proof. Directory
-    and other whole-resource targets pin the recorded historical
-    after-state; configure-graft targets prove their managed section and
-    map the current live snapshot.
+    concrete before-requirement and receipts carry the proof. A normal
+    followup does not claim new project AGENTS bytes outside retired
+    markers. Historical verification proves an overwritten managed fence
+    in the followup original. Mutation rejects Graft operations.
     """
+    from sbtd_deployment import (
+        _is_approved_agents,
+        graft_operation,
+        validate_archived_graft_declarations,
+    )
+
+    project_agents = {
+        str(Path(project["root"]) / "AGENTS.md")
+        for manifest, _ in chain
+        for project in manifest["payload"]["projects"]
+    }
     declared: list[tuple[int, Mapping[str, Any], bool]] = []
     latest: dict[
         str, tuple[tuple[int, int], Mapping[str, Any], Mapping[str, Any]]
@@ -1369,6 +1377,14 @@ def _check_followup_predecessor_outcomes(
             for project in manifest["payload"]["projects"]
             for operation in project["private_operations"]
         ] + list(manifest["payload"]["shared_operations"])
+        if bind_historical:
+            if any(graft_operation(operation) for operation in operations):
+                from sbtd_migration import _bind_legacy_d7
+
+                _bind_legacy_d7(manifest)
+                validate_archived_graft_declarations(manifest["payload"])
+        else:
+            _reject_graft_operations(operations)
         for operation in operations:
             proven = False
             results = stage_results.get(operation["phase"])
@@ -1405,38 +1421,50 @@ def _check_followup_predecessor_outcomes(
                 "the completed batch history cannot prove every declared resource",
             )
     outcomes = {target: item[1]["after"] for target, item in latest.items()}
-    # Anchors prove path containment only, so every live directory
-    # deployment outcome qualifies — including trees the followup
-    # overwrites, whose content stays pinned by the sealed
-    # before-requirement and is re-measured before any write at execute.
-    # Retired trees (cleanup removals, after absent) never anchor: their
-    # paths no longer prove anything about the bytes that were deployed.
-    anchors = [
-        target
-        for target, (_key, result, operation) in latest.items()
-        if operation["phase"] == "deploy"
-        and operation["change"]["kind"] != "remove"
-        and operation["owner_kind"] == "directory"
-        and result["after"]["type"] == "directory"
-    ]
-    configure: list[tuple[str, Mapping[str, Any]]] = []
     for target, (_key, result, operation) in latest.items():
-        if operation["change"]["kind"] == "configure-graft":
-            configure.append((target, operation))
+        if bind_historical and graft_operation(operation):
+            if operation["selector"] == "graft-agents" and target in overwritten:
+                original = (historical_deploy or {}).get(operation["resource_id"])
+                outcomes[target] = _historical_followup_fence_before(original)
             continue
         if target in overwritten:
             continue
-        if snapshot(Path(target)) != result["after"]:
-            _fail(
-                "state-conflict",
-                "a completed batch outcome no longer matches the current state",
-            )
-    for target, operation in configure:
-        # Managed-section outcomes are proven even when the followup batch
-        # rewrites the target, and the mapping carries the live state so the
-        # followup's sealed before-requirement matches the current bytes.
-        outcomes[target] = _check_configure_graft_outcome(
-            operation, Path(target), anchors
+        path = Path(target)
+        live = snapshot(path)
+        if live == result["after"]:
+            continue
+        ownership = operation.get("ownership", {})
+        retired_marker = (
+            operation["selector"] == "trellis-block"
+            and operation["change"]["kind"] == "remove"
+            and ownership.get("kind") == "managed-marker"
+            and ownership.get("marker") == _TRELLIS_MARKER
+        )
+        approved_project_body = (
+            _is_approved_agents(operation)
+            and operation["change"]["kind"] == "ensure-file-block"
+            and ownership.get("kind") == "approved-candidate"
+            and ownership.get("role") == "demo-project"
+        )
+        if (
+            target in project_agents and live["type"] == result["after"]["type"] == "file"
+            and (retired_marker or approved_project_body)
+        ):
+            from sbtd_cleanup_targets import _marker_events
+
+            raw = read_file(path, live)
+            try:
+                has_retired_marker = any(
+                    token.startswith(f"<!-- {_TRELLIS_MARKER}:")
+                    for _, _, token in _marker_events(raw)
+                )
+            except (ValueError, RecursionError):
+                has_retired_marker = True
+            if not has_retired_marker:
+                continue
+        _fail(
+            "state-conflict",
+            "a completed batch outcome no longer matches the current state",
         )
     return outcomes
 
@@ -1448,6 +1476,8 @@ def validate_legacy_inputs(
     resolve_original: ResolveOriginal | None = None,
     stage_results: Mapping[str, Mapping[str, Any]] | None = None,
     cleanup_only: bool = False,
+    readonly_legacy: bool = False,
+    archived_package: Path | None = None,
 ) -> list[dict[str, Any]] | None:
     """Re-validate the complete legacy closure of a sealed manifest.
 
@@ -1473,6 +1503,8 @@ def validate_legacy_inputs(
     cleanup receipt can report truthfully what this phase did not
     re-validate. Every other caller receives the historical None return.
     """
+    if archived_package is not None and not readonly_legacy:
+        _fail("ownership-conflict", "archive template identities are read-only")
     payload = manifest["payload"]
     if payload.get("followup") is not None:
         from sbtd_migration import _result_index
@@ -1497,13 +1529,8 @@ def validate_legacy_inputs(
             for project in payload["projects"]
             for operation in project["private_operations"]
         ] + list(payload["shared_operations"])
-        if any(
-            operation["selector"] == "graft-hooks" for operation in followup_operations
-        ):
-            _fail(
-                "semantic-violation",
-                "a followup batch does not authorize hooks",
-            )
+        if not readonly_legacy:
+            _reject_graft_operations(followup_operations)
         if any(
             operation["before_requirement"]["kind"] != "state"
             for operation in followup_operations
@@ -1538,7 +1565,7 @@ def validate_legacy_inputs(
                 "a followup batch cannot bind routing approvals",
             )
         for project in payload["projects"]:
-            _check_agents_no_touch_untouched(project)
+            _check_agents_no_touch_untouched(project, archived_package=archived_package)
             if (
                 project["sources"]
                 or project["platforms"] != prev_by_root[project["root"]]["platforms"]
@@ -1570,6 +1597,8 @@ def validate_legacy_inputs(
                 prev_manifest, prev_apply, prev_deployment, prev_cleanup, ancestors
             ),
             overwritten=overwritten,
+            bind_historical=readonly_legacy,
+            historical_deploy=None if stage_results is None else stage_results.get("deploy"),
         )
         for operation in followup_operations:
             target = operation["target"]
@@ -1581,8 +1610,10 @@ def validate_legacy_inputs(
                     "ownership-conflict",
                     "a followup before-state differs from its proven predecessor outcome",
                 )
-        _validate_shared_operations(payload, followup_roots, resolve_original)
-        from sbtd_graft_deployment import validate_deployment_declarations
+        _validate_shared_operations(
+            payload, followup_roots, resolve_original, archived_package=archived_package
+        )
+        from sbtd_deployment import validate_deployment_declarations
 
         ignored = validate_deployment_declarations(
             payload,
@@ -1592,6 +1623,7 @@ def validate_legacy_inputs(
                 if result["status"] == "succeeded" and result["after"] is not None
             },
             cleanup_only=cleanup_only,
+            readonly_legacy=readonly_legacy,
         )
         _bind_approved_routing(
             payload, [Path(root) for root in followup_roots], bind_live=False
@@ -1635,7 +1667,9 @@ def validate_legacy_inputs(
         prev_operations: dict[str, Mapping[str, Any]] = {}
         for project in payload["projects"]:
             root = Path(project["root"])
-            _validate_successor_project_operations(root, project)
+            _validate_successor_project_operations(
+                root, project, archived_package=archived_package
+            )
             prev_project = prev_by_root[project["root"]]
             if (
                 project["sources"] != prev_project["sources"]
@@ -1713,10 +1747,14 @@ def validate_legacy_inputs(
                     "state-conflict",
                     "a completed batch outcome no longer matches the current state",
                 )
-        _validate_shared_operations(payload, successor_roots, resolve_original)
-        from sbtd_graft_deployment import validate_deployment_declarations
+        _validate_shared_operations(
+            payload, successor_roots, resolve_original, archived_package=archived_package
+        )
+        from sbtd_deployment import validate_deployment_declarations
 
-        ignored = validate_deployment_declarations(payload, cleanup_only=cleanup_only)
+        ignored = validate_deployment_declarations(
+            payload, cleanup_only=cleanup_only, readonly_legacy=readonly_legacy
+        )
         _bind_approved_routing(
             payload, [Path(root) for root in successor_roots], bind_live=False
         )
@@ -1771,6 +1809,7 @@ def validate_legacy_inputs(
             read_original,
             metadata_reference,
             version,
+            archived_package=archived_package,
         )
         _inventory_coverage(
             entries,
@@ -1793,12 +1832,16 @@ def validate_legacy_inputs(
             project["head"],
         )
     _validate_shared_operations(
-        payload, sorted(str(root) for root in roots), resolve_original
+        payload, sorted(str(root) for root in roots), resolve_original,
+        archived_package=archived_package,
     )
-    from sbtd_graft_deployment import validate_deployment_declarations
+    from sbtd_deployment import validate_deployment_declarations
 
     ignored = validate_deployment_declarations(
-        payload, stage_results=stage_results, cleanup_only=cleanup_only
+        payload,
+        stage_results=stage_results,
+        cleanup_only=cleanup_only,
+        readonly_legacy=readonly_legacy,
     )
     _bind_approved_routing(payload, roots, bind_live=False)
     return ignored
@@ -1855,7 +1898,11 @@ def _check_identity_operation(
 
 
 def _check_ignore_operation(
-    root: Path, operation: Mapping[str, Any], read_original: ReadOriginal
+    root: Path,
+    operation: Mapping[str, Any],
+    read_original: ReadOriginal,
+    *,
+    archived_package: Path | None = None,
 ) -> None:
     if (
         operation["phase"] != "apply"
@@ -1866,7 +1913,11 @@ def _check_ignore_operation(
     _check_operation_common(operation, root)
     if Path(operation["target"]) != root / ".gitignore":
         _fail("semantic-violation", "the ignore protection target was altered")
-    asset = {"path": str(_IGNORE_ASSET), "state": snapshot(_IGNORE_ASSET)}
+    asset = (
+        contracts.archived_file_reference(archived_package, "assets/migration-local-ignore.txt")
+        if archived_package is not None
+        else {"path": str(_IGNORE_ASSET), "state": snapshot(_IGNORE_ASSET)}
+    )
     if operation["change"] != {"kind": "ensure-file-block", "source_ref": asset}:
         _fail("semantic-violation", "the ignore protection content was altered")
     if operation["ownership"] != {"kind": "template-source", "reference": asset}:
@@ -1926,6 +1977,8 @@ def _check_platform_closure(
     metadata_reference: Mapping[str, Any],
     version: str,
     agents_no_touch: Any,
+    *,
+    archived_package: Path | None = None,
 ) -> None:
     """The remaining operations must be exactly the recorded platform files."""
     if not platforms:
@@ -2005,7 +2058,8 @@ def _check_platform_closure(
             None,
         )
         derived_no_touch = _agents_no_touch(
-            root, hashes, read_original, target_state=agents_before
+            root, hashes, read_original, target_state=agents_before,
+            archived_package=archived_package,
         )
     if agents_no_touch != derived_no_touch:
         _fail(
@@ -2085,8 +2139,10 @@ def _validate_project_operations(
     read_original: ReadOriginal,
     metadata_reference: Mapping[str, Any],
     version: str,
+    *,
+    archived_package: Path | None = None,
 ) -> None:
-    _check_agents_no_touch_untouched(project)
+    _check_agents_no_touch_untouched(project, archived_package=archived_package)
     sources = project["sources"]
     if (
         len(sources) != 1
@@ -2128,7 +2184,7 @@ def _validate_project_operations(
     if identities:
         remaining.remove(identities[0])
         _check_identity_operation(root, identities[0], read_original)
-    needs_protection = bool(expected_publications or identities or deployment)
+    needs_protection = _requires_local_protection(project["private_operations"])
     protection = [
         operation for operation in remaining if operation["owner_kind"] == "gitignore"
     ]
@@ -2137,9 +2193,11 @@ def _validate_project_operations(
             _fail("semantic-violation", "the ignore protection scope was altered")
         # Later phases see the applied file. Validate the frozen operation,
         # not whether its pre-apply change is still needed in today's file.
-        _check_ignore_operation(root, protection[0], read_original)
+        _check_ignore_operation(
+            root, protection[0], read_original, archived_package=archived_package
+        )
         remaining.remove(protection[0])
-    elif needs_protection and _ignore_operation(root) is not None:
+    elif needs_protection and _ignore_operation(root, archived_package=archived_package) is not None:
         _fail("semantic-violation", "the required ignore protection is missing")
     cleanups = [operation for operation in remaining if operation["phase"] == "cleanup"]
     if len(cleanups) != 1:
@@ -2157,6 +2215,7 @@ def _validate_project_operations(
         metadata_reference,
         version,
         project.get("agents_no_touch"),
+        archived_package=archived_package,
     )
 
 
@@ -2383,7 +2442,7 @@ def _approved_routing_operations(
             or not candidate_path.is_relative_to(vault)
             or snapshot(candidate_path) != candidate.get("state")
         ):
-            _fail("state-conflict", "an approved routing candidate changed")
+            _fail("approved-routing-drift", "an approved routing candidate changed")
         raw = read_file(candidate_path, candidate["state"])
         if not raw.startswith(pause):
             _fail(
@@ -2519,6 +2578,21 @@ def _routing_key(
     ).decode("utf-8")
 
 
+def project_approved_body(candidate: Mapping[str, Any]) -> bytes:
+    """Pause-stripped body of one signed candidate. Read-only."""
+    raw = read_file(Path(candidate["path"]), candidate["state"])
+    pause = read_file(_PAUSE_ASSET)
+    if not raw.startswith(pause):
+        _fail(
+            "candidate-conflict",
+            "an approved routing candidate lacks the pause block",
+        )
+    body = raw[len(pause) :]
+    if body.startswith(b"\n"):
+        body = body[1:]
+    return body
+
+
 def approved_agents_provenance(
     manifest: Mapping[str, Any],
 ) -> tuple[Mapping[str, Any], dict[str, bytes]]:
@@ -2535,7 +2609,7 @@ def approved_agents_provenance(
     at most one immediately following formatting blank line, keyed by the
     sealed operation target. Only demo-project replacements carry project
     bodies; followup batches and batches without signed routing return an
-    empty mapping (their deployments keep merging proven live bytes).
+    empty mapping and have no approved project rules to deploy.
     """
     origin = manifest
     payload = manifest["payload"]
@@ -2548,22 +2622,12 @@ def approved_agents_provenance(
         return origin, {}
     roots = [Path(project["root"]) for project in payload["projects"]]
     _bind_approved_routing(payload, roots, bind_live=False)
-    pause = read_file(_PAUSE_ASSET)
     bodies: dict[str, bytes] = {}
     for _place, _root, operation in _routing_rows(payload):
         if operation["ownership"].get("role") != "demo-project":
             continue
         candidate = operation["change"]["source_ref"]
-        raw = read_file(Path(candidate["path"]), candidate["state"])
-        if not raw.startswith(pause):
-            _fail(
-                "candidate-conflict",
-                "an approved routing candidate lacks the pause block",
-            )
-        body = raw[len(pause) :]
-        if body.startswith(b"\n"):
-            body = body[1:]
-        bodies[operation["target"]] = body
+        bodies[operation["target"]] = project_approved_body(candidate)
     return origin, bodies
 
 
@@ -2607,9 +2671,15 @@ def _validate_shared_operations(
     payload: Mapping[str, Any],
     all_roots: list[str],
     resolve_original: ResolveOriginal | None = None,
+    *,
+    archived_package: Path | None = None,
 ) -> None:
     pins = _ownership_pins()
-    pause_asset = {"path": str(_PAUSE_ASSET), "state": snapshot(_PAUSE_ASSET)}
+    pause_asset = (
+        contracts.archived_file_reference(archived_package, "assets/migration-paused-agents.txt")
+        if archived_package is not None
+        else {"path": str(_PAUSE_ASSET), "state": snapshot(_PAUSE_ASSET)}
+    )
     shared_roots = payload["shared_roots"]
     for record in shared_roots:
         if record["dependent_projects"] != all_roots:
@@ -2972,6 +3042,7 @@ def _agents_no_touch(
     read_original: ReadOriginal,
     *,
     target_state: Mapping[str, Any] | None = None,
+    archived_package: Path | None = None,
 ) -> dict[str, Any] | None:
     """Re-derive the sealed proof for an already-aligned root AGENTS.md.
 
@@ -2988,9 +3059,14 @@ def _agents_no_touch(
     state = dict(target_state) if target_state is not None else snapshot(target)
     if state["type"] != "file":
         return None
-    template = _present_file_reference(_PROJECT_AGENTS_TEMPLATE, "the project template")
+    template = _project_template_reference(archived_package)
     raw = read_original({"path": str(target), "state": state})
-    if raw != read_original(template):
+    matches_template = (
+        raw == read_original(template)
+        if archived_package is None
+        else hashlib.sha256(raw).hexdigest() == template["state"]["checksum"]
+    )
+    if not matches_template:
         return None
     try:
         text = raw.decode("utf-8")
@@ -3010,8 +3086,18 @@ def _agents_no_touch(
     }
 
 
-def _check_agents_no_touch_untouched(project: Mapping[str, Any]) -> None:
-    """Re-prove the exact installed template binding and forbid all writes.
+def _project_template_reference(archived_package: Path | None) -> dict[str, Any]:
+    if archived_package is not None:
+        return contracts.archived_file_reference(
+            archived_package, "templates/agents/AGENTS.project.md"
+        )
+    return _present_file_reference(_PROJECT_AGENTS_TEMPLATE, "the project template")
+
+
+def _check_agents_no_touch_untouched(
+    project: Mapping[str, Any], *, archived_package: Path | None = None
+) -> None:
+    """Re-prove the exact current or archived template binding and forbid writes.
 
     Later batches must not trust a predecessor's re-sealed proof merely
     because its two references point to the same custom project document.
@@ -3020,15 +3106,15 @@ def _check_agents_no_touch_untouched(project: Mapping[str, Any]) -> None:
     if proof is None:
         return
     target = str(Path(project["root"]) / "AGENTS.md")
+    template = _project_template_reference(archived_package)
     if (
         proof["target"]["path"] != target
-        or proof["template"]["path"] != str(_PROJECT_AGENTS_TEMPLATE)
+        or proof["template"]["path"] != template["path"]
     ):
         _fail(
             "semantic-violation",
-            "the untouched AGENTS proof is not bound to the installed project template",
+            "the untouched AGENTS proof is not bound to its package template",
         )
-    template = _present_file_reference(_PROJECT_AGENTS_TEMPLATE, "the project template")
     if (
         proof["template"] != template
         or proof["target"]["state"] != template["state"]
@@ -3036,10 +3122,10 @@ def _check_agents_no_touch_untouched(project: Mapping[str, Any]) -> None:
     ):
         _fail(
             "semantic-violation",
-            "the untouched AGENTS evidence no longer matches the installed template",
+            "the untouched AGENTS evidence no longer matches its package template",
         )
     raw = _read_current(proof["target"])
-    if raw != _read_current(template):
+    if archived_package is None and raw != _read_current(template):
         _fail(
             "semantic-violation",
             "the untouched AGENTS bytes differ from the installed template",
@@ -3444,7 +3530,7 @@ def _plan_successor(
             "apply_results": embedded,
         },
     }
-    from sbtd_graft_deployment import attach_deployment
+    from sbtd_deployment import attach_deployment
 
     attach_deployment(
         payload,
@@ -3454,9 +3540,8 @@ def _plan_successor(
         successor_pauses=successor_pauses,
     )
     for project in payload["projects"]:
-        if any(
-            operation["phase"] == "apply"
-            for operation in project["private_operations"]
+        if any(operation["phase"] == "apply" for operation in project["private_operations"]) or (
+            deployment_mode == "init" and _ignore_operation(Path(project["root"])) is not None
         ):
             _fail(
                 "successor-conflict",
@@ -3668,7 +3753,7 @@ def _plan_followup(
             },
         },
     }
-    from sbtd_graft_deployment import attach_deployment
+    from sbtd_deployment import attach_deployment
 
     attach_deployment(
         payload,
@@ -3737,14 +3822,20 @@ def _git_bytes(
     *,
     environment: Mapping[str, str] | None = None,
 ) -> bytes | None:
+    from onboard import native_git_argv
+
     try:
+        env = {
+            key: value for key, value in os.environ.items()
+            if not key.upper().startswith("GIT_")
+        }
+        if environment is not None:
+            env.update(environment)
+        argv = native_git_argv(root, *args, path=env.get("PATH", ""))
+        cwd = Path(argv[0]).parent
+        env.update(PATH=str(cwd), GIT_TERMINAL_PROMPT="0")
         completed = subprocess.run(
-            ["git", *args],
-            cwd=root,
-            input=stdin,
-            capture_output=True,
-            check=False,
-            env=environment,
+            argv, cwd=cwd, input=stdin, capture_output=True, check=False, env=env,
         )
     except OSError:
         return None
@@ -3896,10 +3987,8 @@ def _retained_legacy_ignored(
             ["check-ignore", "--no-index", "-z", "--stdin"],
             b"\0".join(os.fsencode(path) for path in queries) + b"\0",
             environment={
-                **os.environ,
                 "GIT_DIR": str(directory),
                 "GIT_WORK_TREE": str(sandbox),
-                "GIT_OPTIONAL_LOCKS": "0",
             },
         )
     if checked is None:
@@ -4465,7 +4554,7 @@ def _check_handoff_ignore(root: Path, targets: Sequence[Path]) -> None:
             "docs/handoffs/",
             *(path.relative_to(root).as_posix() for path in targets),
         )
-        verdicts = gitignore_verdicts(sandbox, probes, env=git._git_environment())
+        verdicts = gitignore_verdicts(sandbox, probes, env=git._git_environment(), native_git=True)
         if isinstance(verdicts, str) or not all(
             verdict.ignored for verdict in verdicts.values()
         ):
@@ -4516,17 +4605,37 @@ def _identity_operation(root: Path) -> dict[str, Any] | None:
     )
 
 
-def _ignore_operation(root: Path) -> dict[str, Any] | None:
+def _requires_local_protection(operations: Sequence[Mapping[str, Any]]) -> bool:
+    return any(
+        operation["phase"] == "deploy" or (
+            operation["phase"] == "apply" and (
+                operation["change"]["kind"] == "migrate-developer" or (
+                    operation["selector"] == "whole-resource"
+                    and operation["change"]["kind"] in {"copy-file", "copy-directory"}
+                )
+            )
+        )
+        for operation in operations
+    )
+
+
+def _ignore_operation(
+    root: Path, *, archived_package: Path | None = None
+) -> dict[str, Any] | None:
     from onboard import missing_file_lines
 
-    asset = _present_file_reference(_IGNORE_ASSET, "the local ignore asset")
+    asset = (
+        _present_file_reference(_IGNORE_ASSET, "the local ignore asset")
+        if archived_package is None
+        else contracts.archived_file_reference(archived_package, "assets/migration-local-ignore.txt")
+    )
     gitignore = root / ".gitignore"
     before = snapshot(gitignore)
     if before["type"] == "directory":
         _fail("target-conflict", "the ignore path is not a writable file")
     current = b"" if before["type"] == "absent" else read_file(gitignore, before)
     try:
-        asset_text = read_file(Path(asset["path"]), asset["state"]).decode("utf-8")
+        asset_text = read_file(_IGNORE_ASSET, asset["state"]).decode("utf-8")
         current_text = current.decode("utf-8")
     except UnicodeDecodeError:
         _fail("invalid-config", "managed ignore content is not UTF-8 text")
@@ -4803,11 +4912,7 @@ def plan_migration(
         _fail("invalid-argument", "a custodian is required")
     if (
         not isinstance(tool_versions, Mapping)
-        or set(tool_versions)
-        != {
-            "onboard",
-            "graft",
-        }
+        or set(tool_versions) != {"onboard"}
         or any(
             not isinstance(value, str) or not value.strip()
             for value in tool_versions.values()
@@ -4815,7 +4920,7 @@ def plan_migration(
     ):
         _fail(
             "invalid-argument",
-            "tool versions must name the actual onboard and graft builds",
+            "new migration plans must identify the installed Onboard build",
         )
     roots = [_physical_root(value) for value in project_roots]
     if len(set(roots)) != len(roots):
@@ -5013,14 +5118,11 @@ def plan_migration(
                 key=lambda item: item["target_path"],
             )
         ]
-        private_ops: list[dict[str, Any]] = []
-        if identity_op is not None or publication_ops:
+        private_ops = ([] if identity_op is None else [identity_op]) + publication_ops
+        if _requires_local_protection(private_ops):
             ignore_op = _ignore_operation(root)
             if ignore_op is not None:
-                private_ops.append(ignore_op)
-        if identity_op is not None:
-            private_ops.append(identity_op)
-        private_ops.extend(publication_ops)
+                private_ops.insert(0, ignore_op)
         private_ops.extend(platform_ops)
         private_ops.extend(private_replacements.get(root, []))
         private_ops.append(_legacy_cleanup_operation(root, legacy_reference))
@@ -5094,7 +5196,7 @@ def plan_migration(
         "deployment": None,
     }
     if deployment_mode is not None:
-        from sbtd_graft_deployment import attach_deployment
+        from sbtd_deployment import attach_deployment
 
         attach_deployment(
             payload,

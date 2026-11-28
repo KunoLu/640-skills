@@ -19,14 +19,16 @@ class AgentCliCommandTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory(prefix="sbtd-agent-cli-test-")
         self.addCleanup(self.temp_dir.cleanup)
-        self.root = Path(self.temp_dir.name)
+        self.root = Path(self.temp_dir.name).resolve()
         self.bin_dir = self.root / "bin"
         self.bin_dir.mkdir()
         self.home = self.root / "home"
         self.home.mkdir()
         self.env = os.environ.copy()
-        self.env["HOME"] = str(self.home)
-        self.env["PATH"] = str(self.bin_dir)
+        for name in ("OMP_PROFILE", "PI_PROFILE", "PI_CONFIG_DIR", "PI_CODING_AGENT_DIR", "AGENT_SKILLS_DIR"):
+            self.env.pop(name, None)
+        self.env.update(HOME=str(self.home), USERPROFILE=str(self.home),
+                        CODEX_HOME=str(self.home / ".codex"), PATH=str(self.bin_dir))
 
     def write_executable(self, name: str, body: str) -> Path:
         target = self.bin_dir / name
@@ -130,31 +132,33 @@ class AgentCliCommandTests(unittest.TestCase):
         self.assertFalse(external_history.exists())
         self.assertEqual(list(self.home.iterdir()), [])
 
-    def test_optional_graft_never_becomes_a_required_raw_npm_install(self) -> None:
-        for conflict in (False, True):
-            with self.subTest(conflict=conflict):
-                if conflict:
-                    self.write_executable("graft", "#!/bin/sh\nexit 99\n")
-                completed = self.run_onboard("check", "--json")
-                self.assertEqual(completed.returncode, 0, completed.stderr)
-                payload = json.loads(completed.stdout)
-                self.assertEqual(
-                    payload["graft"]["status"],
-                    "blocked" if conflict else "not-available",
-                )
-                self.assertNotIn("graft", payload["missing"]["tools"])
-                graft_tool = next(
-                    tool for tool in payload["tools"] if tool["name"] == "graft"
-                )
-                self.assertEqual(graft_tool, payload["graft"])
-                self.assertTrue(graft_tool["optional"])
-                required = payload["installationReport"]["failedOrMissing"]["tools"]
-                self.assertNotIn("graft", [entry["name"] for entry in required])
-                human = self.run_onboard("check")
-                self.assertEqual(human.returncode, 0, human.stderr)
-                self.assertIn(payload["graft"]["reason"], human.stdout)
-                self.assertIn(payload["graft"]["nextStep"], human.stdout)
-                self.assertNotIn("npm install -g @nanonets/graft", human.stdout)
+    def test_retired_cli_commands_and_flags_are_rejected_before_any_write(self):
+        for args in (
+            ("install-graft", "--yes"),
+            ("reset", "--yes", "--graft-hooks"),
+            ("init", "--graft-retire-legacy"),
+            ("plan", "--graft-legacy-bindings", "unused.json"),
+            ("migration", "--phase", "plan", "--graft-hooks"),
+        ):
+            with self.subTest(args=args):
+                completed = self.run_onboard(*args)
+                self.assertEqual(completed.returncode, 2, completed.stderr)
+                self.assertIn("usage:", completed.stderr)
+                self.assertEqual(list(self.home.iterdir()), [])
+
+    def test_plan_and_check_do_not_invoke_the_retired_cli(self):
+        marker = self.root / "unexpected-probe"
+        self.write_executable("graft", f'#!/bin/sh\n: > "{marker}"\nexit 99\n')
+        for platform in ("codex", "omp"):
+            for action in ("plan", "check"):
+                with self.subTest(platform=platform, action=action):
+                    completed = self.run_onboard(action, "--platform", platform, "--json")
+                    self.assertEqual(completed.returncode, 0, completed.stderr)
+                    payload = json.loads(completed.stdout)
+                    self.assertNotIn("graftWiring", payload)
+                    self.assertNotIn("graft", payload)
+                    self.assertIn("graftRetirement", payload)
+                    self.assertFalse(marker.exists())
 
     def test_install_agent_cli_requires_npm_when_command_is_missing(self) -> None:
         completed = self.run_onboard(

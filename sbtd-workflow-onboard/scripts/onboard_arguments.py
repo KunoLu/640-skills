@@ -25,6 +25,8 @@ __all__ = [
     "SingleValueAction",
     "WorkflowArgumentParser",
     "add_cleanup_legacy_parser",
+    "add_project_check_parser",
+    "add_retirement_options",
     "add_migration_parser",
     "add_recovery_parser",
     "add_upgrade_parser",
@@ -32,6 +34,7 @@ __all__ = [
     "validate_cleanup_legacy_args",
     "validate_developer_name",
     "validate_migration_args",
+    "validate_project_check_args",
     "validate_recovery_args",
     "validate_upgrade_args",
 ]
@@ -63,7 +66,6 @@ _MIGRATION_RULES = {
             "followup_cleanup_receipt",
             "deployment_mode",
             "deployment_platform",
-            "graft_hooks",
             "json",
         ),
     ),
@@ -88,7 +90,7 @@ _MIGRATION_RULES = {
     ),
     "verify": (
         ("manifest", "apply_receipt", "deployment_evidence"),
-        ("json",),
+        ("post_write_attestation", "json"),
     ),
     "cleanup": (
         ("manifest", "apply_receipt", "deployment_evidence", "verification"),
@@ -114,6 +116,7 @@ _MIGRATION_VALUE_OPTIONS = (
     "manifest",
     "apply_receipt",
     "deployment_evidence",
+    "post_write_attestation",
     "missing_deployment_evidence",
     "deployment_evidence_out",
     "verification",
@@ -125,7 +128,6 @@ _MIGRATION_VALUE_OPTIONS = (
 _MIGRATION_FLAG_OPTIONS = (
     "yes",
     "json",
-    "graft_hooks",
     "no_routing_approvals",
 )
 
@@ -157,15 +159,17 @@ _RECOVERY_VALUE_OPTIONS = (
 )
 _RECOVERY_FLAG_OPTIONS = ("json",)
 
-_CLEANUP_LEGACY_PHASES = ("plan", "apply")
+_CLEANUP_LEGACY_PHASES = ("plan", "apply", "rollback")
 _CLEANUP_LEGACY_RULES = {
-    "plan": (("projects_root", "backup_root"), ("global_skills_dir", "json")),
+    "plan": (("projects_root", "backup_root"), ("global_skills_dir", "retirement_evidence", "json")),
     "apply": (("plan",), ("cleanup_receipt", "confirm_cleanup", "json")),
+    "rollback": (("plan", "cleanup_receipt", "confirm_cleanup"), ("json",)),
 }
 _CLEANUP_LEGACY_VALUE_OPTIONS = (
     "projects_root",
     "backup_root",
     "global_skills_dir",
+    "retirement_evidence",
     "plan",
     "cleanup_receipt",
     "confirm_cleanup",
@@ -220,6 +224,45 @@ class SingleValueAction(argparse.Action):
         setattr(namespace, self.dest, values)
 
 
+def add_retirement_options(sub: argparse.ArgumentParser, mode: str) -> None:
+    if mode == "plan":
+        sub.add_argument("--action", choices=("init", "reset"), action=SingleValueAction,
+                         help="Preview targets for this action without writing (default: init).")
+    if mode not in {"check", "plan", "reset"}:
+        return
+    sub.add_argument("--retirement-evidence", action=SingleValueAction,
+                     help="Explicit private evidence descriptor inside the retirement backup root.")
+    sub.add_argument("--retirement-backup-root", action=SingleValueAction,
+                     help="Existing private vault outside every installation target.")
+    if mode == "reset":
+        sub.add_argument("--confirm-retirement", action=SingleValueAction,
+                         help="Digest from plan --action reset. Required for a retirement write, in addition to --yes.")
+
+
+def add_project_check_parser(subparsers: Any) -> argparse.ArgumentParser:
+    sub = subparsers.add_parser("check-projects", allow_abbrev=False)
+    sub.add_argument("--projects-root", action=SingleValueAction, required=True,
+                     help="Comma-separated absolute project root paths.")
+    sub.add_argument("--json", action="store_true", help="Print machine-readable project checks.")
+    sub.add_argument("--skip-project-agents", action="store_true",
+                     help="Exclude project AGENTS.md from installation-target checks.")
+    sub.add_argument("--migration-manifest", action=SingleValueAction,
+                     help="Private manifest for read-only deployment smoke; requires its apply receipt.")
+    sub.add_argument("--migration-apply-receipt", action=SingleValueAction,
+                     help="Successful apply receipt bound to the selected manifest and project.")
+    return sub
+
+
+def validate_project_check_args(args: argparse.Namespace, *, parser: argparse.ArgumentParser) -> None:
+    paths = (args.migration_manifest, args.migration_apply_receipt)
+    if paths == (None, None):
+        return
+    if not all(isinstance(p, str) and p.strip() for p in paths):
+        parser.error("provide both migration evidence paths")
+    if args.skip_project_agents or "," in args.projects_root or not args.projects_root.strip():
+        parser.error("migration smoke checks one complete project")
+
+
 def _add_common_options(
     sub: argparse.ArgumentParser, *, projects_root_required: bool
 ) -> None:
@@ -232,7 +275,7 @@ def _add_common_options(
     sub.add_argument(
         "--skip-project-agents",
         action="store_true",
-        help="Skip the project AGENTS template; explicitly selected Graft wiring still maintains its managed fence.",
+        help="Skip the project AGENTS template.",
     )
     sub.add_argument(
         "--global-agents-path",
@@ -264,11 +307,6 @@ def _add_common_options(
         action=SingleValueAction,
         type=validate_developer_name,
         help="Developer identity (lowercase letters and digits).",
-    )
-    sub.add_argument(
-        "--graft-hooks",
-        action="store_true",
-        help="Separately authorize the displayed Codex hooks; never grants host trust.",
     )
 
 
@@ -336,6 +374,7 @@ def add_migration_parser(
         "manifest": "Explicit private migration manifest file.",
         "apply_receipt": "Explicit apply receipt for retry or verification.",
         "deployment_evidence": "Explicit completed deployment evidence file.",
+        "post_write_attestation": "Detached signed permission evidence for this exact historical deployment (verify only; never authorizes a write).",
         "missing_deployment_evidence": "Explicit absent historical deployment evidence path; never overwritten.",
         "deployment_evidence_out": "New private current-state evidence output, distinct from the missing historical path.",
         "verification": "Explicit verification record for cleanup.",
@@ -358,7 +397,6 @@ def add_migration_parser(
                 action="store_true",
                 help={
                     "yes": "Authorize this apply or current-state reconciliation attempt.",
-                    "graft_hooks": "Plan explicitly authorized Codex hook definitions for full deployment.",
                     "json": "Emit the private single-JSON exchange document.",
                     "no_routing_approvals": "Apply a plan that has no routing approval record. Does not authorize AGENTS.md pause or marker removal.",
                 }[dest],
@@ -477,7 +515,7 @@ def add_cleanup_legacy_parser(subparsers: Any) -> argparse.ArgumentParser:
         action=SingleValueAction,
         required=True,
         choices=_CLEANUP_LEGACY_PHASES,
-        help="Legacy cleanup phase: plan (read-only detection) or apply.",
+        help="Preview and seal a legacy cleanup plan, apply it, or roll back its retirement writes.",
     )
     cleanup.add_argument(
         "--projects-root",
@@ -495,14 +533,18 @@ def add_cleanup_legacy_parser(subparsers: Any) -> argparse.ArgumentParser:
         help="Global Skills root override, sealed into the plan (plan only).",
     )
     cleanup.add_argument(
+        "--retirement-evidence", action=SingleValueAction,
+        help="Trusted evidence descriptor in the selected private vault (plan only).",
+    )
+    cleanup.add_argument(
         "--plan",
         action=SingleValueAction,
-        help="Sealed cleanup plan file (apply only).",
+        help="Sealed cleanup plan file (apply or rollback).",
     )
     cleanup.add_argument(
         "--cleanup-receipt",
         action=SingleValueAction,
-        help="Cumulative cleanup receipt for an explicit apply retry (apply only).",
+        help="Cumulative cleanup receipt for an apply retry or confirmed retirement rollback.",
     )
     cleanup.add_argument(
         "--confirm-cleanup",
@@ -564,28 +606,12 @@ def _build_parser() -> tuple[
     for mode in ("check", "plan", "init", "reset", "init-projects"):
         sub = subparsers.add_parser(mode, allow_abbrev=False)
         _add_common_options(sub, projects_root_required=mode == "init-projects")
+        add_retirement_options(sub, mode)
         if mode in ("init", "init-projects"):
             _add_migration_context(sub)
         subs[mode] = sub
 
-    project_check = subparsers.add_parser("check-projects", allow_abbrev=False)
-    project_check.add_argument(
-        "--projects-root",
-        action=SingleValueAction,
-        required=True,
-        help="Comma-separated absolute project root paths.",
-    )
-    project_check.add_argument(
-        "--json",
-        action="store_true",
-        help="Print machine-readable project checks.",
-    )
-    project_check.add_argument(
-        "--skip-project-agents",
-        action="store_true",
-        help="Exclude project AGENTS.md from installation-target checks.",
-    )
-    subs["check-projects"] = project_check
+    subs["check-projects"] = add_project_check_parser(subparsers)
 
     subs["migration"] = add_migration_parser(subparsers)
 
@@ -706,8 +732,6 @@ def validate_migration_args(
             parser.error("followup inputs require --deployment-mode init")
         if getattr(args, "deployment_platform", None) != "omp":
             parser.error("followup inputs require --deployment-platform omp")
-        if getattr(args, "graft_hooks", False):
-            parser.error("followup inputs cannot be combined with --graft-hooks")
 
 
 def _check_migration_context(
@@ -738,6 +762,8 @@ def parse_workflow_args(argv: Sequence[str]) -> argparse.Namespace:
 
     parser, subs = _build_parser()
     args = parser.parse_args(argv)
+    if args.mode == "check-projects":
+        validate_project_check_args(args, parser=subs["check-projects"])
     if args.mode == "migration":
         validate_migration_args(args, parser=subs["migration"])
     elif args.mode == "recovery":

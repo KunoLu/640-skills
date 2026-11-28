@@ -1,9 +1,9 @@
 """Onboard upgrade alignment engine: sealed plans, guarded apply, verify, recovery.
 
 This module owns the upgrade core. ``sbtd_upgrade_inventory`` builds the
-payload baseline and skill/AGENTS resources, ``sbtd_upgrade_hosts`` builds,
-renders and verifies host (MCP/shell) resources, and ``sbtd_upgrade_cli``
-owns the public CLI envelope. Everything here returns JSON-safe
+payload baseline and skill/AGENTS resources, ``sbtd_upgrade_hosts`` validates
+host domains and binds Graft retirement without installing or probing Graft,
+and ``sbtd_upgrade_cli`` owns the public CLI envelope. Everything here returns JSON-safe
 dictionaries; refusals raise the existing sanitized ``ContractError``.
 
 Two digest families are kept strictly separate:
@@ -46,9 +46,9 @@ Security semantics, by design:
   a measured after-state and an immutable cumulative receipt. Original
   backups are never destroyed by the engine.
 - Retry skips only resources whose live state matches the prior receipt's
-  recorded after-state. An interruption between a write and its receipt
-  is reconciled from the persisted intent and the measured live state,
-  never claimed unwritten; unknown live state is rejected.
+  recorded after-state. For Skill and AGENTS writes, interruption reconciliation
+  uses the persisted intent and live state. For retirement, only a bound
+  completed receipt proves the write; an intent and matching bytes do not.
 - Recovery covers only resources this batch actually changed, re-seals
   the current after-state, requires its own confirmation, refuses live
   drift (unknown changes are never overwritten) and restores backups
@@ -60,13 +60,11 @@ Security semantics, by design:
   state. The bound checkpoint is recovery evidence, never the failed
   attempt's success; pre-write validation failures carry no batch evidence
   and keep the plain pre-write blocked surface.
-- Verify is read-only: managed skill/AGENTS payload state is measured
-  semantically against the sealed desired states, while MCP/shell disk,
-  runtime, host and legacy evidence comes from ``verify_hosts`` as a
-  separate dimension — a user adding unrelated configuration after the
-  upgrade stays aligned, ownership drift still fails. A preserve
-  exception always prevents a complete-aligned result, and without an
-  explicit probe no host loading is claimed.
+- Verify is read-only: measure managed payloads and retirement outcomes against
+  sealed states. Host protocol and Skill evidence come from ``verify_hosts``
+  as a separate dimension. Retired MCP and shell writes are not verifiable.
+  A preserve exception prevents complete alignment; without an explicit
+  probe no host loading is claimed.
 
 No cross-domain atomic transaction is claimed: resources are written one
 at a time with per-resource receipts.
@@ -93,6 +91,7 @@ from sbtd_external_notices import NOTICE_DIR, copy_notices
 from sbtd_migration_files import (
     RetainedObjectError,
     _canonical,
+    _hash_file,
     _lstat,
     backup_reference,
     directory_snapshot,
@@ -106,7 +105,7 @@ from sbtd_migration_files import (
     withdraw_directory_reference,
     write_file,
 )
-from sbtd_upgrade_paths import paths_overlap
+from sbtd_upgrade_paths import path_contains, paths_overlap
 
 __all__ = [
     "apply_recovery",
@@ -127,7 +126,9 @@ RECOVERY_RECEIPT_SCHEMA = "upgrade-recovery-receipt"
 _HEX = frozenset("0123456789abcdef")
 _ABSENT = {"type": "absent", "checksum": None}
 _STATE_TYPES = ("absent", "file", "directory")
-_RESOURCE_KINDS = ("skill", "agents", "mcp", "shell")
+_WINDOWS_ACL = "windows_acl_digest"
+_WINDOWS_ACL_AFTER = "windows_acl_digest_after"
+_RESOURCE_KINDS = ("skill", "agents", "mcp", "shell", "retirement")
 _CLASSIFICATIONS = (
     "missing",
     "current",
@@ -226,6 +227,13 @@ def _expect_state(value: Any, what: str) -> dict[str, Any]:
     return {"type": kind, "checksum": checksum}
 
 
+def _validate_windows_acl_fields(row: Mapping[str, Any], what: str) -> None:
+    if _WINDOWS_ACL in row or _WINDOWS_ACL_AFTER in row:
+        _expect_hex(row.get(_WINDOWS_ACL), f"{what} Windows ACL digest")
+    if row.get(_WINDOWS_ACL_AFTER) is not None:
+        _expect_hex(row[_WINDOWS_ACL_AFTER], f"{what} after-state Windows ACL digest")
+
+
 def _expect_abs_path(value: Any, what: str) -> str:
     if not isinstance(value, str) or not value:
         _fail(
@@ -306,7 +314,7 @@ def _validate_resource(value: Any, what: str) -> dict[str, Any]:
     desired = resource["desired"]
     if desired is not None:
         desired = _expect_state(desired, f"{what} desired")
-        if desired["type"] == "absent":
+        if desired["type"] == "absent" and resource.get("kind") != "retirement":
             _fail(
                 "invalid-inventory",
                 f"{what} desired state must describe a payload",
@@ -318,6 +326,7 @@ def _validate_resource(value: Any, what: str) -> dict[str, Any]:
         _fail("invalid-inventory", f"{what} decision is not recognized")
     if not isinstance(resource["details"], Mapping):
         _fail("invalid-inventory", f"{what} details must be an object")
+    _validate_windows_acl_fields(resource["details"], what)
     if decision in _WRITABLE and desired is None:
         _fail(
             "invalid-inventory",
@@ -392,10 +401,9 @@ def _validate_scope(value: Any) -> dict[str, Any]:
 def _canonical_scope(scope: Mapping[str, Any]) -> dict[str, Any]:
     """Canonical provider-normalized scope sealed by every plan.
 
-    The inventory provider's strict ``normalize_scope`` owns the single
-    normalization rule (resolved paths, canonical host platforms such as
-    oh-my-pi -> omp); the engine re-validates the JSON-safe result so the
-    sealed scope, derived resources and later verification all agree.
+    The inventory provider owns checked scope paths and normalized platform
+    names. The host provider seals the effective Codex config spelling while
+    a present alias can still be proven.
     """
     normalize = getattr(_inventory_module(), "normalize_scope", None)
     if normalize is None:
@@ -403,7 +411,8 @@ def _canonical_scope(scope: Mapping[str, Any]) -> dict[str, Any]:
             "inventory-unavailable",
             "the upgrade inventory module does not expose scope normalization",
         )
-    return _validate_scope(_strict_loads(canonical_json_bytes(normalize(scope))))
+    normalized = _validate_scope(_strict_loads(canonical_json_bytes(normalize(scope))))
+    return _hosts_module()._canonical_host_scope(normalized) if normalized.get("hosts") else normalized
 
 
 def _validate_plan(plan: Any) -> tuple[str, dict[str, Any]]:
@@ -432,6 +441,28 @@ def _validate_plan(plan: Any) -> tuple[str, dict[str, Any]]:
         _validate_resource(resource, f"plan resource {index}")
     if not isinstance(payload.get("domains"), list):
         _fail("invalid-document", "plan domains must be a list")
+    if "graftRetirement" in payload:
+        report = payload["graftRetirement"]
+        if (
+            not isinstance(report, Mapping) or type(report.get("stop")) is not bool
+            or any(
+                key in report and (
+                    not isinstance(report[key], list) or any(not isinstance(row, dict) for row in report[key])
+                )
+                for key in ("candidates", "blocked", "preserved")
+            )
+            or any(
+                not isinstance(row.get("path"), str) or not isinstance(row.get("id"), str)
+                for row in report.get("candidates", [])
+            )
+            or ("global_effects" in report and (
+                not isinstance(report["global_effects"], list)
+                or any(not isinstance(path, str) for path in report["global_effects"])
+            ))
+        ):
+            _fail("invalid-document", "plan retirement disclosure is malformed")
+    elif any(resource["kind"] == "retirement" for resource in resources):
+        _fail("invalid-document", "a plan without a retirement disclosure cannot authorize retirement resources")
     return plan_id, payload
 
 
@@ -494,6 +525,7 @@ def _validate_upgrade_receipt(receipt: Any) -> tuple[str, dict[str, Any]]:
             _fail("invalid-document", "receipt mutation attribution must be boolean or unknown")
         if row.get("backup_ref") is not None:
             _expect_reference(row["backup_ref"], "receipt resource backup")
+        _validate_windows_acl_fields(row, "receipt resource")
     return receipt_id, payload
 
 
@@ -505,6 +537,8 @@ def _validate_recovery_receipt(receipt: Any) -> tuple[str, dict[str, Any]]:
         list_key="steps",
     )
     _expect_hex(payload.get("recovery_id"), "receipt recovery_id")
+    for row in payload["steps"]:
+        _validate_windows_acl_fields(_expect_mapping(row, "recovery result"), "recovery result")
     return receipt_id, payload
 
 
@@ -544,6 +578,7 @@ def _validate_step(step: Any, what: str) -> dict[str, Any]:
             "invalid-document",
             f"{what} expected_current must describe the batch outcome",
         )
+    _validate_windows_acl_fields(row, what)
     return row
 
 
@@ -616,9 +651,67 @@ def _payload_state(path: Path) -> dict[str, Any]:
     return result
 
 
+def _retiring_launchers(resources: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Launcher paths this upgrade will overwrite. Absence is not a required asset."""
+    paths: list[str] = []
+    for resource in resources:
+        if resource["kind"] != "skill" or resource["decision"] not in ("install", "replace"):
+            continue
+        paths.append(str(Path(resource["target"]) / "scripts" / "sbtd_graft_entry.py"))
+    return paths
+
+
+def _evidence_inside_vault(evidence: Sequence[Mapping[str, Any]], vault: Path) -> None:
+    for item in evidence:
+        for key, value in item.items():
+            if key == "kind":
+                continue
+            if not isinstance(value, str) or not path_contains(Path(value), vault):
+                _fail(
+                    "scope-conflict",
+                    "retirement evidence must stay inside the private backup root",
+                )
+
+
+def _retirement_planner():
+    planner = getattr(_hosts_module(), "plan_retirement", None)
+    if not callable(planner):
+        _fail("hosts-unavailable", "the upgrade hosts module does not expose retirement planning")
+    return planner
+
+
+def _same_retirement(
+    sealed: Mapping[str, Any], fresh: Mapping[str, Any], *, completed_paths: set[str] | None = None,
+) -> bool:
+    """Historical plans omit the report and gain no targets. A hash is not authority."""
+    if "graftRetirement" not in sealed:
+        return (
+            fresh.get("stop") is False
+            and not fresh.get("candidates")
+            and not fresh.get("blocked")
+            and not completed_paths
+        )
+    report = sealed["graftRetirement"]
+    if completed_paths:
+        candidates = report.get("candidates", [])
+        if not completed_paths.issubset(row.get("path") for row in candidates):
+            return False
+        report = {
+            **report,
+            "candidates": [row for row in candidates if row["path"] not in completed_paths],
+            "global_effects": [path for path in report.get("global_effects", []) if path not in completed_paths],
+        }
+    return canonical_json_bytes(report) == canonical_json_bytes(fresh)
+
+
 def _derive_resources(
-    scope: Mapping[str, Any], package_root: Path | None, *, host_package_root: Path | None = None
-) -> tuple[dict[str, Any], list[dict[str, Any]], list[Any]]:
+    scope: Mapping[str, Any],
+    package_root: Path | None,
+    *,
+    host_package_root: Path | None = None,
+    vault: Path | None = None,
+    required_retirement_targets: Sequence[str] = (),
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[Any], dict[str, Any]]:
     inventory = _inventory_module().build_inventory(scope, package_root=package_root)
     result = _expect_mapping(inventory, "inventory result")
     baseline = _validate_baseline(result.get("baseline"))
@@ -635,6 +728,9 @@ def _derive_resources(
     )
     if not isinstance(host_resources, list):
         _fail("invalid-inventory", "host resources must be a list")
+    host_resources = [
+        resource for resource in host_resources if not _removed_graft_operation(resource)
+    ]
     resources = [
         _validate_resource(resource, f"inventory resource {index}")
         for index, resource in enumerate(raw_resources)
@@ -642,9 +738,41 @@ def _derive_resources(
         _validate_resource(resource, f"host resource {index}")
         for index, resource in enumerate(host_resources)
     ]
-    if not resources:
-        _fail("invalid-scope", "the scope selects no resources")
-    return baseline, resources, domains
+    retirement, disclosure = _derive_retirement(scope, resources, vault, required_retirement_targets)
+    return baseline, resources + retirement, domains, disclosure
+
+
+def _derive_retirement(
+    scope: Mapping[str, Any], resources: Sequence[Mapping[str, Any]], vault: Path | None,
+    required_targets: Sequence[str] = (),
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    evidence = scope.get("retirement_evidence") or []
+    if not isinstance(evidence, list):
+        _fail("invalid-scope", "retirement evidence must be a list")
+    if evidence:
+        if vault is None:
+            _fail("scope-conflict", "retirement evidence requires the private backup root")
+        _evidence_inside_vault(evidence, vault)
+    retirement = _retirement_planner()(
+        scope,
+        vault=None if vault is None else str(vault),
+        evidence=evidence,
+        retiring_launchers=_retiring_launchers(resources),
+        required_targets=required_targets,
+    )
+    if not isinstance(retirement, Mapping):
+        _fail("invalid-inventory", "retirement planning must return an object")
+    extra = retirement.get("resources") or []
+    if not isinstance(extra, list):
+        _fail("invalid-inventory", "retirement resources must be a list")
+    rows = [
+        _validate_resource(resource, f"retirement resource {index}")
+        for index, resource in enumerate(extra)
+    ]
+    disclosure = retirement.get("disclosure")
+    if not isinstance(disclosure, Mapping) or type(disclosure.get("stop")) is not bool:
+        _fail("invalid-inventory", "retirement disclosure is missing")
+    return rows, dict(disclosure)
 
 
 # ---------------------------------------------------------------------------
@@ -735,6 +863,11 @@ def _identity_view(resource: Mapping[str, Any], package_path: str) -> dict[str, 
         view["bindings"]["launcher"] = {
             key: launcher[key] for key in ("path", "desired") if key in launcher
         }
+    if resource["kind"] == "retirement":
+        view.update(before=resource["before"], classification=resource["classification"], decision=resource["decision"])
+        # The inspection report also covers sibling targets, which can already
+        # be retired. Bind the exact candidate and effects for this target.
+        view["bindings"]["retirement"] = {key: value for key, value in details.items() if key != "report"}
     if "effective_inputs" in details:
         view["bindings"]["effective_inputs"] = [
             dependency for dependency in details["effective_inputs"]
@@ -775,6 +908,29 @@ def _check_plan_fresh(
             )
 
 
+def _unfinished_resources(
+    payload: Mapping[str, Any], fresh: Sequence[Mapping[str, Any]], disclosure: Mapping[str, Any],
+    completed: Mapping[str, Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    missing = set(completed) - {row["id"] for row in fresh}
+    if not _same_retirement(payload, disclosure, completed_paths={completed[key]["target"] for key in missing}):
+        _fail("plan-stale", "retirement disclosure differs from a fresh derivation")
+    return [row for row in payload["resources"] if row["id"] not in missing]
+
+
+def _rederive_upgrade(
+    payload: Mapping[str, Any], package: Path | None, vault: Path,
+    completed: Mapping[str, Mapping[str, Any]],
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    baseline, fresh, _domains, disclosure = _derive_resources(
+        payload["scope"], package, host_package_root=package, vault=vault,
+        required_retirement_targets=sorted(row["target"] for row in completed.values()),
+    )
+    remaining = _unfinished_resources(payload, fresh, disclosure, completed)
+    _check_plan_fresh(remaining, fresh, payload["baseline"], baseline)
+    return baseline, fresh
+
+
 def _check_decisions(payload: Mapping[str, Any]) -> None:
     decisions = _scope_decisions(payload["scope"])
     for resource in payload["resources"]:
@@ -786,6 +942,17 @@ def _check_decisions(payload: Mapping[str, Any]) -> None:
                 expected = "install"
             elif resource["classification"] == "identity-conflict":
                 expected = "blocked"
+        if resource["kind"] == "retirement":
+            if resource["classification"] == "identity-conflict":
+                expected = "blocked"
+            elif resource["classification"] == "known-old":
+                if decisions.get(resource["target"]) == "preserve":
+                    _fail("decision-conflict", "retirement conflicts with the sealed preserve decision")
+                expected = "replace"
+            elif resource["classification"] == "current":
+                expected = "keep"
+            if resource["decision"] in _WRITABLE:
+                _retirement_binding(resource)
         if resource["decision"] in _WRITABLE and resource["before"] == resource["desired"]:
             _fail("plan-inconsistent", "a semantically current resource cannot be approved as a write")
         if resource["decision"] != expected:
@@ -1303,22 +1470,27 @@ def plan_upgrade(
     vault = require_private_directory(Path(backup_root))
     _require_isolated_dependencies()
     root = None if package_root is None else Path(package_root)
-    baseline, resources, domains = _derive_resources(sealed_scope, root)
+    baseline, resources, domains, disclosure = _derive_resources(sealed_scope, root, vault=vault)
+    if not resources:
+        _fail("invalid-scope", "the scope selects no resources")
     if paths_overlap(vault, Path(baseline["source"]["path"])):
         _fail("backup-root-overlap", "the backup root overlaps the package")
     _preflight_set(resources, vault)
     blocked = sorted(
         resource["id"] for resource in resources if resource["decision"] == "blocked"
     )
+    if disclosure["stop"] and not blocked:
+        _fail("blocked-resource", "retirement stop produced no blocked resource")
     payload = {
         "plan_schema": PLAN_SCHEMA,
-        "status": "blocked" if blocked else "planned",
+        "status": "blocked" if blocked or disclosure["stop"] else "planned",
         "baseline": baseline,
         "scope": sealed_scope,
         "backup_root": str(vault),
         "resources": resources,
         "domains": domains,
         "blocked_resources": blocked,
+        "graftRetirement": disclosure,
     }
     return {"schema_version": 1, "plan_id": _digest(payload), "payload": payload}
 
@@ -1391,6 +1563,7 @@ def apply_upgrade(
     """Guarded apply via the staged, digest-bound isolated executor."""
     plan_id, payload = _validate_plan(plan)
     _require_confirmation(confirmed, plan_id)
+    _check_decisions(payload)
     _require_isolated_dependencies()
     trusted = _trusted_package_root()
     if _payload_state(trusted) != payload["baseline"]["source"]["state"]:
@@ -1398,17 +1571,9 @@ def apply_upgrade(
     vault = require_private_directory(Path(payload["backup_root"]))
     if paths_overlap(vault, trusted):
         _fail("backup-root-overlap", "the backup root overlaps the trusted package")
-    baseline, recomputed, _domains = _derive_resources(
-        payload["scope"], trusted, host_package_root=trusted
-    )
-    _check_plan_fresh(payload["resources"], recomputed, payload["baseline"], baseline)
     _preflight_set(payload["resources"], vault)
-    _check_decisions(payload)
-    previous: dict[str, Any] | None = None
-    if receipt is not None:
-        _validate_upgrade_receipt(receipt)
-        _require_saved(vault / f"upgrade-receipt-{receipt['receipt_id']}.json", receipt)
-        previous = dict(receipt)
+    previous, _intents, completed = _upgrade_continuation(plan, vault, receipt)
+    _rederive_upgrade(payload, trusted, vault, completed)
     stage = _upgrade_execution_stage(plan, vault)
     plan_ref = _save_once(vault / f"upgrade-plan-{plan_id}.json", plan, vault)
     argv = [
@@ -1420,10 +1585,7 @@ def apply_upgrade(
     ]
     if previous is not None:
         previous_id = previous["receipt_id"]
-        receipt_ref = _save_once(
-            vault / f"upgrade-receipt-{previous_id}.json", previous, vault
-        )
-        argv += ["--receipt-file", receipt_ref["path"]]
+        argv += ["--receipt-file", str(vault / f"upgrade-receipt-{previous_id}.json")]
     try:
         document = _run_isolated(stage["runner"], argv)
     except ContractError as error:
@@ -1466,42 +1628,24 @@ def _apply_upgrade_local(
     _require_confirmation(confirmed, plan_id)
     _check_decisions(payload)
     vault = require_private_directory(Path(payload["backup_root"]))
-    if receipt is not None:
-        _validate_upgrade_receipt(receipt)
-        _require_saved(vault / f"upgrade-receipt-{receipt['receipt_id']}.json", receipt)
-        if receipt["payload"]["plan_id"] != plan_id:  # type: ignore[index]
-            _fail("receipt-mismatch", "the receipt belongs to a different plan")
-    inventory_root = _trusted_package_root() if executor_isolated else package_root
-    baseline, recomputed, _domains = _derive_resources(
-        payload["scope"], inventory_root, host_package_root=inventory_root
-    )
-    _check_plan_fresh(payload["resources"], recomputed, payload["baseline"], baseline)
     _preflight_set(payload["resources"], vault)
+    previous, intents, completed = _upgrade_continuation(plan, vault, receipt)
+    inventory_root = _trusted_package_root() if executor_isolated else package_root
+    baseline, recomputed = _rederive_upgrade(payload, inventory_root, vault, completed)
     _save_once(vault / f"upgrade-plan-{plan_id}.json", plan, vault)
 
-    previous = _latest_receipt(
-        vault,
-        "upgrade-receipt-",
-        "plan_id",
-        plan_id,
-        dict(receipt) if receipt is not None else None,
-        _validate_upgrade_receipt,
-    )
-    prior_results: dict[str, dict[str, Any]] = {}
-    previous_id: str | None = None
-    sequence = 0
-    if previous is not None:
-        previous_id = previous["receipt_id"]
-        sequence = previous["payload"]["sequence"] + 1
-        for row in previous["payload"]["resources"]:
-            if isinstance(row, Mapping) and isinstance(row.get("id"), str):
-                prior_results[row["id"]] = dict(row)
-    intents = _scan_intents(vault, f"intent-{plan_id[:16]}-", "resource_id")
+    previous_id = previous["receipt_id"] if previous is not None else None
+    sequence = previous["payload"]["sequence"] + 1 if previous is not None else 0
+    prior_results = {row["id"]: row for row in previous["payload"]["resources"]} if previous is not None else {}
+    recomputed_by_id = {resource["id"]: resource for resource in recomputed}
 
     actions: list[dict[str, Any]] = []
     results: list[dict[str, Any]] = []
     for resource in payload["resources"]:
-        fresh = next(row for row in recomputed if row["id"] == resource["id"])
+        if resource["id"] in completed:
+            results.append(completed[resource["id"]])
+            continue
+        fresh = recomputed_by_id[resource["id"]]
         continued = (
             prior_results.get(resource["id"], {}).get("result") in _COMPLETED_TOKENS
             or (previous is not None and resource["id"] in intents)
@@ -1512,11 +1656,14 @@ def _apply_upgrade_local(
             if any(resource[key] != fresh[key] for key in ("classification", "decision")):
                 _fail("plan-stale", "initial consent differs from a fresh derivation")
         action = _reconcile_resource(
-            resource, prior_results.get(resource["id"]), intents
+            resource, prior_results.get(resource["id"]), intents, vault=vault, plan_id=plan_id,
         )
         if action["verb"] == "write":
-            action["mechanical_before"] = snapshot(Path(resource["target"]))
-            _missing_parents(Path(resource["target"]))
+            target = Path(resource["target"])
+            action["mechanical_before"] = (
+                _retirement_file_state(target) if resource["kind"] == "retirement" else snapshot(target)
+            )
+            _missing_parents(target)
             action["created_parents"] = []
             actions.append(action)
         else:
@@ -1575,25 +1722,46 @@ def _apply_upgrade_local(
         resource = action["resource"]
         backup_ref: dict[str, Any] | None = None
         if resource["before"]["type"] != "absent":
-            backup_name = hashlib.sha256(
-                resource["id"].encode("utf-8")
-            ).hexdigest()[:32]
+            destination = _upgrade_original_path(vault, plan_id, resource["id"])
             backup_ref = backup_reference(
                 {
                     "path": resource["target"],
                     "state": action["mechanical_before"],
                 },
-                batch_dir / backup_name,
+                destination,
                 private_root=vault,
             )
+            permissions = _retirement_binding(resource)
+            if permissions:
+                target = Path(resource["target"])
+                if (
+                    action["mechanical_before"] != resource["before"]
+                    or _posix_mode(target) != permissions["mode_before"]
+                    or _posix_mode(destination) != permissions["mode_before"]
+                ):
+                    _fail("state-conflict", "retirement bytes or permissions changed before preservation")
+            if _WINDOWS_ACL in permissions:
+                from sbtd_migration_files import preflight_windows_permissions
+                from sbtd_retirement import retain_windows_permissions
+                from sbtd_retirement_permissions import capture, digest
+
+                raw = capture(target)
+                if digest(raw) != permissions[_WINDOWS_ACL] or snapshot(target) != action["mechanical_before"]:
+                    _fail("state-conflict", "retirement bytes or permissions changed before preservation")
+                _assert_private_upgrade_original(destination)
+                retain_windows_permissions(
+                    _acl_sidecar(destination), raw, permissions[_WINDOWS_ACL], private_root=vault,
+                )
+                preflight_windows_permissions(target, raw)
+                action["windows_vault"] = vault
         action["backup_ref"] = backup_ref
 
-    recomputed_by_id = {resource["id"]: resource for resource in recomputed}
     executor = {
         "isolated": executor_isolated,
         "runner": str(Path(__file__).resolve()),
         "package_state": baseline["source"]["state"],
     }
+    actions.sort(key=lambda action: 0 if action["resource"]["kind"] == "retirement" else 1)
     for action in actions:
         _record_result(results, _result_row(
             action["resource"], "pending", None, action["backup_ref"], action["created_parents"],
@@ -1625,6 +1793,7 @@ def _apply_upgrade_local(
                 ),
                 "mechanical_before": action["mechanical_before"],
                 "created_parents": action["created_parents"],
+                **_retirement_binding(resource),
             }
             action["mechanical_desired"] = intent["mechanical_desired"]
             _save_once(
@@ -1643,13 +1812,16 @@ def _apply_upgrade_local(
                     action["mechanical_before"],
                     action,
                 )
-                after = _payload_state(Path(resource["target"]))
+                after = (
+                    _retirement_file_state(Path(resource["target"]))
+                    if resource["kind"] == "retirement" else _payload_state(Path(resource["target"]))
+                )
             except ContractError as error:
                 _record_result(results,
                     _result_row(
                         resource,
                         "failed",
-                        _measured(resource["target"]),
+                        _measured(resource["target"], retirement=resource["kind"] == "retirement"),
                         action["backup_ref"],
                         action["created_parents"],
                         reason=error.code,
@@ -1665,7 +1837,7 @@ def _apply_upgrade_local(
                     _result_row(
                         resource,
                         "failed",
-                        _measured(resource["target"]),
+                        _measured(resource["target"], retirement=resource["kind"] == "retirement"),
                         action["backup_ref"],
                         action["created_parents"],
                         reason="write-failed",
@@ -1698,16 +1870,14 @@ def _apply_upgrade_local(
                         )
                     )
             row = next(row for row in results if row["id"] == resource["id"])
+            permissions = _retirement_binding(resource)
+            if permissions and row["result"] == "succeeded" and not _matches_binding(row, permissions):
+                row["result"] = "failed"
+                row["reason"] = "windows-acl-drift" if _WINDOWS_ACL in permissions else "mode-drift"
+                failure = {"resource_id": resource["id"], "code": row["reason"]}
+                stopped = True
             if row["result"] == "failed":
-                no_commit = not action.get("mutation_started") or row["reason"] in (
-                    "state-conflict", "plan-stale", "render-drift", "invalid-inventory",
-                )
-                if no_commit or row["mechanical_after"] == action["mechanical_before"]:
-                    row["mutated"] = False
-                elif row["mechanical_after"] == intent["mechanical_desired"]:
-                    row["mutated"] = True
-                else:
-                    row["mutated"] = None
+                row["mutated"] = _attributed_mutation(action, row, intent)
             receipt_payload = _receipt_payload(
                 plan_id, payload, vault, previous_id, sequence, results, failure, executor
             )
@@ -1765,7 +1935,7 @@ def _receipt_payload(
         status = "partial"
     else:
         status = "complete"
-    return {
+    document = {
         "receipt_schema": RECEIPT_SCHEMA,
         "plan_id": plan_id,
         "baseline_id": plan_payload["baseline"]["baseline_id"],
@@ -1777,11 +1947,15 @@ def _receipt_payload(
         "resources": list(results),
         "failure": failure,
     }
+    report = plan_payload.get("graftRetirement")
+    if isinstance(report, Mapping):
+        document["graftRetirement"] = dict(report)
+    return document
 
 
-def _measured(target: str) -> dict[str, Any] | None:
+def _measured(target: str, *, retirement: bool = False) -> dict[str, Any] | None:
     try:
-        return _payload_state(Path(target))
+        return _retirement_file_state(Path(target)) if retirement else _payload_state(Path(target))
     except (ContractError, OSError):
         return None
 
@@ -1804,7 +1978,7 @@ def _result_row(
 ) -> dict[str, Any]:
     if result not in _RESULT_TOKENS:
         _fail("invalid-argument", "unknown resource result token")
-    return {
+    row = {
         "id": resource["id"],
         "kind": resource["kind"],
         "target": resource["target"],
@@ -1813,23 +1987,85 @@ def _result_row(
         "before": resource["before"],
         "desired": resource["desired"],
         "after": after,
-        "mechanical_after": _mechanical_measured(resource["target"]) if after is not None else None,
+        "mechanical_after": (
+            _mechanical_measured(resource["target"])
+            if after is not None and resource["kind"] != "retirement" else after
+        ),
         "mechanical_before": backup_ref["state"] if backup_ref is not None else dict(_ABSENT),
         "backup_ref": backup_ref,
         "created_parents": list(created_parents or []),
         "reason": reason,
         "mutated": result in _COMPLETED_TOKENS,
     }
+    if permissions := _retirement_binding(resource):
+        row["mode_before"] = permissions["mode_before"]
+        if after is not None:
+            row["mode_after"] = _posix_mode(Path(row["target"]))
+        if _WINDOWS_ACL in permissions:
+            row[_WINDOWS_ACL] = permissions[_WINDOWS_ACL]
+            _record_windows_acl_after(row, after)
+    return row
+
+
+def _bound_upgrade_receipt(plan: Mapping[str, Any], receipt: Mapping[str, Any], vault: Path) -> None:
+    receipt_id, data = _validate_upgrade_receipt(receipt)
+    if (
+        data["plan_id"] != plan["plan_id"]
+        or data.get("baseline_id") != plan["payload"]["baseline"]["baseline_id"]
+        or data["backup_root"] != str(vault)
+    ):
+        _fail("receipt-mismatch", "the receipt belongs to a different upgrade batch")
+    _require_saved(vault / f"upgrade-receipt-{receipt_id}.json", receipt)
+
+
+def _upgrade_continuation(
+    plan: Mapping[str, Any], vault: Path, receipt: Mapping[str, Any] | None,
+) -> tuple[dict[str, Any] | None, dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    plan_id = plan["plan_id"]
+    stored = vault / f"upgrade-plan-{plan_id}.json"
+    if receipt is not None:
+        _bound_upgrade_receipt(plan, receipt, vault)
+        _require_saved(stored, plan)
+    elif snapshot(stored)["type"] == "absent":
+        return None, {}, {}
+    else:
+        _require_saved(stored, plan)
+    previous = _latest_receipt(
+        vault, "upgrade-receipt-", "plan_id", plan_id, None, _validate_upgrade_receipt,
+    )
+    if previous is not None and previous != receipt:
+        _bound_upgrade_receipt(plan, previous, vault)
+    rows = {row["id"]: row for row in previous["payload"]["resources"]} if previous is not None else {}
+    intents = _scan_intents(vault, f"intent-{plan_id[:16]}-", "resource_id")
+    completed: dict[str, dict[str, Any]] = {}
+    for resource in plan["payload"]["resources"]:
+        row = rows.get(resource["id"])
+        if resource["kind"] != "retirement" or row is None or (
+            row["result"] not in _COMPLETED_TOKENS and resource["id"] not in intents
+        ):
+            continue
+        action = _reconcile_resource(resource, row, intents, vault=vault, plan_id=plan_id)
+        if action["verb"] == "record" and action["row"]["result"] in _COMPLETED_TOKENS:
+            completed[resource["id"]] = action["row"]
+    return previous, intents, completed
 
 
 def _reconcile_resource(
     resource: dict[str, Any],
     prior: dict[str, Any] | None,
     intents: Mapping[str, dict[str, Any]],
+    *,
+    vault: Path,
+    plan_id: str,
 ) -> dict[str, Any]:
     """Decide write/skip/keep per resource, or reject unknown live state."""
-    live = _payload_state(Path(resource["target"]))
-    mechanical = snapshot(Path(resource["target"]))
+    target = Path(resource["target"])
+    permissions = _retirement_binding(resource)
+    if permissions:
+        live = mechanical = _retirement_file_state(target)
+    else:
+        live = _payload_state(target)
+        mechanical = snapshot(target)
     decision = resource["decision"]
     if decision in ("keep", "preserve"):
         if live != resource["before"]:
@@ -1839,9 +2075,18 @@ def _reconcile_resource(
             "verb": "record",
             "row": _result_row(resource, token, live, None, None),
         }
+    intent = intents.get(resource["id"])
+    if permissions and (intent is not None or (prior and prior["result"] in _COMPLETED_TOKENS)):
+        _check_retirement_intent(resource, intent, permissions, plan_id)
+        _check_retirement_row(resource, prior, intent, permissions)
+        _check_retirement_original(resource, intent["backup_ref"], vault, plan_id, permissions)
     if prior is not None and prior.get("result") in _COMPLETED_TOKENS:
+        if permissions and not _retirement_permissions_match(
+            target, live, permissions["mode_after"], permissions.get(_WINDOWS_ACL_AFTER),
+        ):
+            _fail("state-conflict", "completed retirement permissions changed before retry")
         backup = prior.get("backup_ref")
-        if backup is not None and snapshot(Path(backup["path"])) != backup["state"]:
+        if not permissions and backup is not None and snapshot(Path(backup["path"])) != backup["state"]:
             _fail("preservation-failed", "an original backup changed before retry", exit_code=3)
         semantic_retry = resource["kind"] in ("skill", "agents")
         if live == resource["desired"] == prior.get("after") and (
@@ -1858,28 +2103,25 @@ def _reconcile_resource(
         and prior.get("mutated") is False and live != resource["before"]
     ):
         _fail("state-conflict", "a proven unwritten target changed outside this batch")
-    intent = intents.get(resource["id"])
     if intent is not None:
         if intent.get("before") != resource["before"] or intent.get(
             "desired"
         ) != resource["desired"]:
             _fail("corrupt-evidence", "a vault intent contradicts the sealed plan")
         if live == resource["desired"]:
+            if permissions:
+                _fail("state-conflict", "an interrupted retirement has no proven outcome")
             if mechanical != intent.get("mechanical_desired"):
                 _fail("state-conflict", "an interrupted target contains unmeasured changes")
             backup_ref = intent.get("backup_ref")
-            if backup_ref is not None and (
-                snapshot(Path(backup_ref["path"])) != backup_ref["state"]
-            ):
+            if backup_ref is not None and snapshot(Path(backup_ref["path"])) != backup_ref["state"]:
                 _fail(
                     "preservation-failed",
                     "an original backup no longer matches its recorded state",
                     exit_code=3,
                 )
-            return {
-                "verb": "record",
-                "row": _result_row(resource, "reconciled", live, backup_ref, intent.get("created_parents", [])),
-            }
+            row = _result_row(resource, "reconciled", live, backup_ref, intent.get("created_parents", []))
+            return {"verb": "record", "row": row}
         if live != resource["before"]:
             _fail(
                 "state-conflict",
@@ -1908,6 +2150,236 @@ def _mechanical_install_state(fresh: Mapping[str, Any], root: Path | None, *, re
     return snapshot(path)
 
 
+def _retirement_file_state(path: Path) -> dict[str, Any]:
+    # Do not walk unexpected directories when a resource can only be a file.
+    target = _canonical(path)
+    info = _lstat(target)
+    if info is None:
+        return dict(_ABSENT)
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        _fail("unsafe-path", "the selected retirement target is not a singly linked regular file")
+    return {"type": "file", "checksum": _hash_file(target)}
+
+
+def _posix_mode(path: Path) -> str | None:
+    try:
+        info = path.lstat()
+    except OSError:
+        return None
+    if not stat.S_ISREG(info.st_mode):
+        return None
+    return format(stat.S_IMODE(info.st_mode), "04o")
+
+
+def _require_retirement_mode(sealed: Mapping[str, Any], target: Path) -> str:
+    details = sealed.get("details")
+    expected = details.get("mode_before") if isinstance(details, Mapping) else None
+    if not isinstance(expected, str) or _posix_mode(target) != expected:
+        _fail("state-conflict", "retirement target mode changed or was never proven")
+    return expected
+
+
+def _matches_binding(record: Mapping[str, Any], binding: Mapping[str, Any]) -> bool:
+    return all(key in record and record[key] == value for key, value in binding.items())
+
+
+def _retirement_binding(resource: Mapping[str, Any]) -> dict[str, Any]:
+    if resource["kind"] != "retirement" or resource.get("decision") not in _WRITABLE:
+        return {}
+    details = resource["details"]
+    mode = details.get("mode_before")
+    if not isinstance(mode, str) or len(mode) != 4 or any(bit not in "01234567" for bit in mode):
+        _fail("invalid-document", "retirement lacks a recorded file mode")
+    action = details.get("action")
+    if resource["before"]["type"] != "file" or resource["desired"] is None or (
+        (action, resource["desired"]["type"]) not in {("edit", "file"), ("remove-file", "absent")}
+    ):
+        _fail("invalid-document", "retirement does not bind a supported file operation")
+    binding = {"mode_before": mode, "mode_after": mode if action == "edit" else None}
+    if os.name == "nt":
+        if _WINDOWS_ACL not in details:
+            _fail("windows-acl-unrecorded", "Windows retirement requires a new plan with native ACL proof")
+        acl = _expect_hex(details[_WINDOWS_ACL], "retirement Windows ACL digest")
+        binding.update({_WINDOWS_ACL: acl, _WINDOWS_ACL_AFTER: acl if action == "edit" else None})
+    return binding
+
+
+def _check_retirement_intent(
+    resource: Mapping[str, Any], intent: Mapping[str, Any] | None, binding: Mapping[str, Any], plan_id: str,
+) -> None:
+    if intent is None:
+        _fail("intent-missing", "retirement outcome requires the bound write intent")
+    if "backup_ref" not in intent or not _matches_binding(intent, {
+        "intent_schema": "upgrade-write-intent", "plan_id": plan_id, "resource_id": resource["id"],
+        "target": resource["target"], "before": resource["before"], "desired": resource["desired"],
+        "mechanical_before": resource["before"], "mechanical_desired": resource["desired"], **binding,
+    }):
+        _fail("intent-mismatch", "retirement intent contradicts the canonical write or permissions")
+
+
+def _check_retirement_row(
+    resource: Mapping[str, Any], row: Mapping[str, Any] | None, intent: Mapping[str, Any],
+    binding: Mapping[str, Any],
+) -> None:
+    if row is None or not _matches_binding(row, {
+        **{key: resource[key] for key in ("id", "kind", "target", "decision", "before", "desired")},
+        "backup_ref": intent["backup_ref"], "mechanical_before": intent["mechanical_before"],
+    }):
+        _fail("receipt-mismatch", "retirement outcome is not bound to its plan and intent")
+    if row["result"] in _COMPLETED_TOKENS and (
+        row["mutated"] is not True
+        or not _matches_binding(row, {"after": resource["desired"], "mechanical_after": resource["desired"], **binding})
+    ):
+        _fail("receipt-mismatch", "completed retirement lacks its sealed outcome")
+
+
+def _windows_recovery_binding(step: Mapping[str, Any]) -> dict[str, Any]:
+    if os.name != "nt" or step.get("kind") != "retirement":
+        return {}
+    keys = (_WINDOWS_ACL, _WINDOWS_ACL_AFTER, "mode_before", "mode_after")
+    if any(key not in step for key in keys) or step[_WINDOWS_ACL] is None:
+        _fail("windows-acl-unrecorded", "Windows retirement recovery lacks native ACL proof")
+    return {key: step[key] for key in keys}
+
+
+def _recovery_permission_binding(step: Mapping[str, Any]) -> dict[str, Any]:
+    if step.get("kind") != "retirement":
+        return {}
+    return _windows_recovery_binding(step) or {key: step[key] for key in ("mode_before", "mode_after")}
+
+
+def _windows_restored_outcome(binding: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        _WINDOWS_ACL: binding[_WINDOWS_ACL],
+        _WINDOWS_ACL_AFTER: binding[_WINDOWS_ACL],
+        "mode_after": binding["mode_before"],
+    }
+
+
+def _live_windows_acl(path: Path, measured: Mapping[str, Any]) -> str | None:
+    from sbtd_retirement_permissions import capture, digest
+
+    if measured["type"] == "file":
+        return digest(capture(path))
+    if measured["type"] == "absent" and _lstat(path) is None:
+        return None
+    _fail("state-conflict", "retirement target type changed while measuring Windows ACLs")
+
+
+def _retirement_permissions_match(
+    path: Path, measured: Mapping[str, Any], mode: str | None, acl: str | None = None,
+) -> bool:
+    try:
+        info = _lstat(_canonical(path))
+        if measured["type"] == "absent":
+            return info is None and mode is None and acl is None
+        if (
+            measured["type"] != "file" or info is None or not stat.S_ISREG(info.st_mode)
+            or format(stat.S_IMODE(info.st_mode), "04o") != mode
+        ):
+            return False
+        return _live_windows_acl(path, measured) == acl if os.name == "nt" else acl is None
+    except (ContractError, OSError):
+        return False
+
+
+def _record_windows_acl_after(row: dict[str, Any], after: Mapping[str, Any] | None) -> None:
+    if after is None:
+        return
+    try:
+        row[_WINDOWS_ACL_AFTER] = _live_windows_acl(Path(row["target"]), after)
+    except (ContractError, OSError):
+        # Missing means unmeasured; null is proof of absence, not unknown.
+        pass
+
+
+def _upgrade_original_path(vault: Path, plan_id: str, resource_id: str) -> Path:
+    name = _bytes_digest(resource_id.encode("utf-8"))[:32]
+    return vault / "originals" / plan_id[:16] / name
+
+
+def _acl_sidecar(original: Path) -> Path:
+    return original.with_name(f"{original.name}.windows-acl")
+
+
+def _assert_private_upgrade_original(path: Path) -> None:
+    from sbtd_migration_files import assert_private_file
+
+    assert_private_file(path)
+
+
+def _read_upgrade_acl(backup: Mapping[str, Any] | None, vault: Path, digest: str) -> bytes:
+    from sbtd_retirement import read_windows_permissions
+
+    if backup is None:
+        _fail("preservation-failed", "Windows retirement has no private original", exit_code=3)
+    original = Path(backup["path"])
+    _assert_private_upgrade_original(original)
+    return read_windows_permissions(_acl_sidecar(original), digest, private_root=vault)
+
+
+def _check_retirement_original(
+    resource: Mapping[str, Any], backup: Mapping[str, Any] | None,
+    vault: Path, plan_id: str, binding: Mapping[str, Any],
+) -> None:
+    path = _upgrade_original_path(vault, plan_id, resource["id"])
+    if not isinstance(backup, Mapping) or backup.get("path") != str(path) or backup.get("state") != resource["before"]:
+        _fail("preservation-failed", "retirement original has no authorized backup", exit_code=3)
+    if _WINDOWS_ACL in binding:
+        _read_upgrade_acl(backup, vault, binding[_WINDOWS_ACL])
+    if _retirement_file_state(path) != resource["before"] or _posix_mode(path) != binding["mode_before"]:
+        _fail("preservation-failed", "retirement original bytes or mode changed", exit_code=3)
+
+
+def _removed_graft_operation(resource: Mapping[str, Any]) -> bool:
+    if resource.get("kind") not in {"mcp", "shell"}:
+        return False
+    details = resource.get("details")
+    text = json.dumps(details if isinstance(details, Mapping) else {}, default=str)
+    return any(
+        marker in text
+        for marker in (
+            "sbtd-graft",
+            "sbtd_graft_entry",
+            "graft-mcp",
+            "graft-hooks",
+            "graft-omp-mcp",
+        )
+    )
+
+
+def _attributed_mutation(
+    action: Mapping[str, Any], row: Mapping[str, Any], intent: Mapping[str, Any]
+) -> bool | None:
+    """Attribute only outcomes that match the sealed bytes and permissions."""
+    if row.get("result") in _COMPLETED_TOKENS:
+        return True
+    if "mode_before" in intent:
+        if not action.get("mutation_started"):
+            return False
+        if row.get("mechanical_after") == intent["mechanical_before"] and (
+            row.get("mode_after") == intent["mode_before"]
+            and (_WINDOWS_ACL not in intent or row.get(_WINDOWS_ACL_AFTER) == intent[_WINDOWS_ACL])
+        ):
+            return False
+        if row.get("mechanical_after") == intent["mechanical_desired"] and _matches_binding(
+            row, _retirement_binding(action["resource"]),
+        ):
+            return True
+        return None
+    no_commit = not action.get("mutation_started") or row.get("reason") in (
+        "state-conflict",
+        "plan-stale",
+        "render-drift",
+        "invalid-inventory",
+    )
+    if no_commit or row.get("mechanical_after") == action.get("mechanical_before"):
+        return False
+    if row.get("mechanical_after") == intent.get("mechanical_desired"):
+        return True
+    return None
+
+
 def _write_resource(
     sealed: Mapping[str, Any],
     fresh: Mapping[str, Any],
@@ -1918,8 +2390,49 @@ def _write_resource(
 ) -> None:
     target = Path(sealed["target"])
     scope = target.parent
-    if _payload_state(target) != sealed["before"] or snapshot(target) != expected:
+    mechanical = _retirement_file_state(target) if sealed["kind"] == "retirement" else snapshot(target)
+    if mechanical != expected or (
+        (mechanical if sealed["kind"] == "retirement" else _payload_state(target)) != sealed["before"]
+    ):
         _fail("state-conflict", "a target changed immediately before its write")
+    if sealed["kind"] == "retirement":
+        mode_before = _require_retirement_mode(sealed, target)
+        permissions = _retirement_binding(sealed)
+        windows_write: dict[str, Any] = {}
+        if os.name == "nt":
+            if _WINDOWS_ACL not in permissions:
+                _fail("windows-acl-unrecorded", "Windows retirement requires a sealed native ACL")
+            if backup_ref is None or snapshot(Path(backup_ref["path"])) != expected:
+                _fail("preservation-failed", "retirement original changed before its write", exit_code=3)
+            windows_write = {
+                "windows_permissions": _read_upgrade_acl(backup_ref, mutation["windows_vault"], permissions[_WINDOWS_ACL]),
+                "expected_windows_digest": permissions[_WINDOWS_ACL],
+                "windows_mode": int(mode_before, 8),
+            }
+        if sealed["details"].get("action") == "remove-file":
+            mutation["mutation_started"] = True
+            if _WINDOWS_ACL in permissions:
+                remove_reference(
+                    target, expected, scope=scope, expected_windows_digest=permissions[_WINDOWS_ACL],
+                    expected_windows_mode=int(mode_before, 8),
+                )
+            else:
+                remove_reference(target, expected, scope=scope)
+            return
+        content = _hosts_module().render_resource(fresh, package_root=package_root)
+        if not isinstance(content, (bytes, bytearray)):
+            _fail("invalid-inventory", "rendered retirement content must be bytes")
+        if _bytes_digest(bytes(content)) != sealed["desired"]["checksum"]:
+            _fail("render-drift", "freshly rendered retirement content differs from the sealed desired state")
+        _require_retirement_mode(sealed, target)
+        mutation["mutation_started"] = True
+        write_file(target, bytes(content), expected, scope=scope, **windows_write)
+        return
+    if _removed_graft_operation(sealed):
+        _fail(
+            "unsupported-in-rc.3",
+            "a sealed plan still contains Graft operations; regenerate the plan",
+        )
     if sealed["kind"] in ("mcp", "shell"):
         content = _hosts_module().render_resource(fresh, package_root=package_root)
         if not isinstance(content, (bytes, bytearray)):
@@ -2024,15 +2537,20 @@ def verify_upgrade(
 ) -> dict[str, Any]:
     """Read-only verification: managed payload state plus separate host evidence."""
     plan_id, payload = _validate_plan(plan)
+    if any(row["kind"] in ("mcp", "shell") for row in payload["resources"]):
+        _fail("unsupported-in-rc.3", "a sealed plan still contains Graft operations; regenerate the plan")
     vault = require_private_directory(Path(payload["backup_root"]))
     stored = vault / f"upgrade-plan-{plan_id}.json"
-    if snapshot(stored)["type"] == "file":
+    saved = snapshot(stored)["type"] != "absent"
+    if saved:
         _require_saved(stored, plan)
-    else:
-        fresh_baseline, fresh_resources, _domains = _derive_resources(payload["scope"], None)
-        sealed_files = [row for row in payload["resources"] if row["kind"] in ("skill", "agents")]
-        fresh_files = [row for row in fresh_resources if row["kind"] in ("skill", "agents")]
-        _check_plan_fresh(sealed_files, fresh_files, payload["baseline"], fresh_baseline)
+    if saved and any(
+        row["kind"] == "retirement" and row["decision"] in _WRITABLE for row in payload["resources"]
+    ):
+        if receipt is not None:
+            _bound_upgrade_receipt(plan, receipt, vault)
+        # A pre-write checkpoint may predate a durable retirement outcome.
+        receipt = _latest_receipt(vault, "upgrade-receipt-", "plan_id", plan_id, None, _validate_upgrade_receipt)
     receipt_rows: dict[str, dict[str, Any]] = {}
     receipt_id: str | None = None
     if receipt is not None:
@@ -2042,6 +2560,18 @@ def verify_upgrade(
         for row in receipt_payload["resources"]:
             if isinstance(row, Mapping) and isinstance(row.get("id"), str):
                 receipt_rows[row["id"]] = dict(row)
+    if saved:
+        completed = _verify_completed_retirements(plan, vault, receipt, receipt_rows)
+        fresh, disclosure = _derive_retirement(
+            payload["scope"], payload["resources"], vault, sorted(row["target"] for row in completed.values()),
+        )
+        remaining = [
+            row for row in _unfinished_resources(payload, fresh, disclosure, completed)
+            if row["kind"] == "retirement"
+        ]
+        _check_plan_fresh(remaining, fresh, payload["baseline"], payload["baseline"])
+    else:
+        _rederive_upgrade(payload, None, vault, {})
     if not isinstance(probe, bool):
         _fail("invalid-argument", "probe must be a boolean")
     sealed_links = _validate_link_authorizations(
@@ -2123,12 +2653,40 @@ def verify_upgrade(
         "domains": payload["domains"],
         "hosts": dict(hosts_report),
     }
+    report = payload.get("graftRetirement")
+    if isinstance(report, Mapping):
+        verification_payload["graftRetirement"] = dict(report)
     return {
         "schema_version": 1,
         "status": status,
         "verification_id": _digest(verification_payload),
         "payload": verification_payload,
     }
+
+
+def _verify_completed_retirements(
+    plan: Mapping[str, Any], vault: Path, receipt: Mapping[str, Any] | None,
+    rows: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Mapping[str, Any]]:
+    selected = {
+        resource["id"]: resource for resource in plan["payload"]["resources"]
+        if resource["kind"] == "retirement" and resource["decision"] in _WRITABLE
+        and rows.get(resource["id"], {}).get("result") in _COMPLETED_TOKENS
+    }
+    if receipt is None or not selected:
+        return {}
+    _bound_upgrade_receipt(plan, receipt, vault)
+    intents = _scan_intents(vault, f"intent-{plan['plan_id'][:16]}-", "resource_id")
+    completed = {}
+    for identifier, resource in selected.items():
+        row = rows[identifier]
+        binding = _retirement_binding(resource)
+        intent = intents.get(identifier)
+        _check_retirement_intent(resource, intent, binding, plan["plan_id"])
+        _check_retirement_row(resource, row, intent, binding)
+        _check_retirement_original(resource, intent["backup_ref"], vault, plan["plan_id"], binding)
+        completed[identifier] = row
+    return completed
 
 
 def _verify_resource(
@@ -2145,22 +2703,13 @@ def _verify_resource(
     if resource["decision"] == "blocked":
         return {
             **base,
-            "measured": _measured(resource["target"]),
+            "measured": _measured(resource["target"], retirement=resource["kind"] == "retirement"),
             "result": "blocked",
             "reason": "decision-blocked",
         }
-    if resource["kind"] in ("mcp", "shell"):
-        # Host configuration is semantically compared by verify_hosts; the
-        # whole-file digest is recorded but never alone decides alignment,
-        # so unrelated user additions after the upgrade stay aligned.
-        return {
-            **base,
-            "measured": _measured(resource["target"]),
-            "result": "preserved" if resource["decision"] == "preserve" else "host-managed",
-            "reason": None,
-        }
     try:
-        measured = _payload_state(Path(resource["target"]))
+        target = Path(resource["target"])
+        measured = _retirement_file_state(target) if resource["kind"] == "retirement" else _payload_state(target)
     except ContractError as error:
         return {
             **base,
@@ -2180,6 +2729,12 @@ def _verify_resource(
         result = "drift"
         if measured == resource["before"]:
             reason = "not-applied"
+    if result == "aligned" and (permissions := _retirement_binding(resource)):
+        if not _retirement_permissions_match(
+            target, measured, permissions["mode_after"], permissions.get(_WINDOWS_ACL_AFTER),
+        ):
+            reason = "windows-permissions-drift" if _WINDOWS_ACL in permissions else "mode-drift"
+            result = "drift"
     if (
         receipt_row is not None
         and receipt_row.get("result") in _COMPLETED_TOKENS
@@ -2234,7 +2789,7 @@ def _host_verdict(
                 required.append(status(host))
             if "failed" in required:
                 failed = True
-            elif probe and any(token != "verified" for token in required):
+            elif probe and any(token not in {"verified", "not-applicable"} for token in required):
                 blocked = True
             # live_reload and legacy are separate, nonrequested dimensions.
     # Blocked evidence always outranks drift: one blocked domain must never
@@ -2271,7 +2826,7 @@ def _cacheless_mechanical_state(path: Path, overlay: Mapping[str, Path] | None =
 
 
 def _authorize_recovery_evidence(
-    plan: Mapping[str, Any], receipt: Mapping[str, Any], vault: Path
+    plan: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], vault: Path,
 ) -> None:
     """Writable JSON is evidence, never authority: rederive trusted goals first."""
     payload = plan["payload"]
@@ -2280,17 +2835,36 @@ def _authorize_recovery_evidence(
     isolated = trusted.parent == vault / "self"
     if not isolated and _payload_state(trusted) != payload["baseline"]["source"]["state"]:
         _fail("source-stale", "recovery source is not an equivalent running trusted package")
-    baseline, fresh, _domains = _derive_resources(
-        payload["scope"], trusted, host_package_root=trusted
+    sealed = {row["id"]: row for row in payload["resources"]}
+    completed_retirements = {
+        row["id"] for row in rows
+        if (resource := sealed.get(row["id"])) is not None
+        and resource["kind"] == "retirement"
+        and resource["decision"] in _WRITABLE
+        and resource["before"]["type"] == "file"
+        and resource["desired"]["type"] in {"file", "absent"}
+        and row.get("result") in _COMPLETED_TOKENS
+        and row.get("mutated") is True
+        and all(row.get(key) == resource[key] for key in ("kind", "target", "decision", "before", "desired"))
+        and row.get("after") == row.get("mechanical_after") == resource["desired"]
+    }
+    baseline, fresh, _domains, disclosure = _derive_resources(
+        payload["scope"], trusted, host_package_root=trusted, vault=vault,
+        required_retirement_targets=sorted(sealed[identifier]["target"] for identifier in completed_retirements),
     )
+    expected = {row["id"]: row for row in fresh}
+    missing = set(sealed) - set(expected)
+    if not missing.issubset(completed_retirements) or set(expected) - set(sealed):
+        _fail("plan-stale", "recovery resource identities do not derive from the trusted catalog")
+    if not _same_retirement(payload, disclosure, completed_paths={sealed[identifier]["target"] for identifier in missing}):
+        _fail("plan-stale", "retirement disclosure differs from a fresh derivation")
     if baseline["baseline_id"] != payload["baseline"]["baseline_id"] or baseline["source"]["state"] != payload["baseline"]["source"]["state"]:
         _fail("source-stale", "the trusted recovery package no longer matches the batch baseline")
-    expected = {row["id"]: row for row in fresh}
-    sealed = {row["id"]: row for row in payload["resources"]}
-    if set(expected) != set(sealed):
-        _fail("plan-stale", "recovery resource identities do not derive from the trusted catalog")
+    expected.update({identifier: sealed[identifier] for identifier in missing})
     _check_decisions(payload)
     for identifier, resource in sealed.items():
+        if identifier in missing:
+            continue
         actual = _identity_view(resource, str(source))
         derived = _identity_view(expected[identifier], baseline["source"]["path"])
         if resource["kind"] in ("mcp", "shell"):
@@ -2298,7 +2872,7 @@ def _authorize_recovery_evidence(
             actual["desired"] = derived["desired"] = None
             actual["managed_goal"] = resource["details"].get("managed_digest")
             derived["managed_goal"] = expected[identifier]["details"].get("managed_digest")
-        if actual != derived:
+        if canonical_json_bytes(actual) != canonical_json_bytes(derived):
             _fail("plan-stale", "recovery content or source pins do not derive from the trusted package")
     intents = _scan_intents(vault, f"intent-{plan['plan_id'][:16]}-", "resource_id")
     checkpoints = _scan_documents(vault, "upgrade-receipt-")
@@ -2309,9 +2883,9 @@ def _authorize_recovery_evidence(
             for item in checkpoint["resources"]:
                 if item["result"] == "pending" and item["after"] is None:
                     initial_rows.add(_digest([
-                        item["id"], item["before"], item["desired"], item.get("backup_ref"),
+                        item["id"], item["before"], item["desired"], item.get("backup_ref"), item.get(_WINDOWS_ACL),
                     ]))
-    for row in receipt["payload"]["resources"]:
+    for row in rows:
         if row.get("mutated") is False and row.get("result") != "pending":
             continue
         resource = sealed.get(row["id"])
@@ -2326,6 +2900,12 @@ def _authorize_recovery_evidence(
             intent.get(key) != resource.get(key) for key in ("target", "before", "desired")
         ):
             _fail("intent-mismatch", "recovery intent contradicts the canonical write")
+        permissions = _retirement_binding(resource)
+        if permissions:
+            _check_retirement_intent(resource, intent, permissions, plan["plan_id"])
+            _check_retirement_row(resource, row, intent, permissions)
+            if row.get("mutated") is True and not _matches_binding(row, permissions):
+                _fail("receipt-mismatch", "a completed retirement does not match its sealed permissions outcome")
         canonical_goal = (
             _mechanical_install_state(expected[row["id"]], trusted, recovery=True)
             if resource["kind"] in ("skill", "agents") else resource["desired"]
@@ -2338,14 +2918,15 @@ def _authorize_recovery_evidence(
         ):
             _fail("receipt-mismatch", "a completed write does not match its intended canonical goal")
         initial = _digest([
-            row["id"], resource["before"], resource["desired"], intent.get("backup_ref"),
+            row["id"], resource["before"], resource["desired"], intent.get("backup_ref"), intent.get(_WINDOWS_ACL),
         ]) in initial_rows
         if not initial:
             _fail("checkpoint-missing", "recovery requires a bound pre-write checkpoint")
         backup = intent.get("backup_ref")
-        if resource["before"]["type"] != "absent":
-            name = hashlib.sha256(row["id"].encode("utf-8")).hexdigest()[:32]
-            if backup is None or Path(backup["path"]) != vault / "originals" / plan["plan_id"][:16] / name:
+        if permissions:
+            _check_retirement_original(resource, backup, vault, plan["plan_id"], permissions)
+        elif resource["before"]["type"] != "absent":
+            if backup is None or Path(backup["path"]) != _upgrade_original_path(vault, plan["plan_id"], row["id"]):
                 _fail("preservation-failed", "recovery original has no authorized backup", exit_code=3)
             if snapshot(Path(backup["path"])) != backup["state"] or _payload_state(Path(backup["path"])) != resource["before"]:
                 _fail("preservation-failed", "recovery backup differs from the original pre-state", exit_code=3)
@@ -2377,13 +2958,16 @@ def _check_recovery_binding(recovery_plan: Mapping[str, Any]) -> None:
         # A blocked attribution or missing backup is never a retry exception.
         if step["reason"] != "live-drift":
             continue
-        measured = snapshot(Path(step["target"]))
+        target = Path(step["target"])
+        measured = snapshot(target)
+        windows = _windows_recovery_binding(step)
         goal = dict(_ABSENT) if step["action"] == "remove" else step["backup_ref"]["state"]
         prior = outcomes.get(step["step_id"])
         intent = intents.get(step["step_id"])
-        if intent is not None and any(
-            intent.get(key) != step.get(key)
-            for key in ("target", "action", "expected_current", "restore_state")
+        if intent is not None and (
+            not _matches_binding(intent, _recovery_permission_binding(step))
+            or any(intent.get(key) != step.get(key)
+                   for key in ("target", "action", "expected_current", "restore_state"))
         ):
             _fail("intent-mismatch", "recovery continuation intent contradicts its step")
         receipt_proof = (
@@ -2393,6 +2977,16 @@ def _check_recovery_binding(recovery_plan: Mapping[str, Any]) -> None:
         intent_proof = intent is not None and (
             measured == goal or (step["action"] == "restore" and measured["type"] == "absent")
         )
+        if windows:
+            restored = measured == goal and _retirement_permissions_match(
+                target, measured, windows["mode_before"], windows[_WINDOWS_ACL],
+            )
+            receipt_proof = receipt_proof and restored and _matches_binding(prior, _windows_restored_outcome(windows))
+            intent_proof = intent is not None and restored
+        elif step["kind"] == "retirement":
+            restored = measured == goal and _posix_mode(target) == step["mode_before"]
+            receipt_proof = receipt_proof and restored
+            intent_proof = intent is not None and restored
         if receipt_proof or intent_proof:
             step["status"] = "actionable"
             step["reason"] = None
@@ -2420,29 +3014,42 @@ def _recovery_rows(
         vault, "upgrade-receipt-", "plan_id", plan["plan_id"],
         dict(receipt), _validate_upgrade_receipt,
     )
+    if latest is not None and latest != receipt:
+        _bound_upgrade_receipt(plan, latest, vault)
     latest_rows = {
         row["id"]: row for row in latest["payload"]["resources"]
     } if latest is not None else {}
     rows: list[dict[str, Any]] = []
     for original in receipt["payload"]["resources"]:
         row = dict(original)
+        resource = resources.get(row["id"])
         intent = intents.get(row["id"])
         later = latest_rows.get(row["id"])
         if (
-            row["result"] == "pending" and later is not None
-            and later["result"] != "pending" and later.get("mutated") is False
+            row["result"] == "pending" and later is not None and later["result"] != "pending"
+            and (
+                later.get("mutated") is False or (
+                    resource is not None and resource["kind"] == "retirement"
+                    and later["result"] in _COMPLETED_TOKENS
+                )
+            )
         ):
             rows.append(dict(later))
             continue
         if row["result"] == "pending" and intent is not None:
-            resource = resources.get(row["id"])
-            if resource is None or any(
+            if resource is None or row["target"] != resource["target"] or any(
                 intent.get(key) != resource.get(key) for key in ("target", "before", "desired")
             ) or intent.get("plan_id") != plan["plan_id"]:
                 _fail("corrupt-evidence", "an interruption intent leaves the sealed resource set")
-            measured = snapshot(Path(row["target"]))
-            observed = measured == intent["mechanical_desired"]
-            if observed or (observed_ids is not None and row["id"] in observed_ids):
+            target = Path(row["target"])
+            permissions = _retirement_binding(resource)
+            if permissions:
+                _check_retirement_intent(resource, intent, permissions, plan["plan_id"])
+            measured = _retirement_file_state(target) if permissions else snapshot(target)
+            if not permissions and (
+                measured == intent["mechanical_desired"]
+                or (observed_ids is not None and row["id"] in observed_ids)
+            ):
                 row.update({
                     "result": "reconciled", "after": resource["desired"],
                     "mutated": True,
@@ -2450,10 +3057,15 @@ def _recovery_rows(
                     "mechanical_before": intent["mechanical_before"],
                     "backup_ref": intent["backup_ref"],
                     "created_parents": intent.get("created_parents", []),
+                    **permissions,
                 })
-            elif measured != intent["mechanical_before"]:
+            elif measured != intent["mechanical_before"] or (
+                permissions and not _retirement_permissions_match(
+                    target, measured, permissions["mode_before"], permissions.get(_WINDOWS_ACL),
+                )
+            ):
                 row.update({
-                    "result": "failed", "after": _measured(row["target"]),
+                    "result": "failed", "after": measured if permissions else _measured(row["target"]),
                     "mutated": None, "mechanical_after": measured,
                     "mechanical_before": intent["mechanical_before"],
                     "backup_ref": intent["backup_ref"],
@@ -2474,11 +3086,12 @@ def _plan_recovery(
     vault = require_private_directory(Path(plan_payload["backup_root"]))
     _require_saved(vault / f"upgrade-plan-{plan_id}.json", plan)
     _require_saved(vault / f"upgrade-receipt-{receipt_id}.json", receipt)
-    _authorize_recovery_evidence(plan, receipt, vault)
+    recovery_rows = _recovery_rows(plan, receipt, observed_ids)
+    _authorize_recovery_evidence(plan, recovery_rows, vault)
     allowed = {resource["id"]: resource for resource in plan_payload["resources"]}
     steps: list[dict[str, Any]] = []
     blocked = False
-    for row in _recovery_rows(plan, receipt, observed_ids):
+    for row in recovery_rows:
         if not isinstance(row, Mapping):
             _fail("corrupt-evidence", "a receipt resource row is malformed")
         if row.get("result") not in ("succeeded", "reconciled", "skipped-complete", "failed"):
@@ -2507,6 +3120,32 @@ def _plan_recovery(
             "created_parents": list(row.get("created_parents", [])),
             "expected_mechanical": row["mechanical_after"],
         }
+        if row["kind"] in {"mcp", "shell"}:
+            was_present = row["before"]["type"] != "absent"
+            steps.append({
+                **base,
+                "action": "restore" if was_present else "remove",
+                "restore_state": row["before"] if was_present else None,
+                "backup_ref": row.get("backup_ref"),
+                "status": "blocked",
+                "reason": "unsupported-in-rc.3",
+            })
+            blocked = True
+            continue
+        if row["kind"] == "retirement" and row.get("mutated") is True:
+            permissions = _retirement_binding(resource)
+            base.update(permissions)
+            if not _retirement_permissions_match(
+                Path(target), live, permissions["mode_after"], permissions.get(_WINDOWS_ACL_AFTER),
+            ):
+                steps.append({
+                    **base, "action": "restore" if row["before"]["type"] != "absent" else "remove",
+                    "restore_state": row["before"] if row["before"]["type"] != "absent" else None,
+                    "backup_ref": row.get("backup_ref"), "status": "blocked",
+                    "reason": "live-drift",
+                })
+                blocked = True
+                continue
         was_present = row["before"]["type"] != "absent"
         if row.get("mutated") is not True:
             steps.append({
@@ -2544,8 +3183,7 @@ def _plan_recovery(
             continue
         backup_ref = row.get("backup_ref")
         if backup_ref is not None:
-            backup_name = hashlib.sha256(resource_id.encode("utf-8")).hexdigest()[:32]
-            if Path(backup_ref["path"]) != vault / "originals" / plan_id[:16] / backup_name:
+            if Path(backup_ref["path"]) != _upgrade_original_path(vault, plan_id, resource_id):
                 _fail("receipt-mismatch", "an original backup has an unauthorized path")
         if backup_ref is None or (
             snapshot(Path(backup_ref["path"])) != backup_ref["state"]
@@ -2743,6 +3381,8 @@ def _apply_recovery_local(
         "runner": str(Path(__file__).resolve()),
         "package_state": None,
     }
+    # Restore the payloads before reactivating any of their retired callers.
+    actions.sort(key=lambda action: action["step"]["kind"] == "retirement")
     for action in actions:
         _record_result(results, _step_row(action["step"], "pending", None))
     try:
@@ -2768,6 +3408,7 @@ def _apply_recovery_local(
                 "action": step["action"],
                 "expected_current": step["expected_current"],
                 "restore_state": step["restore_state"],
+                **_recovery_permission_binding(step),
             }
             if step["expected_mechanical"]["type"] == "directory" and (
                 step["step_id"] not in intents or "directory_cutover" in intents[step["step_id"]]
@@ -2780,7 +3421,7 @@ def _apply_recovery_local(
                 vault,
             )
             try:
-                _execute_step(step, action["mechanical_before"])
+                _execute_step(step, action["mechanical_before"], vault=vault)
                 after = _payload_state(Path(step["target"]))
                 if step["expected_mechanical"]["type"] == "directory":
                     _check_recovery_cutover(step, intent, after)
@@ -2810,7 +3451,12 @@ def _apply_recovery_local(
                     failure = {"step_id": step["step_id"], "code": "after-mismatch"}
                     stopped = True
                 else:
-                    _record_result(results, _step_row(step, "succeeded", after))
+                    row = _step_row(step, "succeeded", after)
+                    if _WINDOWS_ACL in row and not _matches_binding(row, _windows_restored_outcome(step)):
+                        row.update(result="failed", reason="windows-acl-drift")
+                        failure = {"step_id": step["step_id"], "code": "windows-acl-drift"}
+                        stopped = True
+                    _record_result(results, row)
             receipt_payload = _recovery_receipt_payload(
                 recovery_id,
                 payload,
@@ -2894,7 +3540,7 @@ def _step_row(
 ) -> dict[str, Any]:
     if result not in _STEP_RESULT_TOKENS:
         _fail("invalid-argument", "unknown step result token")
-    return {
+    row = {
         "step_id": step["step_id"],
         "resource_id": step["resource_id"],
         "action": step["action"],
@@ -2906,6 +3552,12 @@ def _step_row(
         "mechanical_after": _mechanical_measured(step["target"]) if after is not None else None,
         "reason": reason,
     }
+    if windows := _windows_recovery_binding(step):
+        row[_WINDOWS_ACL] = windows[_WINDOWS_ACL]
+        _record_windows_acl_after(row, after)
+        if after is not None:
+            row["mode_after"] = _posix_mode(Path(step["target"]))
+    return row
 
 
 def _recovery_retired_path(step: Mapping[str, Any]) -> Path:
@@ -2947,47 +3599,83 @@ def _reconcile_step(
         dict(_ABSENT) if step["action"] == "remove" else step["restore_state"]
     )
     intent = intents.get(step["step_id"])
+    windows = _windows_recovery_binding(step)
+    restored = live == expected_after
+    current = live == step["expected_current"] and mechanical == step["expected_mechanical"]
+    if intent is not None and not _matches_binding(intent, _recovery_permission_binding(step)):
+        _fail("intent-mismatch", "the recovery intent contradicts the sealed retirement permissions")
+    if windows:
+        restored = restored and _retirement_permissions_match(
+            Path(step["target"]), live, windows["mode_before"], windows[_WINDOWS_ACL],
+        )
+        current = current and _retirement_permissions_match(
+            Path(step["target"]), live, windows["mode_after"], windows[_WINDOWS_ACL_AFTER],
+        )
+    elif step.get("kind") == "retirement":
+        mode = _posix_mode(Path(step["target"]))
+        restored = restored and "mode_before" in step and mode == step["mode_before"]
+        current = current and "mode_after" in step and mode == step["mode_after"]
     if step["expected_mechanical"]["type"] == "directory":
         _check_recovery_cutover(step, intent, live)
         if (live == expected_after and intent is not None and "directory_cutover" not in intent
                 and (prior is None or prior["result"] not in ("succeeded", "skipped-complete"))):
             _fail("state-conflict", "legacy directory outcome requires manual cleanup verification")
     if prior is not None and prior.get("result") in _COMPLETED_TOKENS:
-        if live == expected_after and mechanical == prior.get("mechanical_after"):
+        if restored and mechanical == prior.get("mechanical_after") and (
+            not windows or _matches_binding(prior, _windows_restored_outcome(windows))
+        ):
             return {"verb": "record", "row": _step_row(step, "skipped-complete", live)}
         _fail(
             "state-conflict",
             "a completed recovery step no longer matches its receipt outcome",
         )
     if intent is not None:
-        if step["action"] == "restore" and live["type"] == "absent":
+        if step.get("kind") != "retirement" and step["action"] == "restore" and live["type"] == "absent":
             return {"verb": "write", "step": step}
-        if live == expected_after and (
+        if restored and (
             mechanical == (dict(_ABSENT) if step["action"] == "remove" else step["backup_ref"]["state"])
         ):
             return {"verb": "record", "row": _step_row(step, "reconciled", live)}
-        if live != step["expected_current"] or mechanical != step["expected_mechanical"]:
+        if not current:
             _fail(
                 "state-conflict",
                 "an interrupted recovery left an unknown live state; reconcile manually",
             )
         return {"verb": "write", "step": step}
-    if live != step["expected_current"] or mechanical != step["expected_mechanical"]:
+    if not current:
         _fail(
             "state-conflict",
             "a recovery target changed since the recovery plan was sealed",
         )
-    if live == expected_after and step["action"] == "restore":
+    if restored and step["action"] == "restore":
         return {"verb": "record", "row": _step_row(step, "succeeded", live)}
     return {"verb": "write", "step": step}
 
 
-def _execute_step(step: Mapping[str, Any], expected: Mapping[str, Any]) -> None:
+def _execute_step(step: Mapping[str, Any], expected: Mapping[str, Any], *, vault: Path | None = None) -> None:
     target = Path(step["target"])
     scope = target.parent
     if snapshot(target) != expected:
         _fail("state-conflict", "a recovery target changed immediately before its write")
+    if step.get("kind") in {"mcp", "shell"}:
+        _fail(
+            "unsupported-in-rc.3",
+            "a sealed plan still contains Graft operations; regenerate the plan",
+        )
+    windows = _windows_recovery_binding(step)
+    if windows and (
+        expected != step["expected_mechanical"]
+        or not _retirement_permissions_match(target, expected, windows["mode_after"], windows[_WINDOWS_ACL_AFTER])
+    ):
+        _fail("state-conflict", "retirement bytes or Windows ACL changed before recovery")
+    if step.get("kind") == "retirement" or "mode_before" in step or "mode_after" in step:
+        if "mode_before" not in step or "mode_after" not in step:
+            _fail("state-conflict", "retirement recovery lacks a proven after-state mode")
+        if _posix_mode(target) != step["mode_after"]:
+            _fail("state-conflict", "retirement target mode changed before recovery")
     if step["action"] == "remove":
+        if windows:
+            _fail("invalid-document", "Windows retirement recovery requires an original file")
         if expected["type"] == "directory":
             withdraw_directory_reference(target, expected, scope=scope, retired_path=_recovery_retired_path(step))
             return
@@ -3006,17 +3694,31 @@ def _execute_step(step: Mapping[str, Any], expected: Mapping[str, Any]) -> None:
             "an original backup no longer matches its recorded state",
             exit_code=3,
         )
-    if step["restore_state"]["type"] == "file":
+    if windows:
+        if vault is None or step["restore_state"]["type"] != "file" or backup_ref["state"] != step["restore_state"]:
+            _fail("preservation-failed", "Windows recovery lacks a bound private original", exit_code=3)
+        original = read_file(Path(backup_ref["path"]), backup_ref["state"])
+        raw = _read_upgrade_acl(backup_ref, vault, windows[_WINDOWS_ACL])
+        write_file(
+            target, original, expected, scope=scope, windows_permissions=raw,
+            expected_windows_digest=windows[_WINDOWS_ACL_AFTER], windows_mode=int(windows["mode_before"], 8),
+        )
+        if not _retirement_permissions_match(target, step["restore_state"], windows["mode_before"], windows[_WINDOWS_ACL]):
+            _fail("state-conflict", "restored retirement permissions differ from the retained original")
+    elif step["restore_state"]["type"] == "file":
+        if "mode_before" in step and _posix_mode(Path(backup_ref["path"])) != step["mode_before"]:
+            _fail("preservation-failed", "original retirement mode changed before recovery", exit_code=3)
         install_reference(backup_ref, target, expected, scope=scope)
-        return
-    if expected["type"] == "directory":
+    elif expected["type"] == "directory":
         restore_directory_reference(
             backup_ref, target, expected, scope=scope, retired_path=_recovery_retired_path(step),
         )
-        return
-    if expected["type"] != "absent":
-        remove_reference(target, expected, scope=scope)
-    install_reference(backup_ref, target, dict(_ABSENT), scope=scope)
+    else:
+        if expected["type"] != "absent":
+            remove_reference(target, expected, scope=scope)
+        install_reference(backup_ref, target, dict(_ABSENT), scope=scope)
+    if "mode_before" in step and _posix_mode(target) != step["mode_before"]:
+        _fail("state-conflict", "restored retirement mode differs from the retained original")
 
 
 # ---------------------------------------------------------------------------

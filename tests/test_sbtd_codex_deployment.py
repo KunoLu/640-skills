@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import os
+import stat
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
+from onboard import GLOBAL_AGENTS_TEMPLATE
 from onboard_contracts import ContractError, canonical_json_bytes
-from sbtd_graft_deployment import (
+from sbtd_deployment import (
     attach_deployment,
     execute_migration_deployment,
     load_deployment_context,
@@ -17,6 +19,19 @@ from sbtd_migration_files import snapshot
 from sbtd_migration_plan import plan_migration
 
 from tests.test_sbtd_migration_apply import legacy_project
+
+
+def _isolated_home(home, codex_home, skills_root):
+    return {
+        "HOME": str(home),
+        "USERPROFILE": str(home),
+        "CODEX_HOME": str(codex_home),
+        "AGENT_SKILLS_DIR": str(skills_root),
+        "PI_CONFIG_DIR": ".omp",
+        "PI_CODING_AGENT_DIR": "",
+        "OMP_PROFILE": "default",
+        "PI_PROFILE": "default",
+    }
 
 
 class DeploymentContextTests(unittest.TestCase):
@@ -30,7 +45,7 @@ class DeploymentContextTests(unittest.TestCase):
                 "projects": [
                     {
                         "root": str(root),
-                        "private_operations": [{"owner_kind": "gitignore"}],
+                        "private_operations": [],
                     }
                 ],
                 "shared_operations": [],
@@ -42,20 +57,10 @@ class DeploymentContextTests(unittest.TestCase):
                     }
                 ],
             }
-            with (
-                mock.patch("onboard.default_codex_home", return_value=codex_home),
-                mock.patch("onboard.detect_omp_root", return_value=None),
-                mock.patch(
-                    "onboard.resolve_global_skills_dir",
-                    return_value=(codex_home / "skills", "fixture"),
-                ),
-                mock.patch(
-                    "sbtd_graft_deployment.deployment_operations",
-                    return_value=({str(root): []}, []),
-                ),
-                mock.patch(
-                    "sbtd_graft_deployment._installation_templates", return_value=[]
-                ),
+            with mock.patch.dict(
+                os.environ,
+                _isolated_home(base / "home", codex_home, codex_home / "skills"),
+                clear=True,
             ):
                 attach_deployment(payload, project_only=False, hooks_authorized=False)
             self.assertEqual(
@@ -69,6 +74,9 @@ class DeploymentContextTests(unittest.TestCase):
                     }
                 ],
             )
+            targets = {operation["target"] for operation in payload["shared_operations"]}
+            self.assertIn(str(codex_home / "AGENTS.md"), targets)
+            self.assertIn(str(codex_home / "skills/sbtd-task"), targets)
 
     def test_attach_deployment_normalizes_nested_skills_root_under_omp_home(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -76,7 +84,7 @@ class DeploymentContextTests(unittest.TestCase):
             root, codex_home, omp_home = (
                 base / "project",
                 base / "codex",
-                base / "omp/agent",
+                base / "home/.omp/agent",
             )
             root.mkdir()
             roots = [str(root)]
@@ -84,7 +92,7 @@ class DeploymentContextTests(unittest.TestCase):
                 "projects": [
                     {
                         "root": str(root),
-                        "private_operations": [{"owner_kind": "gitignore"}],
+                        "private_operations": [],
                     }
                 ],
                 "shared_operations": [],
@@ -96,27 +104,10 @@ class DeploymentContextTests(unittest.TestCase):
                     }
                 ],
             }
-            with (
-                mock.patch("onboard.default_codex_home", return_value=codex_home),
-                mock.patch("onboard.detect_omp_root", return_value=omp_home.parent),
-                mock.patch(
-                    "onboard.resolve_global_skills_dir",
-                    return_value=(omp_home / "skills", "fixture"),
-                ),
-                mock.patch(
-                    "sbtd_graft_deployment.deployment_operations",
-                    return_value=({str(root): []}, []),
-                ),
-                mock.patch(
-                    "sbtd_graft_deployment._installation_templates", return_value=[]
-                ),
-                mock.patch(
-                    "sbtd_omp_sources.discover_omp_sources",
-                    return_value={
-                        "agent_dir": str(omp_home),
-                        "inputs": [],
-                    },
-                ),
+            with mock.patch.dict(
+                os.environ,
+                _isolated_home(base / "home", codex_home, omp_home / "skills"),
+                clear=True,
             ):
                 attach_deployment(
                     payload,
@@ -140,6 +131,10 @@ class DeploymentContextTests(unittest.TestCase):
                     },
                 ],
             )
+            targets = {operation["target"] for operation in payload["shared_operations"]}
+            self.assertIn(str(omp_home / "AGENTS.md"), targets)
+            self.assertIn(str(omp_home / "skills/sbtd-task"), targets)
+            self.assertFalse(omp_home.parent.exists())
 
     def test_context_validates_scope_and_unused_private_output_before_writes(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -150,12 +145,7 @@ class DeploymentContextTests(unittest.TestCase):
             )
             for path in (home, vault, evidence):
                 path.mkdir(mode=0o700)
-            environment = {
-                "HOME": str(home),
-                "USERPROFILE": str(home),
-                "CODEX_HOME": str(home / ".codex"),
-                "AGENT_SKILLS_DIR": str(home / ".agent/skills"),
-            }
+            environment = _isolated_home(home, home / ".codex", home / ".agent/skills")
             with mock.patch.dict(os.environ, environment):
                 manifest = plan_migration(
                     [root],
@@ -163,7 +153,7 @@ class DeploymentContextTests(unittest.TestCase):
                     "fixture",
                     None,
                     tool_versions=runtime_versions(),
-                    deployment_mode="init-projects",
+                    deployment_mode="init",
                 )
                 manifest_path = evidence / "manifest.json"
                 manifest_path.write_bytes(canonical_json_bytes(manifest))
@@ -179,7 +169,7 @@ class DeploymentContextTests(unittest.TestCase):
                     apply_path,
                     evidence / "deployment.json",
                     previous_path=None,
-                    mode="init-projects",
+                    mode="init",
                     roots=[root],
                     hooks_authorized=False,
                 )
@@ -191,7 +181,7 @@ class DeploymentContextTests(unittest.TestCase):
                         apply_path,
                         evidence / "wrong-mode.json",
                         previous_path=None,
-                        mode="init",
+                        mode="init-projects",
                         roots=[root],
                         hooks_authorized=False,
                     )
@@ -211,12 +201,12 @@ class DeploymentContextTests(unittest.TestCase):
                             apply_path,
                             output,
                             previous_path=None,
-                            mode="init-projects",
+                            mode="init",
                             roots=roots,
                             hooks_authorized=hooks,
                         )
                     self.assertEqual(snapshot(base), before)
-                with mock.patch("sbtd_graft_deployment.datetime") as clock:
+                with mock.patch("sbtd_deployment.datetime") as clock:
                     clock.now.return_value.isoformat.return_value = (
                         "2000-01-01T00:00:00+00:00"
                     )
@@ -226,7 +216,7 @@ class DeploymentContextTests(unittest.TestCase):
                             apply_path,
                             evidence / "clock-rollback.json",
                             previous_path=None,
-                            mode="init-projects",
+                            mode="init",
                             roots=[root],
                             hooks_authorized=False,
                         )
@@ -243,12 +233,9 @@ class DeploymentContextTests(unittest.TestCase):
             for path in (home, vault, evidence):
                 path.mkdir(mode=0o700)
             active = home / "active-codex"
-            environment = {
-                "HOME": str(home),
-                "USERPROFILE": str(home),
-                "CODEX_HOME": str(active),
-                "AGENT_SKILLS_DIR": str(home / ".agent/skills"),
-            }
+            skills = home / ".agent/skills"
+            rules = active / "AGENTS.md"
+            environment = _isolated_home(home, active, skills)
             with mock.patch.dict(os.environ, environment):
                 manifest = plan_migration(
                     [root],
@@ -264,6 +251,15 @@ class DeploymentContextTests(unittest.TestCase):
                     manifest_path, confirmed=True, no_routing_approvals=True
                 )
                 self.assertEqual(code, 0, applied)
+                operations = {
+                    operation["resource_id"]: operation
+                    for operation in manifest["payload"]["shared_operations"]
+                    if operation["phase"] == "deploy"
+                }
+                rules_id = next(
+                    rid for rid, operation in operations.items()
+                    if operation["target"] == str(rules)
+                )
                 receipt = applied["migration"]["apply_receipt"]
                 output = evidence / "deployment.json"
                 context = load_deployment_context(
@@ -277,45 +273,33 @@ class DeploymentContextTests(unittest.TestCase):
                 )
                 original_mkdir = Path.mkdir
 
-                def deny_active_home(path, *args, **kwargs):
-                    if path == active:
-                        raise PermissionError("synthetic scope creation failure")
+                def deny_skills_root(path, *args, **kwargs):
+                    if path == skills:
+                        raise PermissionError("synthetic skills scope creation failure")
                     return original_mkdir(path, *args, **kwargs)
 
-                def isolated_native_boundary(project, _runtime):
-                    (project / "graft").mkdir()
-                    (project / "graft/fixture").write_bytes(b"synthetic native output")
-
-                runtime = {
-                    "node": "/fixture/node",
-                    "cli": "/fixture/cli.js",
-                    "python": "/fixture/python",
-                }
-                with (
-                    mock.patch(
-                        "sbtd_graft_deployment.verified_runtime", return_value=runtime
-                    ),
-                    mock.patch(
-                        "sbtd_graft_deployment.build_project_graph",
-                        side_effect=isolated_native_boundary,
-                    ),
-                    mock.patch.object(Path, "mkdir", deny_active_home),
-                ):
+                with mock.patch.object(Path, "mkdir", deny_skills_root):
                     result, code = execute_migration_deployment(context)
-                self.assertNotEqual(code, 0)
+                self.assertEqual((code, result["status"]), (2, "blocked"), result)
                 self.assertEqual(result["deploymentEvidence"]["path"], str(output))
                 saved = result["deploymentEvidence"]["evidence"]["payload"]
-                self.assertEqual(saved["status"], "blocked")
-                self.assertEqual(len(saved["projects"][0]["private_results"]), 2)
-                for resource in saved["projects"][0]["private_results"]:
-                    self.assertEqual(resource["status"], "succeeded")
-                    self.assertIsNotNone(resource["after"])
-                self.assertFalse(active.exists())
-                self.assertIn(
+                rows = {row["resource_id"]: row for row in saved["shared_results"]}
+                self.assertEqual(len(rows), 2)
+                self.assertEqual(rows[rules_id]["status"], "succeeded")
+                self.assertEqual(rows[rules_id]["before"]["type"], "absent")
+                self.assertEqual(rows[rules_id]["after"], snapshot(rules))
+                self.assertEqual(rules.read_bytes(), GLOBAL_AGENTS_TEMPLATE.read_bytes())
+                if os.name == "posix":
+                    self.assertEqual(stat.S_IMODE(active.stat().st_mode), 0o700)
+                rules_inode = rules.stat().st_ino
+                blocked = next(row for row in rows.values() if row["status"] == "blocked")
+                self.assertEqual(Path(operations[blocked["resource_id"]]["target"]).parent, skills)
+                self.assertEqual(blocked["before"], blocked["after"])
+                self.assertFalse(skills.exists())
+                self.assertFalse(saved["projects"][0]["report_refs"])
+                self.assertFalse((root / "graft").exists())
+                self.assertNotIn(
                     b"<!-- graft:start -->", (root / "AGENTS.md").read_bytes()
-                )
-                self.assertEqual(
-                    (root / "graft/fixture").read_bytes(), b"synthetic native output"
                 )
                 before_retry = snapshot(root)
                 retry_path = evidence / "retry.json"
@@ -328,33 +312,20 @@ class DeploymentContextTests(unittest.TestCase):
                     roots=[root],
                     hooks_authorized=False,
                 )
-                with (
-                    mock.patch(
-                        "sbtd_graft_deployment.verified_runtime", return_value=runtime
-                    ),
-                    mock.patch(
-                        "sbtd_graft_deployment.build_project_graph",
-                        side_effect=AssertionError(
-                            "completed graph must not be rebuilt"
-                        ),
-                    ),
-                    mock.patch(
-                        "sbtd_graft_deployment.run_project_smoke",
-                        side_effect=OSError("synthetic smoke failure"),
-                    ),
-                ):
-                    retried, code = execute_migration_deployment(retry)
-                self.assertNotEqual(code, 0)
-                second = retried["deploymentEvidence"]["evidence"]["payload"]
-                self.assertEqual(second["status"], "failed")
-                self.assertEqual(
-                    second["projects"][0]["private_results"],
-                    saved["projects"][0]["private_results"],
-                )
+                retried, code = execute_migration_deployment(retry)
+                self.assertEqual(code, 0, retried)
+                self.assertEqual(retried["status"], "succeeded")
+                self.assertTrue(retried["projects"][0]["report_refs"])
+                self.assertFalse((root / "graft").exists())
                 self.assertEqual(snapshot(root), before_retry)
-                self.assertTrue((active / "config.toml").is_file())
-                self.assertTrue((home / ".agent/skills/sbtd-task/SKILL.md").is_file())
-                with mock.patch("sbtd_graft_deployment.datetime") as clock:
+                cumulative = retried["deploymentEvidence"]["evidence"]["payload"]
+                retried_rows = {row["resource_id"]: row for row in cumulative["shared_results"]}
+                self.assertEqual(retried_rows[rules_id], rows[rules_id])
+                self.assertEqual(rules.stat().st_ino, rules_inode)
+                self.assertEqual(retried_rows[blocked["resource_id"]]["status"], "succeeded")
+                self.assertTrue((skills / "sbtd-task/SKILL.md").is_file())
+                self.assertFalse((active / "config.toml").exists())
+                with mock.patch("sbtd_deployment.datetime") as clock:
                     clock.now.return_value.isoformat.return_value = receipt["payload"][
                         "finished_at"
                     ]
@@ -381,29 +352,21 @@ class DeploymentContextTests(unittest.TestCase):
                     roots=[root],
                     hooks_authorized=False,
                 )
-                with (
-                    mock.patch(
-                        "sbtd_graft_deployment.verified_runtime", return_value=runtime
-                    ),
-                    mock.patch(
-                        "sbtd_graft_deployment.run_project_smoke",
-                        side_effect=OSError("synthetic smoke failure"),
-                    ),
-                    mock.patch(
-                        "sbtd_graft_deployment.save_document",
-                        side_effect=OSError("synthetic evidence write failure"),
-                    ),
+                with mock.patch(
+                    "sbtd_deployment.save_document",
+                    side_effect=OSError("synthetic evidence write failure"),
                 ):
                     unsaved, code = execute_migration_deployment(third)
                 self.assertEqual(code, 5)
                 self.assertIsNone(unsaved["deploymentEvidence"])
                 self.assertFalse(unsaved_path.exists())
+                compared = retried["deploymentEvidence"]["evidence"]["payload"]
                 self.assertEqual(
                     {item["resource_id"]: item for item in unsaved["operationResults"]},
                     {
                         item["resource_id"]: item
-                        for item in second["projects"][0]["private_results"]
-                        + second["shared_results"]
+                        for item in compared["projects"][0]["private_results"]
+                        + compared["shared_results"]
                     },
                 )
                 self.assertEqual(snapshot(root), before_retry)
@@ -431,7 +394,7 @@ class DeploymentSharedRootTests(unittest.TestCase):
         }
 
     def _execute(self, operation, root, vault, expected=None):
-        from sbtd_graft_deployment import execute_resource
+        from sbtd_deployment import execute_resource
 
         target = Path(operation["target"])
         return execute_resource(
@@ -440,10 +403,6 @@ class DeploymentSharedRootTests(unittest.TestCase):
             root=Path(root),
             private_root=Path(vault),
             backup_path=Path(vault) / "deploy" / operation["resource_id"],
-            bindings=[],
-            runtime={"node": "/fixture/node", "cli": "/fixture/cli.js"},
-            launcher_state={"type": "absent", "checksum": None},
-            install_template=True,
         )
 
     def test_shared_root_with_unrelated_symlink_deploys(self):
@@ -558,12 +517,7 @@ class DeploymentSharedRootTests(unittest.TestCase):
             elsewhere.mkdir()
             (elsewhere / "payload").write_bytes(b"unrelated payload\n")
             os.symlink(elsewhere, active / "plugins")
-            environment = {
-                "HOME": str(home),
-                "USERPROFILE": str(home),
-                "CODEX_HOME": str(active),
-                "AGENT_SKILLS_DIR": str(home / ".agent/skills"),
-            }
+            environment = _isolated_home(home, active, home / ".agent/skills")
             with mock.patch.dict(os.environ, environment):
                 manifest = plan_migration(
                     [root],
@@ -590,43 +544,29 @@ class DeploymentSharedRootTests(unittest.TestCase):
                     hooks_authorized=False,
                 )
 
-                def isolated_native_boundary(project, _runtime):
-                    (project / "graft").mkdir(exist_ok=True)
-                    (project / "graft/fixture").write_bytes(b"synthetic native output")
-
-                runtime = {
-                    "node": "/fixture/node",
-                    "cli": "/fixture/cli.js",
-                    "python": "/fixture/python",
-                }
-                with (
-                    mock.patch(
-                        "sbtd_graft_deployment.verified_runtime", return_value=runtime
-                    ),
-                    mock.patch(
-                        "sbtd_graft_deployment.build_project_graph",
-                        side_effect=isolated_native_boundary,
-                    ),
-                    mock.patch(
-                        "sbtd_graft_deployment.run_project_smoke",
-                        side_effect=OSError("synthetic smoke failure"),
-                    ),
-                ):
-                    result, code = execute_migration_deployment(context)
-                self.assertNotEqual(code, 0)
+                result, code = execute_migration_deployment(context)
+                self.assertEqual(code, 0, result)
+                self.assertEqual(result["status"], "succeeded")
                 saved = result["deploymentEvidence"]["evidence"]["payload"]
-                self.assertEqual(saved["status"], "failed")
-                self.assertEqual(
-                    saved["projects"][0]["reason"],
-                    "deployment or smoke is incomplete",
-                )
+                self.assertEqual(saved["status"], "succeeded")
+                self.assertTrue(saved["projects"][0]["report_refs"])
                 for resource in saved["shared_results"]:
-                    self.assertEqual(resource["status"], "succeeded", resource)
-                for resource in saved["projects"][0]["private_results"]:
                     self.assertEqual(resource["status"], "succeeded", resource)
                 self.assertTrue((active / "plugins").is_symlink())
                 self.assertEqual(os.readlink(active / "plugins"), str(elsewhere))
-                self.assertTrue((active / "config.toml").is_file())
+                self.assertEqual((elsewhere / "payload").read_bytes(), b"unrelated payload\n")
+                rules = active / "AGENTS.md"
+                operation = next(
+                    item for item in manifest["payload"]["shared_operations"]
+                    if item["phase"] == "deploy" and item["target"] == str(rules)
+                )
+                outcome = next(
+                    row for row in saved["shared_results"]
+                    if row["resource_id"] == operation["resource_id"]
+                )
+                self.assertEqual(outcome["after"], snapshot(rules))
+                self.assertEqual(rules.read_bytes(), GLOBAL_AGENTS_TEMPLATE.read_bytes())
+                self.assertFalse((active / "config.toml").exists())
 
 
 if __name__ == "__main__":

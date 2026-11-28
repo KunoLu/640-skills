@@ -16,6 +16,7 @@
   ],
   "$defs": {
     "hex": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "optionalAclDigest": { "anyOf": [{ "$ref": "#/$defs/hex" }, { "type": "null" }] },
     "state": {
       "type": "object",
       "required": ["type", "checksum"],
@@ -55,16 +56,23 @@
     "resource": {
       "type": "object",
       "required": ["id", "kind", "target", "source", "before", "desired", "classification", "decision", "details"],
+      "if": { "properties": { "kind": { "const": "retirement" } } },
+      "else": { "properties": { "desired": { "anyOf": [{ "$ref": "#/$defs/presentState" }, { "type": "null" }] } } },
       "properties": {
         "id": { "type": "string", "minLength": 1 },
-        "kind": { "enum": ["skill", "agents", "mcp", "shell"] },
+        "kind": { "enum": ["skill", "agents", "mcp", "shell", "retirement"] },
         "target": { "type": "string" },
         "source": { "$ref": "#/$defs/source" },
         "before": { "$ref": "#/$defs/state" },
-        "desired": { "anyOf": [{ "$ref": "#/$defs/presentState" }, { "type": "null" }] },
+        "desired": { "anyOf": [{ "$ref": "#/$defs/presentState" }, { "type": "object", "additionalProperties": false, "required": ["type", "checksum"], "properties": { "type": { "const": "absent" }, "checksum": { "type": "null" } } }, { "type": "null" }] },
         "classification": { "enum": ["missing", "current", "known-old", "unknown-drift", "identity-conflict"] },
         "decision": { "enum": ["install", "keep", "replace", "preserve", "blocked"] },
-        "details": { "type": "object" },
+        "details": {
+          "type": "object",
+          "properties": {
+            "windows_acl_digest": { "$ref": "#/$defs/hex" }
+          }
+        },
         "host": { "type": "object" },
         "profile": { "type": "object" }
       }
@@ -118,6 +126,17 @@
             }
           }
         },
+        "retirement_evidence": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "oneOf": [
+              { "type": "object", "additionalProperties": false, "required": ["kind", "path"], "properties": { "kind": { "const": "operation-results" }, "path": { "type": "string" } } },
+              { "type": "object", "additionalProperties": false, "required": ["kind", "manifest", "deployment"], "properties": { "kind": { "const": "manifest-deployment" }, "manifest": { "type": "string" }, "deployment": { "type": "string" } } },
+              { "type": "object", "additionalProperties": false, "required": ["kind", "plan", "receipt"], "properties": { "kind": { "const": "upgrade-plan-apply" }, "plan": { "type": "string" }, "receipt": { "type": "string" } } }
+            ]
+          }
+        },
         "decisions": {
           "type": "object",
           "additionalProperties": { "enum": ["replace", "preserve"] }
@@ -157,19 +176,23 @@
       "required": ["id", "kind", "target", "decision", "result", "before", "desired", "after", "mechanical_before", "mechanical_after", "mutated", "backup_ref", "created_parents", "reason"],
       "properties": {
         "id": { "type": "string" },
-        "kind": { "enum": ["skill", "agents", "mcp", "shell"] },
+        "kind": { "enum": ["skill", "agents", "mcp", "shell", "retirement"] },
         "target": { "type": "string" },
         "decision": { "enum": ["install", "keep", "replace", "preserve", "blocked"] },
         "result": { "enum": ["succeeded", "reconciled", "skipped-complete", "kept", "preserved", "failed", "pending"] },
         "before": { "$ref": "#/$defs/state" },
-        "desired": { "anyOf": [{ "$ref": "#/$defs/presentState" }, { "type": "null" }] },
+        "desired": { "anyOf": [{ "$ref": "#/$defs/presentState" }, { "type": "object", "additionalProperties": false, "required": ["type", "checksum"], "properties": { "type": { "const": "absent" }, "checksum": { "type": "null" } } }, { "type": "null" }] },
         "after": { "anyOf": [{ "$ref": "#/$defs/state" }, { "type": "null" }] },
         "mechanical_before": { "$ref": "#/$defs/state" },
         "mechanical_after": { "anyOf": [{ "$ref": "#/$defs/state" }, { "type": "null" }] },
         "backup_ref": { "anyOf": [{ "$ref": "#/$defs/reference" }, { "type": "null" }] },
         "mutated": { "type": ["boolean", "null"] },
         "created_parents": { "type": "array", "items": { "type": "string" } },
-        "reason": { "type": ["string", "null"] }
+        "reason": { "type": ["string", "null"] },
+        "mode_before": { "anyOf": [{ "type": "string", "pattern": "^[0-7]{4}$" }, { "type": "null" }] },
+        "mode_after": { "anyOf": [{ "type": "string", "pattern": "^[0-7]{4}$" }, { "type": "null" }] },
+        "windows_acl_digest": { "$ref": "#/$defs/hex" },
+        "windows_acl_digest_after": { "$ref": "#/$defs/optionalAclDigest" }
       }
     },
     "planDocument": {
@@ -182,6 +205,12 @@
         "payload": {
           "type": "object",
           "required": ["plan_schema", "status", "baseline", "scope", "backup_root", "resources", "domains", "blocked_resources"],
+          "if": {
+            "properties": {
+              "resources": { "contains": { "properties": { "kind": { "const": "retirement" } } } }
+            }
+          },
+          "then": { "required": ["graftRetirement"] },
           "properties": {
             "plan_schema": { "const": "upgrade-plan" },
             "status": { "enum": ["planned", "blocked"] },
@@ -190,7 +219,25 @@
             "backup_root": { "type": "string" },
             "resources": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/resource" } },
             "domains": { "type": "array" },
-            "blocked_resources": { "type": "array", "items": { "type": "string" } }
+            "blocked_resources": { "type": "array", "items": { "type": "string" } },
+            "graftRetirement": {
+              "type": "object",
+              "required": ["stop"],
+              "properties": {
+                "stop": { "type": "boolean" },
+                "candidates": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["id", "path"],
+                    "properties": { "id": { "type": "string" }, "path": { "type": "string" } }
+                  }
+                },
+                "blocked": { "type": "array", "items": { "type": "object" } },
+                "preserved": { "type": "array", "items": { "type": "object" } },
+                "global_effects": { "type": "array", "items": { "type": "string" } }
+              }
+            }
           }
         }
       }
@@ -259,11 +306,11 @@
                 "required": ["id", "kind", "target", "classification", "decision", "desired", "measured", "result", "reason"],
                 "properties": {
                   "id": { "type": "string" },
-                  "kind": { "enum": ["skill", "agents", "mcp", "shell"] },
+                  "kind": { "enum": ["skill", "agents", "mcp", "shell", "retirement"] },
                   "target": { "type": "string" },
                   "classification": { "enum": ["missing", "current", "known-old", "unknown-drift", "identity-conflict"] },
                   "decision": { "enum": ["install", "keep", "replace", "preserve", "blocked"] },
-                  "desired": { "anyOf": [{ "$ref": "#/$defs/presentState" }, { "type": "null" }] },
+                  "desired": { "anyOf": [{ "$ref": "#/$defs/state" }, { "type": "null" }] },
                   "measured": { "anyOf": [{ "$ref": "#/$defs/state" }, { "type": "null" }] },
                   "result": { "enum": ["aligned", "preserved", "kept", "drift", "missing", "blocked", "host-managed"] },
                   "reason": { "type": ["string", "null"] }
@@ -283,7 +330,7 @@
       "properties": {
         "step_id": { "$ref": "#/$defs/hex" },
         "resource_id": { "type": "string" },
-        "kind": { "enum": ["skill", "agents", "mcp", "shell"] },
+        "kind": { "enum": ["skill", "agents", "mcp", "shell", "retirement"] },
         "target": { "type": "string" },
         "action": { "enum": ["restore", "remove"] },
         "expected_current": { "$ref": "#/$defs/state" },
@@ -292,7 +339,11 @@
         "backup_ref": { "anyOf": [{ "$ref": "#/$defs/reference" }, { "type": "null" }] },
         "created_parents": { "type": "array", "items": { "type": "string" } },
         "status": { "enum": ["actionable", "blocked"] },
-        "reason": { "type": ["string", "null"] }
+        "reason": { "type": ["string", "null"] },
+        "mode_before": { "anyOf": [{ "type": "string", "pattern": "^[0-7]{4}$" }, { "type": "null" }] },
+        "mode_after": { "anyOf": [{ "type": "string", "pattern": "^[0-7]{4}$" }, { "type": "null" }] },
+        "windows_acl_digest": { "$ref": "#/$defs/hex" },
+        "windows_acl_digest_after": { "$ref": "#/$defs/optionalAclDigest" }
       }
     },
     "recoveryPlanDocument": {
@@ -355,6 +406,9 @@
                   "restore_state": { "anyOf": [{ "$ref": "#/$defs/state" }, { "type": "null" }] },
                   "after": { "anyOf": [{ "$ref": "#/$defs/state" }, { "type": "null" }] },
                   "mechanical_after": { "anyOf": [{ "$ref": "#/$defs/state" }, { "type": "null" }] },
+                  "mode_after": { "anyOf": [{ "type": "string", "pattern": "^[0-7]{4}$" }, { "type": "null" }] },
+                  "windows_acl_digest": { "$ref": "#/$defs/hex" },
+                  "windows_acl_digest_after": { "$ref": "#/$defs/optionalAclDigest" },
                   "reason": { "type": ["string", "null"] }
                 }
               }

@@ -3,9 +3,12 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import site
+import subprocess
 import sys
 import tempfile
 import unittest
+import venv
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -829,6 +832,218 @@ class MigrationVerifyPathTests(unittest.TestCase):
                     ],
                     [str(root / ".trellis")],
                 )
+
+
+
+class HistoricalModeProofTests(unittest.TestCase):
+    def test_a_self_added_post_write_mode_is_not_proof(self):
+        from sbtd_migration_verify import _observe_legacy_resource
+
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory).resolve() / "rules"
+            target.write_bytes(b"same bytes")
+            after = snapshot(target)
+            state, record = _observe_legacy_resource(
+                {"resource_id": "cd" * 32, "target": str(target)},
+                {"status": "succeeded", "after": after, "post_write_mode": "0640"},
+                None,
+            )
+            self.assertEqual(state, after)
+            self.assertEqual((record["bytes"], record["mode"], record["status"]), ("match", "absent", "not-verified"))
+            self.assertIsNone(record["mode_source"])
+
+    def test_unreadable_absence_is_not_drift(self):
+        from sbtd_migration_verify import _observe_legacy_resource
+
+        with mock.patch("sbtd_migration_verify.snapshot_with_mode", side_effect=OSError("unreadable fixture")):
+            state, record = _observe_legacy_resource(
+                {"resource_id": "cd" * 32, "target": "/unreadable-fixture"}, None, None
+            )
+        self.assertIsNone(state)
+        self.assertEqual((record["bytes"], record["status"]), ("unreadable", "not-verified"))
+
+    def test_observed_missing_or_changed_type_is_drift(self):
+        from sbtd_migration_verify import _observe_legacy_resource
+
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory).resolve() / "rules"
+            target.write_bytes(b"recorded bytes")
+            op = {"resource_id": "cd" * 32, "target": str(target)}
+            result = {"status": "succeeded", "after": snapshot(target)}
+            target.unlink()
+            for kind in ("absent", "directory"):
+                if kind == "directory":
+                    target.mkdir()
+                state, record = _observe_legacy_resource(op, result, None)
+                self.assertEqual(state["type"], kind)
+                self.assertEqual((record["bytes"], record["status"]), ("differ", "drifted"))
+
+
+
+class OnboardCliSmokeTests(unittest.TestCase):
+    def test_trusted_check_projects_is_not_business_api(self):
+        from sbtd_migration_verify import ONBOARD_CLI_SMOKE_SCHEMA, onboard_cli_smoke_command
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            projection = {
+                "mode": "check-projects",
+                "projects": [{"projectRoot": str(root), "sbtd": {"status": "success"}}],
+            }
+            document = {
+                "schema": ONBOARD_CLI_SMOKE_SCHEMA,
+                "projectRoot": str(root),
+                "sourceRef": "non-git",
+                "sourceCommit": None,
+                "startedAt": "2026-11-27T00:00:01Z",
+                "finishedAt": "2026-11-27T00:00:02Z",
+                "command": onboard_cli_smoke_command(root),
+                "exitCode": 0,
+                "status": "passed",
+                "mockStrategy": "none",
+                "onboardVersion": runtime_versions()["onboard"],
+                "projection": projection,
+                "projectionSha256": hashlib.sha256(canonical_json_bytes(projection)).hexdigest(),
+            }
+            path = root / "cli-smoke.json"
+            path.write_text(json.dumps(document), encoding="utf-8")
+            record = {
+                "root": str(root),
+                "source_ref": None,
+                "head": None,
+                "report_refs": [{"path": str(path), "state": snapshot(path)}],
+            }
+            payload = {
+                "started_at": "2026-11-27T00:00:00Z",
+                "finished_at": "2026-11-27T00:00:03Z",
+                "previous_deployment_id": None,
+            }
+            validate_deployment_reports(payload, record)
+            for exit_code in (False, 0.0, 1):
+                with self.subTest(exit_code=exit_code):
+                    document["exitCode"] = exit_code
+                    path.write_text(json.dumps(document), encoding="utf-8")
+                    record["report_refs"] = [{"path": str(path), "state": snapshot(path)}]
+                    with self.assertRaisesRegex(
+                        ContractError, "an Onboard CLI smoke record did not exit cleanly"
+                    ) as raised:
+                        validate_deployment_reports(payload, record)
+                    self.assertEqual(raised.exception.code, "report-acceptance")
+            document["exitCode"] = 0
+            document["mockStrategy"] = "app-mocked"
+            path.write_text(json.dumps(document), encoding="utf-8")
+            record["report_refs"] = [{"path": str(path), "state": snapshot(path)}]
+            with self.assertRaises(ContractError) as raised:
+                validate_deployment_reports(payload, record)
+            self.assertEqual(raised.exception.code, "report-acceptance")
+
+            # A passing project check cannot replace the raw exit of a native API run.
+            fixture = ReportFixture(root)
+            fixture.raw["exitCode"] = 1
+            fixture.save()
+            project = fixture.project
+            projection["projects"][0]["projectRoot"] = project["root"]
+            document.update(
+                projectRoot=project["root"],
+                sourceRef=project["source_ref"],
+                sourceCommit=project["head"],
+                startedAt=fixture.raw["startedAt"],
+                finishedAt=fixture.raw["finishedAt"],
+                command=onboard_cli_smoke_command(fixture.root),
+                mockStrategy="none",
+                projectionSha256=hashlib.sha256(canonical_json_bytes(projection)).hexdigest(),
+            )
+            path.write_text(json.dumps(document), encoding="utf-8")
+            project["report_refs"].append({"path": str(path), "state": snapshot(path)})
+            with self.assertRaisesRegex(
+                ContractError, "an API smoke raw run did not exit cleanly"
+            ) as raised:
+                validate_deployment_reports(fixture.deployment, project)
+            self.assertEqual(raised.exception.code, "report-acceptance")
+
+    @unittest.skipUnless(os.name == "posix", "requires a separate symlinked Python environment")
+    def test_completed_bound_smoke_accepts_equivalent_interpreter_not_arbitrary_argv(self):
+        from onboard_contracts import load_document
+        from sbtd_migration_verify import ONBOARD_CLI_SMOKE_BOUND_SCHEMA, ONBOARD_CLI_SMOKE_SCHEMA
+        from tests.test_sbtd_deployment_smoke import _applied_retained_project
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root, evidence, manifest_path, apply_path = _applied_retained_project(base)
+            context_paths = (manifest_path, apply_path)
+            manifest = load_document(manifest_path.read_bytes(), "manifest")
+            declared = manifest["payload"]["projects"][0]
+            producer_env = base / "historical-producer"
+            venv.EnvBuilder(system_site_packages=True, symlinks=True).create(producer_env)
+            # Use the same declared dependencies in an independently launched environment.
+            dependency_path = Path(site.getsitepackages([str(producer_env)])[0])
+            (dependency_path / "fixture-dependencies.pth").write_text(
+                "\n".join(site.getsitepackages()) + "\n", encoding="utf-8"
+            )
+            producer = producer_env / "bin" / "python"
+            completed = subprocess.run(
+                [
+                    str(producer), "-I", "-B", "-c",
+                    "import json,sys;from pathlib import Path;"
+                    "sys.path.insert(0,sys.argv[1]);"
+                    "from sbtd_deployment_smoke import run_project_smoke;"
+                    "root,evidence,manifest,applied=map(Path,sys.argv[2:]);"
+                    "print(json.dumps(run_project_smoke(root,evidence,context_paths=(manifest,applied))))",
+                    str(SCRIPTS), str(root), str(evidence), str(manifest_path), str(apply_path),
+                ],
+                capture_output=True, text=True, encoding="utf-8", check=False, timeout=30,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            refs = json.loads(completed.stdout)
+            report_path = Path(refs[0]["path"])
+            report = json.loads(report_path.read_bytes())
+            self.assertEqual(report["schema"], ONBOARD_CLI_SMOKE_BOUND_SCHEMA)
+            self.assertEqual(report["command"][0], str(producer))
+            self.assertNotEqual(report["command"][0], sys.executable)
+            payload = {
+                "manifest_id": manifest["manifest_id"],
+                "apply_id": load_document(apply_path.read_bytes(), "apply_receipt")["apply_id"],
+                "started_at": report["startedAt"],
+                "finished_at": report["finishedAt"],
+                "previous_deployment_id": None,
+            }
+            record = {key: declared[key] for key in ("root", "source_ref", "head")}
+            record["report_refs"] = refs
+            producer.unlink()
+            # A genuine sealed capture survives removal of its original launcher.
+            validate_deployment_reports(
+                payload, record, context_paths=context_paths, verified_manifest=manifest,
+            )
+
+            def accept(document, *, historical=True):
+                report_path.write_bytes(canonical_json_bytes(document))
+                record["report_refs"] = [{"path": str(report_path), "state": snapshot(report_path)}]
+                validate_deployment_reports(
+                    payload, record, context_paths=context_paths,
+                    verified_manifest=manifest if historical else None,
+                )
+
+            different = base / "unproved"
+            different.mkdir()
+            other_script = different / "scripts" / "onboard.py"
+            recorded = report["command"]
+            legacy = {key: value for key, value in report.items() if key != "producer"}
+            legacy["schema"] = ONBOARD_CLI_SMOKE_SCHEMA
+            bad_reports = (
+                {**report, "command": [str(different), *recorded[1:]]},
+                {**report, "command": [*recorded[:5], str(other_script), *recorded[6:]]},
+                {**report, "command": [*recorded[:-1], str(base / "other-apply.json")]},
+                {**report, "command": recorded, "applyId": "different-apply"},
+                {**report, "producer": {**report["producer"], "imageSha256": "0" * 64}},
+                legacy,
+            )
+            for invalid in bad_reports:
+                with self.subTest(command=invalid["command"]), self.assertRaises(ContractError) as error:
+                    accept(invalid)
+                self.assertEqual(error.exception.code, "report-acceptance")
+            with self.assertRaises(ContractError) as fresh:
+                accept(report, historical=False)
+            self.assertEqual(fresh.exception.code, "report-acceptance")
 
 
 if __name__ == "__main__":

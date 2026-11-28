@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import io
 import json
 import os
 import shutil
@@ -8,9 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
 from pathlib import Path
-from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "sbtd-workflow-onboard" / "scripts"
@@ -32,6 +29,7 @@ class FindingsCliRegressionTests(unittest.TestCase):
             home = root / "home"
             home.mkdir()
             environment = os.environ.copy()
+            environment.pop("PYTHONPATH", None)  # Exercise the incomplete copy, not the checkout.
             environment.update(
                 HOME=str(home), USERPROFILE=str(home), CODEX_HOME=str(home / ".codex")
             )
@@ -120,24 +118,6 @@ class FindingsCliRegressionTests(unittest.TestCase):
                     self.assertIn("scripts/sbtd_project.py", combined)
                     self.assertNotIn("UNEXPECTED_CLI_EXECUTION", combined)
 
-    def test_text_plan_reports_wiring_blocker_and_remedy(self):
-        payload = {
-            "mode": "plan",
-            "platform": "codex",
-            "operations": [],
-            "graftWiring": {
-                "status": "blocked",
-                "reason": "foreign configuration conflict",
-                "nextStep": "preserve foreign configuration and resolve ownership",
-            },
-        }
-        stream = io.StringIO()
-        with redirect_stdout(stream):
-            onboard.print_plan(payload)
-        self.assertIn("blocked", stream.getvalue())
-        self.assertIn("foreign configuration conflict", stream.getvalue())
-        self.assertIn("preserve foreign configuration", stream.getvalue())
-
     def test_missing_optional_runtime_is_not_an_installation_failure(self):
         runtime = {
             name: {
@@ -169,56 +149,6 @@ class FindingsCliRegressionTests(unittest.TestCase):
                 for entry in report["conditionalRuntime"]
             )
         )
-
-    def test_late_wiring_conflict_keeps_blocked_exit_and_partial_setup_report(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            project = root / "project"
-            project.mkdir()
-            home = root / "home"
-            home.mkdir()
-            environment = {
-                "HOME": str(home),
-                "USERPROFILE": str(home),
-                "CODEX_HOME": str(home / ".codex"),
-                "GIT_CONFIG_GLOBAL": os.devnull,
-                "GIT_CONFIG_NOSYSTEM": "1",
-            }
-            args = onboard.build_parser().parse_args(
-                [
-                    "init-projects",
-                    "--projects-root",
-                    str(project),
-                    "--skip-project-agents",
-                    "--yes",
-                    "--json",
-                ]
-            )
-            stream = io.StringIO()
-            with (
-                mock.patch.dict(os.environ, environment),
-                mock.patch(
-                    "sbtd_graft_deployment.plan_normal_wiring",
-                    return_value={"status": "planned"},
-                ),
-                mock.patch(
-                    "sbtd_graft_deployment.execute_normal_wiring",
-                    return_value=(
-                        {
-                            "status": "blocked",
-                            "reason": "configuration changed after planning",
-                        },
-                        2,
-                    ),
-                ),
-                redirect_stdout(stream),
-            ):
-                code = onboard.run("init-projects", args)
-            self.assertEqual(code, 2)
-            report = json.loads(stream.getvalue())
-            self.assertEqual(report["sbtdProjectSetup"]["status"], "blocked")
-            self.assertTrue((project / ".gitignore").is_file())
-            self.assertTrue(report["operationResults"])
 
 
 if __name__ == "__main__":

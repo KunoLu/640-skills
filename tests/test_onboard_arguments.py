@@ -76,8 +76,11 @@ class CommonModeGrammarTests(ParseErrorAssertions):
         self.assertIsNone(args.projects_root)
 
     def test_plan_and_reset_parse_common_options(self) -> None:
-        plan = parse_workflow_args(["plan", "--platform", "omp", "--developer", "a1"])
+        plan = parse_workflow_args(["plan", "--action", "reset", "--platform", "omp", "--developer", "a1"])
         self.assertEqual(plan.mode, "plan")
+        self.assertEqual(plan.action, "reset")
+        self.assert_parse_error(["plan", "--action", "upgrade"])
+        self.assert_parse_error(["plan", "--action", "init", "--action", "reset"])
         reset = parse_workflow_args(["reset", "--yes", "--json"])
         self.assertEqual(reset.mode, "reset")
         self.assertTrue(reset.yes)
@@ -97,6 +100,19 @@ class CommonModeGrammarTests(ParseErrorAssertions):
         self.assert_parse_error(
             ["check-projects", "--projects-root", "/repo/one", "--yes"]
         )
+
+    def test_bound_project_check_requires_a_pair_and_one_complete_project(self) -> None:
+        base = ["check-projects", "--projects-root", "/repo/one"]
+        manifest = ["--migration-manifest", "/private/m.json"]
+        receipt = ["--migration-apply-receipt", "/private/a.json"]
+        parsed = parse_workflow_args(base + manifest + receipt)
+        self.assertEqual((parsed.migration_manifest, parsed.migration_apply_receipt),
+                         (manifest[1], receipt[1]))
+        for args in (base + manifest, base + receipt,
+                     base + manifest + receipt + ["--skip-project-agents"],
+                     ["check-projects", "--projects-root", "/a,/b", *manifest, *receipt]):
+            with self.subTest(args=args):
+                self.assert_parse_error(args)
 
     def test_developer_rejects_non_matching_values(self) -> None:
         self.assert_parse_error(["check", "--developer", "Alice"])
@@ -374,6 +390,14 @@ class MigrationPhaseTests(ParseErrorAssertions):
         )
         self.assertEqual(args.deployment_evidence, "d.json")
 
+    def test_detached_mode_proof_is_verify_only(self) -> None:
+        chain = ["--manifest", "m.json", "--apply-receipt", "a.json", "--deployment-evidence", "d.json"]
+        proof = ["--post-write-attestation", "modes.json"]
+        args = parse_workflow_args(["migration", "--phase", "verify", *chain, *proof])
+        self.assertEqual(args.post_write_attestation, "modes.json")
+        self.assert_parse_error(["migration", "--phase", "cleanup", *chain, "--verification", "v.json", *proof])
+        self.assert_parse_error(["migration", "--phase", "apply", "--manifest", "m.json", *proof])
+
     def test_verify_phase_requires_full_evidence_chain(self) -> None:
         self.assert_parse_error(
             ["migration", "--phase", "verify", "--manifest", "m.json"]
@@ -478,7 +502,6 @@ class MigrationPhaseTests(ParseErrorAssertions):
             ["--deployment-evidence", "existing.json"],
             ["--verification", "verification.json"],
             ["--confirm-cleanup", "cleanup-id"],
-            ["--graft-hooks"],
             ["--no-routing-approvals"],
         ):
             with self.subTest(extra=extra[0]):

@@ -357,10 +357,12 @@ class PhysicalTargetPlanTests(InventoryTests):
         }
         vault = self.base / "vault"
         require_private_directory(vault, create=True)
-        plan = sbtd_upgrade.plan_upgrade(self.scope(hosts=[host]), vault, package_root=self.pkg)
-        resource = plan["payload"]["resources"][0]
-        self.assertEqual(resource["target"], str(home / "config.toml"))
-        self.assertEqual(resource["decision"], "install")
+        plan = sbtd_upgrade.plan_upgrade(self.scope(
+            hosts=[host], agents_targets=[str(self.base / "AGENTS.md")],
+        ), vault, package_root=self.pkg)
+        self.assertFalse(any(row["kind"] == "mcp" for row in plan["payload"]["resources"]))
+        host_domain = next(row for row in plan["payload"]["domains"] if row["kind"] == "host")
+        self.assertEqual(host_domain["config"], str(home / "config.toml"))
         agents = alias / "AGENTS.md"
         mixed = sbtd_upgrade.plan_upgrade(self.scope(
             hosts=[host], agents_targets=[str(agents)],
@@ -500,11 +502,7 @@ print(json.dumps(receipt))
             (installed / "SKILL.md").read_bytes(), (package / "SKILL.md").read_bytes()
         )
         self.assertEqual((sibling / "SKILL.md").read_bytes(), sibling_original)
-        self.assertTrue((sibling / "scripts" / "sbtd_graft_entry.py").is_file())
-        parsed = tomllib.loads(config.read_text(encoding="utf-8"))
-        args = parsed["mcp_servers"]["sbtd-graft"]["args"]
-        self.assertIn(str(installed / "scripts" / "sbtd_graft_entry.py"), args)
-        self.assertNotIn(str(sibling / "scripts" / "sbtd_graft_entry.py"), args)
+        self.assertFalse(config.exists())
 
     def test_conflicting_agents_aliases_refuse_without_mutation(self):
         """U20: real inventory cannot authorize replace through a preserved alias."""
@@ -1083,7 +1081,8 @@ class ScopeValidationTests(InventoryTests):
 
     def test_host_only_binding_is_explicit_but_unsupported_platform_needs_none(self):
         host = self.host_entry(skills_roots=[])
-        self.assert_code("scope-conflict", self.scope(hosts=[host]))
+        document = self.build(self.scope(hosts=[host]))
+        self.assertIsNone(document["domains"][0]["onboard_root"])
         host["onboard_root"] = str(self.pkg)
         document = self.build(self.scope(hosts=[host]))
         (host_domain,) = document["domains"]

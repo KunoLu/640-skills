@@ -370,13 +370,47 @@ def build_manifest_payload() -> dict[str, Any]:
             ],
             "disposal_authorization": "separate-manual-confirmation",
         },
-        "tool_versions": {"onboard": "2.0.0", "graft": "1.0.0"},
+        "tool_versions": {"onboard": "2.0.0"},
         "deployment": {"mode": "init", "platform": "codex", "inputs": []},
     }
 
 
 def build_manifest() -> dict[str, Any]:
     return contracts.seal_document("manifest", build_manifest_payload())
+
+
+def legacy_graft_versions(onboard: str = "2.0.0") -> dict[str, str]:
+    """Historical sealed pin for retirement and legacy verification tests.
+
+    Not a current plan identity and not part of the default family.
+    """
+    return {"onboard": onboard, "graft": contracts.ARCHIVED_GRAFT_PIN}
+
+
+def legacy_graft_operation(
+    *,
+    target: str,
+    owner_kind: str,
+    selector: str,
+    kind: str,
+    dependents: list[str],
+    before: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """One historical Graft deploy operation. Does not read a live policy file."""
+    policy = copy.deepcopy(contracts.archived_graft_policy())
+    rid = contracts.resource_id(owner_kind, target)
+    return {
+        "phase": "deploy",
+        "resource_id": rid,
+        "operation_id": contracts.operation_id("deploy", rid, selector),
+        "owner_kind": owner_kind,
+        "target": target,
+        "selector": selector,
+        "change": {"kind": kind, "source_ref": policy},
+        "ownership": {"kind": "template-source", "reference": copy.deepcopy(policy)},
+        "before_requirement": {"kind": "state", "state": dict(before or ABSENT)},
+        "dependent_projects": list(dependents),
+    }
 
 
 def build_resource_result(

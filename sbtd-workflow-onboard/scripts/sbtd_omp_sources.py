@@ -1,4 +1,4 @@
-"""Read-only OMP 18.2.5 MCP source discovery for SBTD deployment.
+"""Read-only OMP path resolution and MCP source discovery.
 
 This module mirrors the pinned host's configuration selection without importing
 or launching it. It parses declared files only; environment expansion,
@@ -7,6 +7,7 @@ provider commands, and every write stay out of this layer.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from collections.abc import Mapping, Sequence
@@ -15,10 +16,12 @@ from typing import Any, NoReturn
 
 import onboard_contracts as contracts
 from sbtd_migration_files import read_file, snapshot
-from sbtd_omp_wiring import _servers, _strict_json, analyze_omp_configuration
 from sbtd_project import (
     TaskDataError,
+    _check_finite,
     _build_safe_loader,
+    _reject_json_constant,
+    _reject_json_duplicates,
     require_dependency,
     validate_json_compatible,
 )
@@ -26,7 +29,6 @@ from sbtd_project import (
 __all__ = [
     "active_omp_agent_dir",
     "active_omp_paths",
-    "analyze_omp_sources",
     "discover_omp_sources",
     "omp_config_root",
 ]
@@ -294,6 +296,48 @@ def _user_enabled(
     if provider == "claude" and environ.get("CLAUDE_CONFIG_DIR", "").strip():
         return True
     return bool(settings["enabled"] & {provider, "*", "all"})
+
+
+def _strict_json(raw: bytes, label: str) -> Any:
+    try:
+        text = raw.decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        _fail("invalid-utf8", f"the {label} is not strict UTF-8")
+    try:
+        value = json.loads(
+            text,
+            object_pairs_hook=_reject_json_duplicates,
+            parse_constant=_reject_json_constant,
+        )
+    except (ValueError, RecursionError):
+        _fail("invalid-json", f"the {label} is not strict JSON")
+    if not _check_finite(value):
+        _fail("invalid-json", f"the {label} contains a non-finite number")
+    return value
+
+
+def _reject_dynamic(value: Any) -> None:
+    if isinstance(value, str) and re.search(r"\$\{[^}:]+(?::-[^}]*)?\}", value):
+        _fail("invalid-config", "OMP configuration contains unsupported dynamic values")
+    if isinstance(value, list):
+        for item in value:
+            _reject_dynamic(item)
+    elif isinstance(value, dict):
+        for item in value.values():
+            _reject_dynamic(item)
+
+
+def _servers(document: Any, label: str) -> dict[str, Mapping[str, Any]]:
+    if not isinstance(document, dict):
+        _fail("invalid-config", f"the {label} must be a JSON object")
+    servers = document.get("mcpServers", {})
+    if not isinstance(servers, dict) or any(
+        not isinstance(name, str) or not isinstance(server, Mapping)
+        for name, server in servers.items()
+    ):
+        _fail("invalid-config", f"the {label} MCP server section is malformed")
+    _reject_dynamic(servers)
+    return servers
 
 
 def _json_servers(raw: bytes, label: str) -> dict[str, Mapping[str, Any]]:
@@ -565,21 +609,3 @@ def discover_omp_sources(
         "sources": sources,
         "disabled_extensions": sorted(settings["disabled_extensions"]),
     }
-
-
-def analyze_omp_sources(
-    roots: Sequence[Path],
-    bindings: Sequence[Mapping[str, Any]],
-    *,
-    home: Path,
-    environ: Mapping[str, str],
-) -> dict[str, Any]:
-    """Return source discovery plus the desired-binding target analysis."""
-    discovered = discover_omp_sources(roots, home=home, environ=environ)
-    discovered["analysis"] = analyze_omp_configuration(
-        Path(discovered["target"]),
-        bindings,
-        discovered["sources"],
-        disabled_extensions=discovered["disabled_extensions"],
-    )
-    return discovered

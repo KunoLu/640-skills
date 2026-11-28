@@ -85,7 +85,6 @@ def _runtime(base: Path) -> dict[str, str]:
 def _package(base: Path) -> Path:
     root = base / "package"
     (root / "scripts").mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(SCRIPTS / "sbtd_graft_entry.py", root / "scripts" / "sbtd_graft_entry.py")
     return root
 
 
@@ -131,6 +130,7 @@ def _sealed_plan(vault: Path, scope: dict, resources: list[dict]) -> dict:
         "resources": resources,
         "domains": [],
         "blocked_resources": [],
+        "graftRetirement": hosts.plan_retirement(scope, vault, evidence=[])["disclosure"],
     }
     return {"schema_version": 1, "plan_id": _digest(payload), "payload": payload}
 
@@ -184,6 +184,7 @@ def _tree_bytes(root: Path) -> dict[str, bytes]:
 class _Stdin:
     def __init__(self, proc: "_Proc") -> None:
         self._proc = proc
+        self.closed = False
 
     def write(self, data: bytes) -> int:
         for line in data.splitlines():
@@ -195,18 +196,20 @@ class _Stdin:
         return None
 
     def close(self) -> None:
+        self.closed = True
         self._proc._close()
 
 
 class _Stdout:
     def __init__(self, proc: "_Proc") -> None:
         self._proc = proc
+        self.closed = False
 
     def readline(self) -> bytes:
         return self._proc._next_line()
 
     def close(self) -> None:
-        return None
+        self.closed = True
 
 
 class _Proc:
@@ -219,6 +222,7 @@ class _Proc:
         self._pending: list[bytes] = []
         self._closed = False
         self.returncode: int | None = None
+        self.reaped = False
         self.stdin = _Stdin(self)
         self.stdout = _Stdout(self)
         self.requests: list[dict] = []
@@ -228,8 +232,9 @@ class _Proc:
         response = self._handler(request)
         if response is None:
             return
+        line = response if isinstance(response, bytes) else json.dumps(response).encode("utf-8")
         with self._condition:
-            self._pending.append((json.dumps(response) + "\n").encode("utf-8"))
+            self._pending.append(line + b"\n")
             self._condition.notify_all()
 
     def _close(self) -> None:
@@ -252,6 +257,7 @@ class _Proc:
             if self.returncode is None:
                 self.returncode = self._exit_code
                 self._condition.notify_all()
+            self.reaped = True
             return self.returncode
 
     def terminate(self) -> None:
@@ -269,6 +275,8 @@ class _Rig:
         self.expected_skills = list(expected_skills)
         self.extra_roots: list[str] = []
         self.spawns: list[list[str]] = []
+        self.omp_agent: Path | None = None
+        self.omp_commands_skills: list[str] | None = None
 
     def _mcp_handler(self, request: dict):
         method = request.get("method")
@@ -365,9 +373,16 @@ class _Rig:
                 },
             }
         if rtype == "get_available_commands":
+            assert self.omp_agent is not None
+            active = self.omp_agent / "skills"
+            self.omp_commands_skills = sorted(
+                child.name
+                for child in active.iterdir()
+                if child.is_dir() and (child / "SKILL.md").is_file()
+            ) if active.is_dir() else []
             return {
                 **envelope,
-                "data": [{"name": f"skill:{name}"} for name in self.expected_skills],
+                "data": [{"name": f"skill:{name}"} for name in self.omp_commands_skills],
             }
         return None
 
@@ -376,6 +391,7 @@ class _Rig:
         if "app-server" in argv:
             return _Proc(self._codex_handler)
         if "--mode" in argv:
+            self.omp_agent = Path(env["PI_CODING_AGENT_DIR"])
             return _Proc(self._omp_handler)
         return _Proc(self._mcp_handler)
 
@@ -432,6 +448,198 @@ class _LinksCase(unittest.TestCase):
 
     def prepare(self, plan_id: str, root: Path, link: Path, physical: Path) -> dict:
         return _prepare(plan_id, root, link, physical)
+
+
+class IsolatedProbeProtocolTests(_LinksCase):
+    def _scope(self):
+        root = self.base / "skills"
+        _write_skill(root, "alpha")
+        project = self.base / "project"
+        project.mkdir()
+        host = _codex_host(self.base, _runtime(self.base), root, project)
+        return {"hosts": [host], "skills_roots": [str(root)]}
+
+    def test_codex_reply_id_requires_exact_json_category_and_value(self) -> None:
+        scope = self._scope()
+        rig = _Rig(self, ["alpha"]).install()
+        original = rig._codex_handler
+        for token, expected in (
+            (b"1.0", "pass"), (b"1e0", "pass"), (b"true", "fail"),
+            (b'"1"', "fail"), (b"1.0000000000000000001", "fail"),
+        ):
+            with self.subTest(id=token):
+                def reply(request):
+                    if request["method"] == "initialize":
+                        return b'{"id":' + token + b',"result":{"codexHome":"/fixture"}}'
+                    return original(request)
+
+                with (
+                    mock.patch.object(rig, "_codex_handler", side_effect=reply),
+                    mock.patch.object(hosts, "_HOST_TIMEOUT", 0.2),
+                ):
+                    (entry,) = hosts.verify_hosts(scope, probe=True)["hosts"]
+                self.assertEqual(entry["status"], expected, entry)
+                if expected == "fail":
+                    self.assertEqual(entry["host"]["checks"]["protocol"]["reason"], "host-response-timeout")
+
+    def test_codex_result_with_even_null_error_cannot_supply_evidence(self) -> None:
+        scope = self._scope()
+        rig = _Rig(self, ["alpha"]).install()
+        original = rig._codex_handler
+        for error in (None, {"code": -32601, "message": "method not found"}):
+            with self.subTest(error=error):
+                def reply(request):
+                    result = original(request)
+                    if request["method"] == "initialize":
+                        result["error"] = error
+                    return result
+
+                with mock.patch.object(rig, "_codex_handler", side_effect=reply):
+                    (entry,) = hosts.verify_hosts(scope, probe=True)["hosts"]
+                self.assertEqual(entry["status"], "fail")
+                self.assertEqual(entry["host"]["checks"]["protocol"], {
+                    "status": "failed", "reason": "protocol-evidence-invalid",
+                })
+
+
+    def test_only_parsed_selected_registrations_block_host_probe(self) -> None:
+        scope = self._scope()
+        host = scope["hosts"][0]
+        config = Path(host["config"])
+        config.parent.mkdir(parents=True)
+        harmless = b'# sbtd-graft used to be registered here\nmodel = "mention sbtd_graft_entry.py"\n'
+        config.write_bytes(harmless)
+        unselected = self.base / "unselected" / ".codex" / "config.toml"
+        unselected.parent.mkdir(parents=True)
+        retired = b'[mcp_servers.other]\ncommand = "python"\nargs = ["/old/sbtd_graft_entry.py"]\n'
+        unselected.write_bytes(retired)
+        rig = _Rig(self, ["alpha"]).install()
+        with mock.patch.object(hosts, "read_file", wraps=hosts.read_file) as read:
+            (entry,) = hosts.verify_hosts(scope, probe=True)["hosts"]
+        self.assertEqual(entry["status"], "pass")
+        self.assertEqual(len(rig.host_spawns()), 1)
+        self.assertEqual([call.args[0] for call in read.call_args_list], [config])
+        self.assertEqual(config.read_bytes(), harmless)
+        self.assertEqual(unselected.read_bytes(), retired)
+
+        config.write_bytes(retired)
+        (entry,) = hosts.verify_hosts(scope, probe=True)["hosts"]
+        self.assertEqual(entry["host"]["checks"]["host_load"]["reason"], "unsafe-registered-server")
+        self.assertEqual(len(rig.host_spawns()), 1)
+        self.assertEqual(config.read_bytes(), retired)
+
+
+    def test_omp_probe_refuses_a_selected_project_alternate_registration(self) -> None:
+        root = self.base / "skills"
+        _write_skill(root, "alpha")
+        project = self.base / "project"
+        config = project / ".omp" / ".mcp.json"
+        config.parent.mkdir(parents=True)
+        document = {"mcpServers": {"sbtd-graft": {"command": "graft"}}}
+        config.write_text(json.dumps(document), encoding="utf-8")
+        host = _omp_host(self.base, _runtime(self.base), root, project)
+        rig = _Rig(self, ["alpha"]).install()
+        (entry,) = hosts.verify_hosts({"hosts": [host], "skills_roots": [str(root)]}, probe=True)["hosts"]
+        self.assertEqual(entry["host"]["checks"]["host_load"]["reason"], "unsafe-registered-server")
+        self.assertEqual(rig.host_spawns(), [])
+        self.assertEqual(json.loads(config.read_text(encoding="utf-8")), document)
+
+    def test_omp_probe_checks_alternate_registration_only_in_selected_agent(self) -> None:
+        root = self.base / "skills"
+        _write_skill(root, "alpha")
+        project = self.base / "project"
+        project.mkdir()
+        host = _omp_host(self.base, _runtime(self.base), root, project)
+        unselected = Path(host["config"]).with_name(".mcp.json")
+        selected = Path(host["config_home"]) / "profiles" / "selected" / "agent" / ".mcp.json"
+        host["config"] = str(selected.with_name("mcp.json"))
+        scope = {"hosts": [host], "skills_roots": [str(root)]}
+        document = b'{"mcpServers":{"sbtd-graft":{"command":"fixture-only"}}}'
+        unselected.parent.mkdir(parents=True)
+        unselected.write_bytes(document)
+        rig = _Rig(self, ["alpha"]).install()
+
+        (entry,) = hosts.verify_hosts(scope, probe=True)["hosts"]
+        self.assertEqual(entry["status"], "pass", entry)
+        self.assertEqual(len(rig.spawns), 1)
+
+        selected.parent.mkdir(parents=True)
+        selected.write_bytes(document)
+        (entry,) = hosts.verify_hosts(scope, probe=True)["hosts"]
+        self.assertEqual(entry["status"], "fail", entry)
+        self.assertEqual(entry["host"]["checks"]["host_load"]["reason"], "unsafe-registered-server")
+        self.assertEqual(len(rig.spawns), 1)
+        self.assertEqual(selected.read_bytes(), document)
+        self.assertEqual(unselected.read_bytes(), document)
+
+
+
+    def test_codex_failure_envelope_cannot_supply_result_evidence(self) -> None:
+        scope = self._scope()
+        rig = _Rig(self, ["alpha"]).install()
+        original = rig._codex_handler
+
+        def reply(request):
+            result = original(request)
+            if request["method"] == "initialize":
+                result["success"] = False
+            return result
+
+        with mock.patch.object(rig, "_codex_handler", side_effect=reply):
+            (entry,) = hosts.verify_hosts(scope, probe=True)["hosts"]
+        self.assertEqual(entry["status"], "fail")
+        self.assertEqual(entry["host"]["checks"]["protocol"], {
+            "status": "failed", "reason": "host-request-refused",
+        })
+
+    def test_codex_load_errors_cannot_hide_behind_enabled_skills(self) -> None:
+        scope = self._scope()
+        rig = _Rig(self, ["alpha"]).install()
+        original = rig._codex_handler
+        for selected in (False, True):
+            with self.subTest(selected=selected):
+                def reply(request):
+                    result = original(request)
+                    if request["method"] == "skills/list":
+                        (row,) = result["result"]["data"]
+                        (skill,) = row["skills"]
+                        path = skill["path"] if selected else str(self.base / "unselected" / "SKILL.md")
+                        row["errors"] = [{"path": path, "message": "Skill could not be loaded"}]
+                    return result
+
+                with mock.patch.object(rig, "_codex_handler", side_effect=reply):
+                    (entry,) = hosts.verify_hosts(scope, probe=True)["hosts"]
+                checks = entry["host"]["checks"]
+                self.assertEqual(checks["protocol"]["status"], "verified")
+                self.assertEqual(entry["status"], "fail" if selected else "pass")
+                self.assertEqual(checks["skills"]["status"], "failed" if selected else "verified")
+                if selected:
+                    self.assertEqual(checks["host_load"]["reason"], "skills-evidence-mismatch")
+
+    def test_stalled_real_host_pipes_time_out_and_are_reaped(self) -> None:
+        for stall_write in (False, True):
+            with self.subTest(stall_write=stall_write), mock.patch.object(hosts, "_HOST_SHUTDOWN", 0.5):
+                command = (
+                    "import sys, time\n"
+                    + ("" if stall_write else "sys.stdin.buffer.readline()\n")
+                    + "time.sleep(2)\n"
+                )
+                with subprocess.Popen(
+                    [sys.executable, "-I", "-B", "-c", command],
+                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                    cwd=self.base,
+                ) as proc:
+                    rpc = hosts._JsonLines(proc, 0.15)
+                    try:
+                        params = {"payload": "x" * (2 * 1024 * 1024)} if stall_write else {}
+                        with self.assertRaises(hosts._ProbeError) as caught:
+                            rpc.call("initialize", params)
+                        self.assertEqual(caught.exception.reason, "host-response-timeout")
+                    finally:
+                        rpc.close()
+                    self.assertIsNotNone(proc.poll())
+                    self.assertTrue(proc.stdin.closed)
+                    self.assertTrue(proc.stdout.closed)
 
 
 # ---------------------------------------------------------------------------
@@ -1167,10 +1375,6 @@ class VerifyHostsProbeLinkTests(_LinksCase):
     def _aligned_scope(self, platform: str = "codex"):
         runtime, package = _runtime(self.base), _package(self.base)
         root, link, physical, _alpha = self.linked_fixture()
-        # The installed Onboard copy used for launcher bindings.
-        onboard = root / "sbtd-workflow-onboard" / "scripts"
-        onboard.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(SCRIPTS / "sbtd_graft_entry.py", onboard / "sbtd_graft_entry.py")
         project = self.base / "project"
         project.mkdir()
         if platform == "codex":
@@ -1178,30 +1382,31 @@ class VerifyHostsProbeLinkTests(_LinksCase):
         else:
             host = _omp_host(self.base, runtime, root, project)
         scope = {"hosts": [host], "skills_roots": [str(root)]}
-        resource = hosts.build_host_resources(scope, package_root=package)[0]
-        config = Path(host["config"])
-        config.parent.mkdir(parents=True, exist_ok=True)
-        config.write_bytes(hosts.render_resource(resource))
         return scope, package, root, link, physical, host
 
     def test_authorized_probe_passes_with_full_link_evidence(self) -> None:
         scope, package, root, link, physical, host = self._aligned_scope()
         document = self.prepare("1" * 64, root, link, physical)
         rig = _Rig(self, ["alpha", "linked-skill"]).install()
-        result = hosts.verify_hosts(
-            scope,
-            package_root=package,
-            probe=True,
-            link_authorizations=[
-                {
-                    "authorization_id": document["authorization_id"],
-                    "payload": probe_links.validate_link_authorization(
-                        document, plan_id="1" * 64,
-                        hosts=[{"id": HOST_ID, "skills_roots": [str(root)]}],
-                    ),
-                }
-            ],
-        )
+        scratch = self.base / "scratch"
+        scratch.mkdir()
+        alias = self.base / "temp-alias"
+        alias.symlink_to(scratch, target_is_directory=True)
+        with mock.patch.object(tempfile, "tempdir", str(alias)):
+            result = hosts.verify_hosts(
+                scope,
+                package_root=package,
+                probe=True,
+                link_authorizations=[
+                    {
+                        "authorization_id": document["authorization_id"],
+                        "payload": probe_links.validate_link_authorization(
+                            document, plan_id="1" * 64,
+                            hosts=[{"id": HOST_ID, "skills_roots": [str(root)]}],
+                        ),
+                    }
+                ],
+            )
         entry = result["hosts"][0]
         self.assertEqual(entry["status"], "pass", entry)
         skills = entry["host"]["checks"]["skills"]
@@ -1217,6 +1422,7 @@ class VerifyHostsProbeLinkTests(_LinksCase):
         )
         self.assertTrue(rig.host_spawns(), "the isolated host probe never ran")
         self.assertTrue(link.is_symlink())
+        self.assertEqual(list(scratch.iterdir()), [], "probe left temporary copies")
 
     def test_authorized_probe_passes_for_omp_host(self) -> None:
         scope, package, root, link, physical, host = self._aligned_scope("omp")
@@ -1247,6 +1453,7 @@ class VerifyHostsProbeLinkTests(_LinksCase):
         skills = entry["host"]["checks"]["skills"]
         self.assertEqual(skills["status"], "verified", skills)
         self.assertEqual(skills["link_authorizations"][0]["status"], "materialized")
+        self.assertEqual(rig.omp_commands_skills, ["alpha", "linked-skill"])
 
     def test_unauthorized_link_fails_before_any_host_spawn(self) -> None:
         scope, package, root, link, physical, _host = self._aligned_scope()
@@ -1315,6 +1522,31 @@ class VerifyHostsProbeLinkTests(_LinksCase):
         self.assertEqual(load["reason"], "link-mismatch")
         self.assertEqual(rig.host_spawns(), [])
 
+    def test_same_named_skill_cannot_replace_an_unmaterialized_authorized_link(self) -> None:
+        scope, package, root, link, physical, host = self._aligned_scope()
+        document = self.prepare("1" * 64, root, link, physical)
+        alternate = self.base / "alternate" / "skills"
+        _write_skill(alternate, "linked-skill")
+        host["skills_roots"].append(str(alternate))
+        scope["skills_roots"].append(str(alternate))
+        rig = _Rig(self, ["alpha", "linked-skill"]).install()
+        list_entries = hosts._root_entries
+
+        def link_disappears(path: Path):
+            if path == root:
+                link.unlink(missing_ok=True)
+            return list_entries(path)
+
+        with mock.patch.object(hosts, "_root_entries", side_effect=link_disappears):
+            result = hosts.verify_hosts(
+                scope, package_root=package, probe=True, link_authorizations=[_entry(document)],
+            )
+        (entry,) = result["hosts"]
+        self.assertEqual(entry["host"]["checks"]["host_load"]["reason"], "skill-identity-unproven")
+        self.assertEqual(rig.host_spawns(), [])
+        self.assertTrue((alternate / "linked-skill" / "SKILL.md").is_file())
+
+
 
 # ---------------------------------------------------------------------------
 # Engine integration (sbtd_upgrade)
@@ -1325,9 +1557,6 @@ class UpgradeEngineLinkTests(_LinksCase):
     def _engine_fixture(self):
         runtime, package = _runtime(self.base), _package(self.base)
         root, link, physical, alpha = self.linked_fixture()
-        onboard = root / "sbtd-workflow-onboard" / "scripts"
-        onboard.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(SCRIPTS / "sbtd_graft_entry.py", onboard / "sbtd_graft_entry.py")
         project = self.base / "project"
         project.mkdir()
         host = _codex_host(self.base, runtime, root, project)
@@ -1410,10 +1639,6 @@ class UpgradeEngineLinkTests(_LinksCase):
             )
             for selected in scope["hosts"]
         ]
-        for resource in hosts.build_host_resources(scope, package_root=SCRIPTS.parent):
-            config = Path(resource["target"])
-            config.parent.mkdir(parents=True, exist_ok=True)
-            config.write_bytes(hosts.render_resource(resource))
         rig = _Rig(self, ["alpha", "linked-skill", "sbtd-workflow-onboard"]).install()
         result = sbtd_upgrade.verify_upgrade(plan, probe=True, link_authorizations=documents)
         self.assertEqual(result["status"], "aligned", result)
@@ -1458,10 +1683,6 @@ class UpgradeEngineLinkTests(_LinksCase):
         document = sbtd_upgrade.prepare_probe_link_authorization(
             plan, host_id=HOST_ID, skill_path=str(link), target_path=str(physical)
         )
-        resource = hosts.build_host_resources(scope, package_root=SCRIPTS.parent)[0]
-        config = Path(host["config"])
-        config.parent.mkdir(parents=True, exist_ok=True)
-        config.write_bytes(hosts.render_resource(resource))
         rig = _Rig(self, ["alpha", "linked-skill", "sbtd-workflow-onboard"]).install()
         result = sbtd_upgrade.verify_upgrade(
             plan, probe=True, link_authorizations=[document]
@@ -1469,18 +1690,32 @@ class UpgradeEngineLinkTests(_LinksCase):
         self.assertEqual(result["status"], "aligned", result["payload"]["hosts"])
         skills = result["payload"]["hosts"]["hosts"][0]["host"]["checks"]["skills"]
         self.assertEqual(skills["status"], "verified", skills)
+        self.assertEqual(skills["skills"], ["alpha", "linked-skill", "sbtd-workflow-onboard"])
         evidence = skills["link_authorizations"]
         self.assertEqual(len(evidence), 1)
         self.assertEqual(evidence[0]["authorization_id"], document["authorization_id"])
         self.assertEqual(evidence[0]["status"], "materialized")
         self.assertEqual(evidence[0]["target"], document["payload"]["target"])
-        self.assertTrue(rig.host_spawns())
+        self.assertEqual(len(rig.host_spawns()), 1)
         self.assertEqual(plan_path.read_bytes(), plan_bytes)
         self.assertEqual(legacy_receipt.read_bytes(), receipt_bytes)
         self.assertTrue(link.is_symlink())
         import jsonschema
 
         jsonschema.validate(result, SCHEMA)
+
+        rig.expected_skills.remove("linked-skill")
+        failed = sbtd_upgrade.verify_upgrade(plan, probe=True, link_authorizations=[document])
+        self.assertEqual(failed["status"], "drift", failed)
+        (report,) = failed["payload"]["hosts"]["hosts"]
+        checks = report["host"]["checks"]
+        self.assertEqual(checks["protocol"]["status"], "verified")
+        self.assertEqual(checks["host_load"]["reason"], "skills-evidence-mismatch")
+        self.assertEqual(checks["skills"]["status"], "failed")
+        self.assertEqual(checks["skills"]["skills"], ["alpha", "sbtd-workflow-onboard"])
+        self.assertEqual(checks["skills"]["expected"], ["alpha", "linked-skill", "sbtd-workflow-onboard"])
+        self.assertEqual(checks["skills"]["link_authorizations"], evidence)
+        jsonschema.validate(failed, SCHEMA)
 
 
 # ---------------------------------------------------------------------------
@@ -1512,10 +1747,13 @@ class UpgradeCliLinkTests(_LinksCase):
 
     def _cli_fixture(self):
         root, link, physical, _alpha = self.linked_fixture()
+        project = self.base / "project"
+        project.mkdir()
+        host = _codex_host(self.base, _runtime(self.base), root, project)
         scope = {
             "schema_version": 1,
             "skills_roots": [str(root)],
-            "hosts": [{"id": HOST_ID, "skills_roots": [str(root)]}],
+            "hosts": [host],
             "decisions": {},
         }
         vault = require_private_directory(self.base / "vault", create=True)
@@ -1656,10 +1894,6 @@ class UpgradeCliLinkTests(_LinksCase):
         first_file.write_text(json.dumps(first), encoding="utf-8")
         second_file = self.base / "auth-two.json"
         second_file.write_text(json.dumps(second_doc), encoding="utf-8")
-        resource = hosts.build_host_resources(scope, package_root=SCRIPTS.parent)[0]
-        config = Path(host["config"])
-        config.parent.mkdir(parents=True, exist_ok=True)
-        config.write_bytes(hosts.render_resource(resource))
         rig = _Rig(
             self, ["alpha", "linked-skill", "other-skill", "sbtd-workflow-onboard"]
         ).install()

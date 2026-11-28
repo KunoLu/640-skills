@@ -194,6 +194,9 @@ def plan_recovery(
         documents[kind] = document
         raw_documents[kind] = raw
     contracts.validate_declared_bindings(manifest, documents, raw_documents)
+    from sbtd_deployment import reject_legacy_execution
+
+    reject_legacy_execution(manifest["payload"])
     projects = _selected_roots(manifest, projects_root)
     context_conflicts: list[str] = []
     try:
@@ -399,6 +402,14 @@ def _execute_step(
         "error": None,
     }
     try:
+        change = operation.get("change") or {}
+        if change.get("kind") in {"build-graft", "configure-graft"} or operation.get(
+            "selector"
+        ) in {"graft-agents", "graft-mcp", "graft-hooks", "graft-omp-mcp"}:
+            _fail(
+                "unsupported-in-rc.3",
+                "a sealed plan still contains Graft operations; regenerate the plan",
+            )
         if before != step["expected_current"]:
             _fail("state-conflict", "a recovery step target changed after planning")
         scope = _resource_scope(manifest, operation)
@@ -570,6 +581,9 @@ def apply_recovery(
                 "a previous receipt is later than the current operation",
             )
     contracts.validate_declared_bindings(manifest, documents, raw_documents)
+    from sbtd_deployment import reject_legacy_execution
+
+    reject_legacy_execution(manifest["payload"])
     manifest_dir = Path(evidence["manifest"]["path"]).parent
     if plan_path.parent != manifest_dir:
         _fail(

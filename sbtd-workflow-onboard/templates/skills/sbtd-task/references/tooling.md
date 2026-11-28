@@ -20,19 +20,15 @@ Use OAuth/session/cookies/accounts only through controlled Agent/connector inter
 
 Do not silently change MCP transports, host plugins/hooks, optional startup grace, planning-tool enablement or output limits. One invalid marketplace does not invalidate others. A configured optional MCP absent on first discovery deserves a second visibility check, not an immediate reinstall. Extensions may transform tool results; raw server output is not proof of what the model received. Package-style server names containing `:`, `@`, `/` or `.` are not inherently invalid.
 
-## Graft
+## Structural evidence
 
-Use only the supported, verified structural subset and selected repository roots. Never init/build/query a shared parent as a federation shortcut; query authorized roots independently and summarize read-only. Nested repositories/submodules need separate authorization and stay off by default. Worktree/branch/root binding must be observed, not inferred from an open server.
+Prefer actual source, LSP, and contracts. Use `ast-grep` or `rg` when they are already available. Do not install a search tool merely to fill a report, and do not treat a missing optional tool as a failed required check.
 
-Managed CLI/MCP/hook entry points keep DO_NOT_TRACK=1 and prevent LLM/cloud enrichment, `--deep`, `blast --name` and automatic code/query uploads. Existing connected cloud/provider state blocks that integration plan; do not disconnect another user use silently. No ordinary task changes global env or prints API keys. If the managed privacy/side-effect safeguards are not available, use source/LSP/contract evidence instead of invoking an unsafe path.
+Read only an authorized single repository root. Nested repositories and submodules need separate authorization and stay off by default. Do not query a shared parent as a federation shortcut. Observe the worktree, branch, and root; do not infer them from an open tool.
 
-Raw graph/blast output can contain source, diffs and Git author information. Do not upload it to PR artifacts, public viewers or knowledge systems. A requested report uses `--no-owners` where supported and a minimal redacted summary; an output request is not authorization to publish raw project data or personal identifiers.
+Do not upload source, diffs, or author data to PR artifacts, public viewers, or knowledge systems. Do not enable LLM or cloud enrichment. An output request is not authorization to publish raw project data or personal identifiers.
 
-Default local version detection must be proven read-only; `graft version` includes npm metadata lookup and is not that proof. npm lookup unreachable means unknown/unreachable, not a fabricated latest or an install loop. Authorized downloads/metadata access do not authorize code upload. Missing native dependencies or installation failure is not installation success, though unrelated safe work may continue.
-
-Query refresh can fail, be disabled, be busy or miss unsupported/ignored changes. `check` reports freshness only and does not repair or prove business correctness; exit0/empty blast is not no-risk proof. Record actual diff basis: default blast may use the last commit when clean, and `<base>...HEAD` does not include extra working-tree changes. Account separately for untracked/deleted/renamed/mode-only/unindexed files; preserve pre-change dependency evidence where the current graph lost a deleted symbol. Basic graph grep is not a complete Markdown/YAML/Shell/JSON audit.
-
-Never promise PDG/taint/API-route/rename parity that the tool does not provide. Six MCP tools do not imply a direct blast tool. Passive projections need their own freshness evidence; hooks stay off unless separately authorized and actually verified, with no translation of one host's hooks into another's events.
+An empty result or exit 0 is not proof of no impact. Record the actual diff basis, including untracked, deleted, renamed, mode-only, and unindexed files. A text search is not a complete audit of every language or format.
 
 ## Web / Mobile / API evidence
 
@@ -63,6 +59,6 @@ Use only the fields relevant to the task, with accurate exercised scope:
 - Final Test Report: generated/blocked/not-supported/not-needed; Run Summary MD: generated/blocked/not-needed; Targeted Rerun: passed/failed/blocked/not-needed; Final Full Rerun: passed/failed/blocked/skipped-with-risk/not-needed.
 - Evidence Source: developer-local/ci/knowledge-server/not-needed; Source Revision: exact/dirty/unknown/not-needed; Environment Alignment: verified/unverified/mismatch/not-needed; Evidence Publication: local-only/published/blocked/not-configured/not-needed.
 - SEO/GEO: audited/static-only/blocked/skipped/not-needed. Internal apps/APIs and ordinary test runs do not become SEO tasks without the relevant public/search scope.
-- Graft: used/skipped/blocked/not-available, with the actual CLI/MCP surface, authorized root, observed version and coverage/freshness limitations. Report it when used or when unavailability affects the conclusion; omit the row for unrelated work.
+- Structural evidence: source/LSP/contract, with optional `ast-grep` or `rg` when used. Report the authorized root and any coverage limit when the search affects the conclusion; omit the row for unrelated work.
 
 These enums describe facts. Missing environment/data/authorization does not become passed through a label, an alternate tool or a lighter execution mode.

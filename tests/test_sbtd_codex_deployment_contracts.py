@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 import unittest
-from pathlib import Path
 
 from tests import onboard_contract_fixtures as fixtures
 
@@ -15,17 +13,7 @@ class CodexDeploymentContractTests(unittest.TestCase):
         payload = fixtures.build_manifest_payload()
         target = fixtures.ALPHA + "/graft"
         resource = contracts.resource_id("directory", target)
-        policy_path = (
-            Path(__file__).resolve().parents[1]
-            / "sbtd-workflow-onboard/assets/graft-build-policy.json"
-        )
-        policy = {
-            "path": str(policy_path),
-            "state": {
-                "type": "file",
-                "checksum": hashlib.sha256(policy_path.read_bytes()).hexdigest(),
-            },
-        }
+        policy = contracts.archived_graft_policy()
         operation = {
             "phase": "deploy",
             "resource_id": resource,
@@ -91,17 +79,7 @@ class CodexDeploymentContractTests(unittest.TestCase):
         payload = fixtures.build_manifest_payload()
         target = fixtures.ALPHA + "/AGENTS.md"
         resource = contracts.resource_id("markdown", target)
-        policy_path = (
-            Path(__file__).resolve().parents[1]
-            / "sbtd-workflow-onboard/assets/graft-build-policy.json"
-        )
-        policy = {
-            "path": str(policy_path),
-            "state": {
-                "type": "file",
-                "checksum": hashlib.sha256(policy_path.read_bytes()).hexdigest(),
-            },
-        }
+        policy = contracts.archived_graft_policy()
         operation = {
             "phase": "deploy",
             "resource_id": resource,
@@ -138,17 +116,7 @@ class CodexDeploymentContractTests(unittest.TestCase):
         payload = fixtures.build_manifest_payload()
         target = "/private/home/.omp/mcp.json"
         resource = contracts.resource_id("json", target)
-        policy_path = (
-            Path(__file__).resolve().parents[1]
-            / "sbtd-workflow-onboard/assets/graft-build-policy.json"
-        )
-        policy = {
-            "path": str(policy_path),
-            "state": {
-                "type": "file",
-                "checksum": hashlib.sha256(policy_path.read_bytes()).hexdigest(),
-            },
-        }
+        policy = contracts.archived_graft_policy()
         payload["shared_roots"].append(
             {
                 "kind": "omp-home",
@@ -193,17 +161,7 @@ class CodexDeploymentContractTests(unittest.TestCase):
         payload = fixtures.build_manifest_payload()
         target = "/private/home/.omp/mcp.json"
         resource = contracts.resource_id("json", target)
-        policy_path = (
-            Path(__file__).resolve().parents[1]
-            / "sbtd-workflow-onboard/assets/graft-build-policy.json"
-        )
-        policy = {
-            "path": str(policy_path),
-            "state": {
-                "type": "file",
-                "checksum": hashlib.sha256(policy_path.read_bytes()).hexdigest(),
-            },
-        }
+        policy = contracts.archived_graft_policy()
         payload["shared_roots"].append({
             "kind": "omp-home", "path": "/private/home/.omp",
             "dependent_projects": list(fixtures.BOTH),
@@ -261,17 +219,7 @@ class CodexDeploymentContractTests(unittest.TestCase):
                     self.assertIn("wrong resource type", str(caught.exception))
 
     def test_configure_graft_file_targets_cannot_stay_absent(self):
-        policy_path = (
-            Path(__file__).resolve().parents[1]
-            / "sbtd-workflow-onboard/assets/graft-build-policy.json"
-        )
-        policy = {
-            "path": str(policy_path),
-            "state": {
-                "type": "file",
-                "checksum": hashlib.sha256(policy_path.read_bytes()).hexdigest(),
-            },
-        }
+        policy = contracts.archived_graft_policy()
         cases = (
             ("graft-mcp", "toml", "/private/home/alt-codex/config.toml", "shared"),
             ("graft-hooks", "json", "/private/home/.codex/hooks.json", "shared"),

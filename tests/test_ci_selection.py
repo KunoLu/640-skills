@@ -174,11 +174,11 @@ class CiSelectionTests(unittest.TestCase):
 
     def test_windows_overlap_executes_once_and_keeps_native_boundaries(self):
         identities = list(WINDOWS_CASES) + [
-            "test_sbtd_upgrade_hosts.ShellResourceTests.test_unicode_resolution_uses_utf8_even_with_legacy_console_encoding",
+            "test_sbtd_upgrade_hosts.ShellResourceTests.test_selected_profile_is_neither_read_nor_executed_in_probe",
             "test_install_sh_agent_cli_flow.PowerShellInstallerAgentCliFlowTests.test_powershell_script_has_utf8_bom_for_windows_powershell",
             "test_install_sh_agent_cli_flow.BashInstallerAgentCliFlowTests.test_powershell_unknown_flag",
             "test_install_sh_agent_cli_flow.BashInstallerAgentCliFlowTests.test_bash_only",
-            "test_sbtd_graft_entry.SessionRootResolutionTests.test_session_root",
+            "test_sbtd_retirement.RetirementTests.test_refuses_unproven_entry",
             "test_workflow_contracts.WorkflowContractTests.test_native_ignore",
             "test_sbtd_probe_links.ProbeLinksTests.test_authorized_directory",
         ]

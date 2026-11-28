@@ -30,7 +30,7 @@
 
 普通需求不等于授权init/reset、全局工具安装、HOME/MCP/hooks修改、迁移、workflow sync、清理或发布。旧项目只提示显式迁移，不猜项目清单、不遍历兄弟项目；先备份和验收，再取独立清理确认。迁移verify通过后主动展示实际清理候选（批次封存项与实际运行新鲜plan得到的清单）并询问；「sbtd cleanup」「清理工作流」或明确清理旧资产的意图只授权只读检测/计划，看到清单后的明确同意才授权执行，一次确认覆盖所展示的合并范围；批次清理改变新鲜计划封存的原件时重新生成并展示剩余清单。同一已确认流程内，清单不变或仅减少由绑定回执证明已完成的项、其余目标和效果不变时沿用原同意，不重复询问；新增目标或改变效果须重新确认，无法解释的消失、用户改动或失败证据先停止调和，执行仍使用当前plan_id；全局MCP条目影响其他项目须单独披露；init/reset不执行此清理。Git tag不保全ignored数据或HOME；不自动stash/reset --hard。备份销毁有独立责任、保留期和再次授权。
 
-工具可用性靠当前callable／实际检查；catalog、已安装提示或配置文件存在不够。账号、OAuth/cookies只用受控工具，不读取／复制／打印／入库秘密或生产数据；不擅改代理、MCP transport、插件或hooks。Graft仅对授权单仓根调用，DNT和禁LLM/cloud边界不因模式放宽；不安全或不可用则用实际源码／LSP／contract补充，不以空图或exit0证明无影响。
+工具可用性靠当前callable／实际检查；catalog、已安装提示或配置文件存在不够。账号、OAuth/cookies只用受控工具，不读取／复制／打印／入库秘密或生产数据；不擅改代理、MCP transport、插件或hooks。结构证据优先实际源码、LSP与contract；可用时用ast-grep或rg。空结果或exit 0不证明无影响。只读已授权单仓根，不上传代码、diff或作者信息，不启用LLM/cloud，不对共父目录联邦。
 
 需要写真正长期lesson才调用lessons-record解析`.sbtd/developer`：正常文件中唯一name须原样匹配`^[a-z0-9]+$`；本地合法优先，仅确实缺失且verified linked worktree才只读主checkout，任一被选中的现存异常身份不能绕过或当作缺失。允许来源确实缺失才说明路径并询问；首次建立先校验ignore/tracked、路径和窄授权，只建身份，不全量onboard或读旧身份猜名。缺名不冻结default/lite无关安全工作，strict必需lesson仍未完成。只写己方marker，新ID查重，历史ID／他人块不改名；详细读写和显式迁移边界由lessons-record负责。
 

@@ -256,6 +256,31 @@ def build_host_resources(scope, *, package_root=None):
     return resources
 
 
+def _canonical_host_scope(scope):
+    # This fixture does not expose physical host config aliases.
+    return scope
+
+
+def plan_retirement(scope, *, vault=None, evidence=None, retiring_launchers=(), required_targets=()):
+    return {
+        "disclosure": {
+            "schema": "sbtd-retirement/1",
+            "purpose": "upgrade",
+            "stop": False,
+            "stop_reason": None,
+            "global_effects": [],
+            "proof_gap": None,
+            "disclosure": "fixture",
+            "candidates": [],
+            "blocked": [],
+            "preserved": [],
+            "manual": [],
+        },
+        "resources": [],
+    }
+
+
+
 def render_resource(resource, *, package_root=None):
     root = _root(package_root)
     if package_root is not None and str(root) != resource["details"]["package_root"]:
@@ -325,6 +350,7 @@ ENGINE_COPY = (
     "sbtd_upgrade_paths.py",
     "onboard_contracts.py",
     "sbtd_migration_files.py",
+    "sbtd_retirement_permissions.py",
     "sbtd_cleanup_targets.py",
     "sbtd_project.py",
 )
@@ -1071,7 +1097,7 @@ class UpgradeEngineTests(unittest.TestCase):
 
     # -- host resources --------------------------------------------------------
 
-    def test_host_profile_lifecycle_and_semantic_verify(self):
+    def test_legacy_profile_plan_cannot_be_verified_or_probed(self):
         home = self.base / "home"
         home.mkdir()
         profile = home / ".bashrc"
@@ -1091,54 +1117,33 @@ class UpgradeEngineTests(unittest.TestCase):
             },
             files={"managed/profile.sh": "# sbtd-managed-bin\nexport PATH=\"$HOME/bin:$PATH\"\n"},
         )
-        # The fixture inventory requires at least one skill resource; add a
-        # current no-op skill so the combined set is valid.
-        skills = self._skills_root()
-        current = skills / "skill-a"
-        current.mkdir()
-        (current / "SKILL.md").write_bytes(b"same\n")
-        (package / "payload/skill-a").mkdir(parents=True)
-        (package / "payload/skill-a/SKILL.md").write_bytes(b"same\n")
-        fixture = json.loads((package / "upgrade_fixture.json").read_text(encoding="utf-8"))
-        fixture["resources"] = [self._skill_fixture(current, "payload/skill-a")]
-        (package / "upgrade_fixture.json").write_text(json.dumps(fixture), encoding="utf-8")
         self._register(package)
         vault = self._vault()
         scope = {
             "schema_version": 1,
-            "skills_roots": [str(skills)],
             "shell_profiles": [
                 {"path": str(profile), "shell": "bash", "bin": str(self.base / "bin")}
             ],
         }
         plan = self._plan(scope, vault, package)
+        plan = self._forge(plan, lambda payload: payload.pop("graftRetirement"))
         rows = {row["id"]: row for row in plan["payload"]["resources"]}
         self.assertEqual(rows[f"shell@{profile}"]["decision"], "install")
         receipt = self._apply_local(plan)
         self.assertEqual(receipt["payload"]["status"], "complete")
         managed = (package / "managed/profile.sh").read_bytes()
         self.assertEqual(profile.read_bytes(), managed)
-        verification = sbtd_upgrade.verify_upgrade(plan, receipt=receipt)
-        self.assertEqual(verification["payload"]["status"], "aligned")
-        self.assertEqual(verification["payload"]["hosts"]["probe"], False)
-        (profile_row,) = verification["payload"]["hosts"]["shell_profiles"]
-        self.assertEqual(profile_row["disk"]["status"], "aligned")
-        self.assertEqual(profile_row["host"], "unverified")
-        # Unrelated user additions keep managed alignment; ownership loss drifts.
-        with profile.open("ab") as handle:
-            handle.write(b"# user additions\n")
-        still = sbtd_upgrade.verify_upgrade(plan, receipt=receipt)
-        self.assertEqual(still["payload"]["hosts"]["shell_profiles"][0]["disk"]["status"], "aligned")
-        self.assertEqual(still["payload"]["status"], "aligned")
-        profile.write_text("# user-owned profile without the managed block\n", encoding="utf-8")
-        drifted = sbtd_upgrade.verify_upgrade(plan, receipt=receipt)
-        self.assertEqual(drifted["payload"]["status"], "drift")
-        probed = sbtd_upgrade.verify_upgrade(plan, probe=True)
-        self.assertEqual(probed["payload"]["probe"], True)
-        self.assertEqual(
-            probed["payload"]["hosts"]["shell_profiles"][0]["disk"]["status"],
-            "drifted",
-        )
+        profile.unlink()
+        before_vault = sorted(vault.iterdir())
+        provider = sys.modules["sbtd_upgrade_hosts"]
+        with mock.patch.object(provider, "verify_hosts") as probe_hosts:
+            for probe in (False, True):
+                with self.subTest(probe=probe), self.assertRaises(ContractError) as unsupported:
+                    sbtd_upgrade.verify_upgrade(plan, receipt=receipt, probe=probe)
+                self.assertEqual(unsupported.exception.code, "unsupported-in-rc.3")
+        probe_hosts.assert_not_called()
+        self.assertFalse(profile.exists())
+        self.assertEqual(sorted(vault.iterdir()), before_vault)
 
     def test_host_resource_retries_after_original_source_is_removed(self):
         home = self.base / "home"
@@ -1181,7 +1186,7 @@ class UpgradeEngineTests(unittest.TestCase):
         self.assertEqual(profile.read_bytes(), b"# sbtd-managed-bin\n")
 
 
-    def test_host_preserve_downgrades_to_exception_without_leaking_config(self):
+    def test_legacy_mcp_preserve_does_not_authorize_verification(self):
         home = self.base / "home"
         home.mkdir()
         config = home / "config.json"
@@ -1189,14 +1194,10 @@ class UpgradeEngineTests(unittest.TestCase):
             json.dumps({"mcpServers": {"other": {"command": "secret-SECRET-cmd"}}}),
             encoding="utf-8",
         )
-        skills = self._skills_root()
-        current = skills / "skill-a"
-        current.mkdir()
-        (current / "SKILL.md").write_bytes(b"same\n")
         package = self._package(
             fixture={
                 "baseline_id": "b1",
-                "resources": [self._skill_fixture(current, "payload/skill-a")],
+                "resources": [],
                 "host_resources": [
                     {
                         "id": f"mcp@{config}",
@@ -1208,7 +1209,6 @@ class UpgradeEngineTests(unittest.TestCase):
                 ],
             },
             files={
-                "payload/skill-a/SKILL.md": "same\n",
                 "managed/mcp.json": json.dumps({"mcpServers": {"graft": {"command": "run"}}}),
             },
         )
@@ -1216,16 +1216,16 @@ class UpgradeEngineTests(unittest.TestCase):
         vault = self._vault()
         scope = {
             "schema_version": 1,
-            "skills_roots": [str(skills)],
             "hosts": [{
                 "id": "fixture-host", "platform": "codex",
                 "config_home": str(home), "config": str(config),
-                "skills_roots": [str(skills)], "project_roots": [],
+                "skills_roots": [], "project_roots": [],
                 "runtime": {"python": "/usr/bin/python3", "node": "/usr/bin/node", "cli": "/usr/bin/graft"},
             }],
             "decisions": {str(config): "preserve"},
         }
         plan = self._plan(scope, vault, package)
+        plan = self._forge(plan, lambda payload: payload.pop("graftRetirement"))
         rows = {row["id"]: row for row in plan["payload"]["resources"]}
         self.assertEqual(rows[f"mcp@{config}"]["decision"], "preserve")
         self.assertIsNone(rows[f"mcp@{config}"]["desired"])
@@ -1233,15 +1233,20 @@ class UpgradeEngineTests(unittest.TestCase):
         self.assertEqual(
             self._receipt_rows(receipt)[f"mcp@{config}"]["result"], "preserved"
         )
-        verification = sbtd_upgrade.verify_upgrade(plan, receipt=receipt)
-        self.assertEqual(verification["payload"]["status"], "exceptions")
-        self.assertIn("fixture-host", verification["payload"]["exceptions"])
-        self.assertNotIn("SECRET", json.dumps(verification))
+        provider = sys.modules["sbtd_upgrade_hosts"]
+        with (
+            mock.patch.object(provider, "verify_hosts") as probe_hosts,
+            self.assertRaises(ContractError) as unsupported,
+        ):
+            sbtd_upgrade.verify_upgrade(plan, receipt=receipt, probe=True)
+        self.assertEqual(unsupported.exception.code, "unsupported-in-rc.3")
+        probe_hosts.assert_not_called()
+        self.assertNotIn("SECRET", unsupported.exception.message)
         self.assertIn("secret-SECRET-cmd", config.read_text(encoding="utf-8"))
 
     # -- recovery --------------------------------------------------------------
 
-    def _recovery_batch(self):
+    def _recovery_batch(self, *, historical: bool = False):
         skills = self._skills_root()
         replaced = skills / "skill-a"
         replaced.mkdir()
@@ -1274,6 +1279,8 @@ class UpgradeEngineTests(unittest.TestCase):
             "decisions": {str(replaced): "replace"},
         }
         plan = self._plan(scope, vault, package)
+        if historical:
+            plan = self._forge(plan, lambda payload: payload.pop("graftRetirement"))
         receipt = self._apply_local(plan)
         self.assertEqual(receipt["payload"]["status"], "complete")
         return plan, receipt, replaced, agents_file, vault
@@ -1558,6 +1565,49 @@ class UpgradeEngineTests(unittest.TestCase):
         recovery_receipt = self._apply_recovery_local(recovery_plan)
         jsonschema.validate(recovery_receipt, schema)
         jsonschema.validate(plan["payload"]["scope"], schema)
+
+    def test_schema_and_engine_refuse_an_absent_agents_goal(self):
+        import jsonschema
+
+        plan, _receipt, _skill, _agents, vault = self._recovery_batch()
+        schema = json.loads((ROOT / "sbtd-workflow-onboard" / "upgrade.schema.json").read_text(encoding="utf-8"))
+        forged = self._forge(plan, lambda payload: next(
+            row for row in payload["resources"] if row["kind"] == "agents"
+        ).update(desired={"type": "absent", "checksum": None}))
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(forged, schema)
+        destination = vault / "invalid-absent-agents.json"
+        with self.assertRaises(ContractError) as invalid:
+            sbtd_upgrade.save_plan(forged, destination)
+        self.assertEqual(invalid.exception.code, "invalid-inventory")
+        self.assertFalse(destination.exists())
+
+    def test_historical_plan_and_embedded_recovery_accept_absent_disclosure(self):
+        import jsonschema
+
+        schema = json.loads((ROOT / "sbtd-workflow-onboard" / "upgrade.schema.json").read_text(encoding="utf-8"))
+        plan, receipt, replaced, agents, vault = self._recovery_batch(historical=True)
+        self.assertNotIn("graftRetirement", plan["payload"])
+        jsonschema.validate(plan, schema)
+        recovery = sbtd_upgrade.plan_recovery(plan, receipt)
+        jsonschema.validate(recovery, schema)
+        self.assertEqual(recovery["payload"]["upgrade_plan"], plan)
+        self.assertEqual(self._apply_recovery_local(recovery)["status"], "complete")
+        self.assertEqual((replaced / "SKILL.md").read_bytes(), b"original bytes\n")
+        self.assertFalse(agents.exists())
+
+        for invalid in (None, {}, {"stop": "false"}, {"stop": False, "candidates": {}}):
+            with self.subTest(disclosure=invalid):
+                malformed = self._forge(plan, lambda payload: payload.update(graftRetirement=invalid))
+                embedded = copy.deepcopy(recovery)
+                embedded["payload"]["upgrade_plan"] = malformed
+                for document in (malformed, embedded):
+                    with self.assertRaises(jsonschema.ValidationError):
+                        jsonschema.validate(document, schema)
+                with self.assertRaises(ContractError) as caught:
+                    sbtd_upgrade.save_plan(malformed, vault / "invalid-plan.json")
+                self.assertEqual(caught.exception.code, "invalid-document")
+                self.assertFalse((vault / "invalid-plan.json").exists())
 
     def test_public_apply_rejects_untrusted_executor_source(self):
         plan, _receipt, _skill, _agents, vault = self._recovery_batch()
@@ -1871,7 +1921,7 @@ class UpgradeEngineTests(unittest.TestCase):
         self.assertFalse(target.exists())
         self.assertTrue(parent.is_dir())
 
-    def test_mcp_missing_or_stale_preserved_onboard_blocks_the_whole_write_set(self):
+    def test_removed_mcp_neither_writes_nor_blocks_unrelated_skill(self):
         for stale in (False, True):
             with self.subTest(stale=stale):
                 skills = self._skills_root(f"skills-{stale}")
@@ -1929,12 +1979,15 @@ class UpgradeEngineTests(unittest.TestCase):
                 vault = self._vault(f"vault-{stale}")
                 with mock.patch.object(provider, "build_host_resources", with_dependency):
                     plan = self._plan(scope, vault, package)
-                    with self.assertRaises(ContractError) as refused:
-                        self._apply_local(plan)
-                self.assertEqual(refused.exception.code, "launcher-dependency-conflict")
-                self.assertFalse(other.exists())
+                    self.assertFalse(any(row["kind"] == "mcp" for row in plan["payload"]["resources"]))
+                    receipt = self._apply_local(plan)
+                self.assertEqual(receipt["payload"]["status"], "complete")
+                self.assertEqual((other / "SKILL.md").read_text(encoding="utf-8"), "other\n")
                 self.assertFalse(config.exists())
-                self.assertFalse((vault / "originals").exists())
+                if stale:
+                    self.assertEqual((onboard / "SKILL.md").read_text(encoding="utf-8"), "customized\n")
+                else:
+                    self.assertFalse(onboard.exists())
 
     def test_real_codex_current_config_cannot_be_forged_into_replace(self):
         skills = self._skills_root()
@@ -1946,7 +1999,7 @@ class UpgradeEngineTests(unittest.TestCase):
             files={
                 "payload/skill-a/SKILL.md": "same\n",
                 "SKILL.md": "---\nname: sbtd-workflow-onboard\n---\n",
-                "scripts/sbtd_graft_entry.py": (SCRIPTS / "sbtd_graft_entry.py").read_text(encoding="utf-8"),
+                "scripts/README": "launcher is not a required installed asset\n",
             },
         )
         self._register(package)
@@ -1968,21 +2021,48 @@ class UpgradeEngineTests(unittest.TestCase):
             "runtime": {"python": str(runtime / "python"), "node": str(runtime / "node"), "cli": str(runtime / "graft")},
         }
         scope = {"schema_version": 1, "skills_roots": [str(skills)], "hosts": [host]}
-        resource = real_hosts.build_host_resources(scope, package_root=package)[0]
-        config.write_bytes(real_hosts.render_resource(resource, package_root=package))
-        before = config.read_bytes()
+        self.assertEqual(real_hosts.build_host_resources(scope, package_root=package), [])
+        self.assertFalse(config.exists())
         vault = self._vault()
         plan = self._plan(scope, vault, package)
-        mcp = next(row for row in plan["payload"]["resources"] if row["kind"] == "mcp")
-        self.assertEqual(mcp["classification"], "current")
-        self.assertEqual(mcp["decision"], "keep")
-        forged = self._forge(plan, lambda payload: next(
-            row for row in payload["resources"] if row["kind"] == "mcp"
-        ).update({"decision": "replace"}))
-        with self.assertRaises(ContractError) as denied:
-            self._apply_local(forged)
-        self.assertEqual(denied.exception.code, "plan-inconsistent")
-        self.assertEqual(config.read_bytes(), before)
+        self.assertFalse(any(row["kind"] == "mcp" for row in plan["payload"]["resources"]))
+        self.assertIn("graftRetirement", plan["payload"])
+        self.assertFalse(plan["payload"]["graftRetirement"]["stop"])
+
+    def test_noncanonical_codex_scope_fails_before_any_upgrade_write(self):
+        agents_target = self.base / "global" / "AGENTS.md"
+        package = self._package(
+            fixture={"baseline_id": "b1", "resources": [{
+                "id": f"agents@{agents_target}", "kind": "agents",
+                "source": "payload/AGENTS.md", "target": str(agents_target),
+            }]},
+            files={"payload/AGENTS.md": "managed\n"},
+        )
+        self._register(package)
+        sys.modules["sbtd_upgrade_hosts"] = self._real_module("sbtd_upgrade_hosts")
+        home = self.base / "codex-home"
+        home.mkdir()
+        project = self.base / "selected-project"
+        project.mkdir()
+        scope = {
+            "schema_version": 1, "agents_targets": [str(agents_target)],
+            "hosts": [{
+                "id": "codex", "platform": "codex", "config_home": str(home),
+                "config": str(home / "config.toml"), "skills_roots": [],
+                "project_roots": [str(project)], "runtime": {"python": None, "node": None, "cli": None},
+            }],
+        }
+        vault = self._vault()
+        plan = self._plan(scope, vault, package)
+        scope["hosts"][0]["config"] = str(home / "unselected.toml")
+        with self.assertRaises(ContractError) as planning:
+            self._plan(scope, vault, package)
+        self.assertEqual(planning.exception.code, "scope-conflict")
+        forged = self._forge(plan, lambda payload: payload.update(scope=scope))
+        with self.assertRaises(ContractError) as applying:
+            sbtd_upgrade.apply_upgrade(forged, confirmed=forged["plan_id"])
+        self.assertEqual(applying.exception.code, "scope-conflict")
+        self.assertFalse(agents_target.parent.exists())
         self.assertEqual(list(vault.iterdir()), [])
 
     def test_nullable_host_runtime_scope_and_plan_match_schema(self):
@@ -2260,7 +2340,7 @@ class UpgradeEngineTests(unittest.TestCase):
             files={
                 "payload/skill-a/SKILL.md": "same\n",
                 "SKILL.md": "---\nname: sbtd-workflow-onboard\n---\n",
-                "scripts/sbtd_graft_entry.py": (SCRIPTS / "sbtd_graft_entry.py").read_text(encoding="utf-8"),
+                "scripts/README": "launcher is not a required installed asset\n",
             },
         )
         self._register(package)
@@ -2288,21 +2368,12 @@ class UpgradeEngineTests(unittest.TestCase):
             "schema_version": 1, "skills_roots": [str(skills)], "hosts": [host],
             "decisions": {str(config): "preserve"},
         }
-        expected = real_hosts.render_resource(
-            real_hosts.build_host_resources(scope, package_root=package)[0],
-            package_root=package,
-        )
+        self.assertEqual(real_hosts.build_host_resources(scope, package_root=package), [])
         vault = self._vault()
         plan = self._plan(scope, vault, package)
-        mcp = next(row for row in plan["payload"]["resources"] if row["kind"] == "mcp")
-        self.assertEqual(mcp["classification"], "missing")
-        self.assertEqual(mcp["decision"], "install")
-        receipt = self._apply_local(plan)
-        rows = {row["id"]: row for row in receipt["payload"]["resources"]}
-        self.assertEqual(rows[mcp["id"]]["result"], "succeeded")
-        self.assertEqual(config.read_bytes(), expected)
-        parsed = tomllib.loads(config.read_text(encoding="utf-8"))
-        self.assertIn("sbtd-graft", json.dumps(parsed))
+        self.assertFalse(any(row["kind"] == "mcp" for row in plan["payload"]["resources"]))
+        self.assertFalse(config.exists())
+        self.assertFalse(plan["payload"]["graftRetirement"]["stop"])
 
     def test_post_write_persistence_failure_binds_batch_checkpoint(self):
         """R02: a post-mutation persistence failure keeps batch recovery evidence."""
@@ -2538,26 +2609,26 @@ class UpgradeEngineTests(unittest.TestCase):
         }, vault, package)
         real_save = sbtd_upgrade._save_once
         real_scan = sbtd_upgrade._scan_intents
+        receipt_failed = False
 
         def fail_final_receipt(path, document, vault_arg):
+            nonlocal receipt_failed
             if Path(path).name.startswith("upgrade-receipt-") and any(
                 row.get("result") == "succeeded"
                 for row in document["payload"]["resources"]
             ):
+                receipt_failed = True
                 raise OSError("injected receipt persistence failure")
             return real_save(path, document, vault_arg)
 
-        scans: list[str] = []
-
-        def broken_second_scan(vault_arg, prefix, id_field):
-            scans.append(prefix)
-            if len(scans) > 1:
+        def unreadable_after_failure(vault_arg, prefix, id_field):
+            if receipt_failed:
                 raise OSError("injected intent scan failure")
             return real_scan(vault_arg, prefix, id_field)
 
         with (
             mock.patch.object(sbtd_upgrade, "_save_once", fail_final_receipt),
-            mock.patch.object(sbtd_upgrade, "_scan_intents", broken_second_scan),
+            mock.patch.object(sbtd_upgrade, "_scan_intents", unreadable_after_failure),
             self.assertRaises(ContractError) as caught,
         ):
             self._apply_local(plan)

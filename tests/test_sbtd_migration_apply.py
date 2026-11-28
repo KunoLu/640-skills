@@ -491,7 +491,7 @@ class MigrationApplyTests(unittest.TestCase):
             manifest = {
                 "manifest_id": "m1",
                 "payload": {
-                    "tool_versions": {"onboard": predecessor, "graft": "0.18.0"},
+                    "tool_versions": {"onboard": predecessor},
                     "projects": [
                         {
                             "private_operations": [
@@ -534,10 +534,7 @@ class MigrationApplyTests(unittest.TestCase):
                     manifest,
                     receipt,
                     manifest["payload"]["tool_versions"],
-                    {
-                        "onboard": "runtime-sha256:unlisted-successor",
-                        "graft": "0.18.0",
-                    },
+                    {"onboard": "runtime-sha256:unlisted-successor"},
                 )
             self.assertEqual(unlisted.exception.code, "version-conflict")
             self.assertEqual(target.read_bytes(), b"after\n")
@@ -550,7 +547,7 @@ class MigrationApplyTests(unittest.TestCase):
         predecessor = (
             "runtime-sha256:27e74bf511e8b62ad6dac07188933811bd429a84b38b8f01ae025e997fdd7750"
         )
-        current = {"onboard": "runtime-sha256:successor", "graft": "0.18.0"}
+        current = {"onboard": "runtime-sha256:successor"}
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             target = base / "live.txt"
@@ -562,7 +559,7 @@ class MigrationApplyTests(unittest.TestCase):
             manifest = {
                 "manifest_id": "m1",
                 "payload": {
-                    "tool_versions": {"onboard": predecessor, "graft": "0.18.0"},
+                    "tool_versions": {"onboard": predecessor},
                     "projects": [
                         {
                             "private_operations": [
@@ -610,7 +607,7 @@ class MigrationApplyTests(unittest.TestCase):
                     _require_runtime_lineage(
                         manifest,
                         receipt,
-                        {"onboard": "runtime-sha256:other", "graft": "0.18.0"},
+                        {"onboard": "runtime-sha256:other"},
                         current,
                     )
                 self.assertEqual(unlisted.exception.code, "version-conflict")
@@ -635,7 +632,7 @@ class MigrationApplyTests(unittest.TestCase):
         predecessor = (
             "runtime-sha256:27e74bf511e8b62ad6dac07188933811bd429a84b38b8f01ae025e997fdd7750"
         )
-        current = {"onboard": "runtime-sha256:successor", "graft": "0.18.0"}
+        current = {"onboard": "runtime-sha256:successor"}
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             restored = base / "restored.txt"
@@ -652,7 +649,7 @@ class MigrationApplyTests(unittest.TestCase):
             manifest = {
                 "manifest_id": "m1",
                 "payload": {
-                    "tool_versions": {"onboard": predecessor, "graft": "0.18.0"},
+                    "tool_versions": {"onboard": predecessor},
                     "projects": [
                         {
                             "private_operations": [
@@ -752,10 +749,7 @@ class MigrationApplyTests(unittest.TestCase):
                         manifest,
                         receipt,
                         sealed,
-                        {
-                            "onboard": "runtime-sha256:unlisted-successor",
-                            "graft": "0.18.0",
-                        },
+                        {"onboard": "runtime-sha256:unlisted-successor"},
                         recovery,
                     )
                 self.assertEqual(unlisted.exception.code, "version-conflict")

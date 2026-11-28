@@ -1,6 +1,6 @@
 # --init-projects 只初始化项目
 
-project-only 模式。与普通 `--projects-root` + `--action init|reset` 互斥。不安装或更新全局工具、Skills、AGENTS、MCP 或 hooks。为准备项目本地 Graft 资源，可以只读核验既有 runtime。
+project-only 模式。与普通 `--projects-root` + `--action init|reset` 互斥。不安装或更新全局工具、Skills、AGENTS、MCP 或 hooks。不构建项目图，也不删除历史项目目录。
 
 `python scripts/onboard.py init-projects` 接受可选 `--platform`，但不需要 Trellis CLI、用户名或其平台标志。Trellis 参数已移除；普通项目无 task、developer 或 bootstrap 仍可检查和安装必要资产。
 
@@ -13,14 +13,14 @@ project-only 模式。与普通 `--projects-root` + `--action init|reset` 互斥
 ```mermaid
 flowchart TD
   start[确定项目根及是否写项目 AGENTS.md] --> entry{入口？}
-  entry -->|根安装器| summary["Final plan 仅列平台、动作、项目根及 AGENTS 等摘要；不调用 plan，不列本地 Graft 明细"]
+  entry -->|根安装器| summary["Final plan 仅列平台、动作、项目根及 AGENTS 等摘要；不调用 plan"]
   summary --> confirm{"确认执行，或已传 --yes？"}
   confirm -->|否| abort[不调用 init-projects]
   confirm -->|是| dry{dry-run？}
   dry -->|是| stopDry[到此停止，不执行核心写入]
   dry -->|否| wrapperCall["携带所选范围和 --yes 调用 init-projects"]
   entry -->|直接调用 Python| core
-  wrapperCall --> core["Python 构建文件操作与适用的本地 Graft 计划；非 JSON 模式打印计划摘要"]
+  wrapperCall --> core["Python 构建文件操作；非 JSON 模式打印计划摘要"]
   core --> yes{"已传 --yes？"}
   yes -->|否| refuse[拒绝执行，不等待交互确认]
   yes -->|是| stateCheck[检查所选项目状态与目标]
@@ -38,7 +38,7 @@ flowchart TD
   pAgents -->|是且文件已存在| bakProj[备份后覆盖]
   copyProj --> post
   bakProj --> post
-  post[按计划维护项目本地围栏、图与 stamp，再只读复查；不追加宿主接线]
+  post[只读复查；不追加宿主接线，不构建项目图]
   post --> pw{项目已有 Playwright 适用标记?}
   pw -->|否| skipPw[Playwright: not-needed]
   pw -->|是且未装| notePw[仅汇报; 安装要另走 install-playwright-cli]
@@ -61,7 +61,7 @@ flowchart TD
 | Agent `--platform` | 仅平台上下文，不调用或安装 Agent CLI | 同样无全局操作 |
 | 项目 `AGENTS.md` | Q4 同意才复制 | Q4 同意则备份后覆盖 |
 | `.gitignore` | 追加缺行 | 行齐全则 skip |
-| 项目本地 Graft 资源 | 按平台、项目根及可用 runtime 维护围栏／图／stamp | 图存在不证明已注册宿主 MCP |
+| 历史项目目录 | 不构建、不删除 | 目录存在不证明宿主已接线；退役见 README 的退役说明 |
 | task / developer / bootstrap | 不预建，缺失正常 | 只读检查选中记录；未完成 bootstrap 返回 6 |
 | 旧 `.trellis` 或异常状态 | 无旧工具前置依赖 | 保留并报告需用户处理，不自动迁移或重建 |
 | Playwright / React Bits | `onboard.py` 只在写入后汇报 | `install.sh` 才可能在写入前询问并另装 |

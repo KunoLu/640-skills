@@ -1,13 +1,8 @@
 """Followup batch behavior: original -> successor codex deployment -> verified
 cleanup -> OMP followup plan/apply/deploy/verify/cleanup/recovery.
 
-Everything runs inside an isolated TemporaryDirectory HOME. The only native
-boundaries (verified runtime, project graph build, project smoke) are
-deterministic smoke-only doubles; they do not prove a real host deployment
-(合成夹具；不证明真实 host 部署。). No write ever reaches the live HOME or demo
-assets, and no test subclasses another test class, so no suite is duplicated.
-
-Reusable smoke fixture (parent CLI smoke, runtime mocks explicitly labeled):
+Everything runs inside an isolated TemporaryDirectory HOME. Deploy uses the
+real local check-projects smoke. No write reaches the live HOME.
 
     with tempfile.TemporaryDirectory() as directory:
         base = Path(directory).resolve()
@@ -18,22 +13,20 @@ Reusable smoke fixture (parent CLI smoke, runtime mocks explicitly labeled):
             # plan/apply/verify/cleanup: run_migration(SimpleNamespace(...))
             # under mock.patch.dict(os.environ, fixture.environment);
             # deploy: fixture.execute_deployment(manifest_path, apply_path,
-            # output_path) wraps load_deployment_context +
-            # execute_migration_deployment inside fixture.deployment_mocks().
+            # output_path) invokes the real deployment pipeline.
             ...
 """
 from __future__ import annotations
 
-import contextlib
 import copy
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -41,9 +34,10 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "sbtd-workflow-onboard" / "scrip
 sys.path.insert(0, str(SCRIPTS))
 
 import onboard_contracts as contracts
-import sbtd_graft_deployment
+import sbtd_deployment
+from onboard import GLOBAL_AGENTS_TEMPLATE
 from onboard_contracts import ContractError, canonical_json_bytes
-from sbtd_graft_deployment import execute_migration_deployment, load_deployment_context
+from sbtd_deployment import execute_migration_deployment, load_deployment_context
 from sbtd_migration import apply_migration, cleanup_migration, runtime_versions
 from sbtd_migration_files import read_file, save_document, snapshot
 from sbtd_migration_plan import plan_migration, validate_legacy_inputs
@@ -54,108 +48,12 @@ from tests.test_sbtd_migration_apply import legacy_project
 from tests.test_sbtd_migration_cleanup import VerifiedMigration, _fake_vendor_adapter
 from tests.test_sbtd_migration_verify import _tree_bytes
 
-_RUNTIME = {"node": "/fixture/node", "cli": "/fixture/cli.js", "python": "/fixture/python"}
 
 
 def _reader(reference):
     return read_file(Path(reference["path"]), reference["state"])
 
 
-def _graph_fixture(project, _runtime):
-    (project / "graft").mkdir(exist_ok=True)
-    (project / "graft/fixture").write_bytes(b"synthetic native output")
-
-
-def _synthetic_smoke(manifest):
-    """Smoke-only native report double bound to one manifest's revisions.
-
-    Writes synthetic validation-evidence files; does not prove a real host
-    deployment (合成 smoke 夹具；不证明真实 host 部署。).
-    """
-    records = {project["root"]: project for project in manifest["payload"]["projects"]}
-
-    def smoke(project, smoke_runtime, evidence_dir):
-        record = records[str(project)]
-        source_ref, head = record["source_ref"], record["head"]
-        label = (
-            source_ref
-            if source_ref is not None
-            else "HEAD" if head is not None else "non-git"
-        )
-        revision = "dirty" if head is not None else "unknown"
-        moment = datetime.now(timezone.utc).isoformat()
-        stem = (
-            "api-report-graft-smoke-"
-            + hashlib.sha256(str(project).encode()).hexdigest()[:16]
-            + "-"
-            + datetime.now(timezone.utc).strftime("%Y_%m_%d-%H_%M_%S-%f")
-        )
-        report_path = evidence_dir / (stem + ".json")
-        summary_path = evidence_dir / (stem + ".md")
-        envelope_path = evidence_dir / (stem + ".evidence.json")
-        summary_path.write_text(
-            "合成 smoke 摘要；不证明真实 host 部署。\n", encoding="utf-8"
-        )
-        raw = {
-            "repositoryKey": hashlib.sha256(str(project).encode()).hexdigest(),
-            "projectRoot": str(project),
-            "sourceRef": label,
-            "sourceCommit": head,
-            "worktreeState": revision,
-            "sourceRevision": revision,
-            "evidenceSource": "developer-local",
-            "trigger": "manual",
-            "environmentAlignment": "verified",
-            "evidencePublication": "local-only",
-            "e2eMode": "smoke-only",
-            "mockStrategy": "none",
-            "startedAt": moment,
-            "finishedAt": moment,
-            "command": [smoke_runtime["node"], smoke_runtime["cli"], "check", "."],
-            "stdout": "synthetic native output",
-            "stderr": "",
-            "exitCode": 0,
-            "processExitCode": 0,
-            "timedOut": False,
-        }
-        report_path.write_text(json.dumps(raw), encoding="utf-8")
-        envelope = {
-            "schemaVersion": 1,
-            "runId": "followup-smoke",
-            "createdAt": moment,
-            "evidenceSource": "developer-local",
-            "trigger": "manual",
-            "repository": {
-                "repositoryKey": raw["repositoryKey"],
-                "sourceRef": label,
-                "sourceCommit": head,
-                "worktreeState": revision,
-            },
-            "sourceRevision": revision,
-            "environmentAlignment": "verified",
-            "e2eMode": "smoke-only",
-            "mockStrategy": "none",
-            "featureSources": [],
-            "reports": [
-                {
-                    "testType": "api",
-                    "path": str(report_path),
-                    "summaryMd": str(summary_path),
-                    "sha256": hashlib.sha256(report_path.read_bytes()).hexdigest(),
-                    "status": "passed",
-                    "mode": "smoke-only",
-                }
-            ],
-            "evidencePublication": "local-only",
-            "secretsRedacted": True,
-        }
-        envelope_path.write_text(json.dumps(envelope), encoding="utf-8")
-        return [
-            {"path": str(path), "state": snapshot(path)}
-            for path in (report_path, envelope_path, summary_path)
-        ]
-
-    return smoke
 
 
 def _failed_copy(path, kind, destination):
@@ -189,7 +87,7 @@ def _focused_installation_templates(case):
     Normal test cleanup restores the unfiltered selection; nested catalog
     patches still compose through the same module attribute.
     """
-    real_catalog = sbtd_graft_deployment._installation_templates
+    real_catalog = sbtd_deployment._installation_templates
 
     def focused(roots, *, omp_agents_target=None):
         return [
@@ -199,7 +97,7 @@ def _focused_installation_templates(case):
             or operation.target.name in _FOCUSED_SKILL_DIRECTORIES
         ]
 
-    patcher = mock.patch("sbtd_graft_deployment._installation_templates", new=focused)
+    patcher = mock.patch("sbtd_deployment._installation_templates", new=focused)
     case.addCleanup(patcher.stop)
     patcher.start()
 
@@ -218,8 +116,7 @@ class FollowupMigration:
     """Isolated original -> codex deployment -> verified cleanup predecessor.
 
     Reusable context manager driving the real stage entry points against an
-    isolated HOME; only the three native boundaries are labeled smoke-only
-    doubles. ``build()`` leaves a complete codex predecessor whose five
+    isolated HOME. ``build()`` leaves a complete Codex predecessor whose five
     private documents feed plan_migration's followup kwargs. With
     ``via_successor`` the deployment chain runs on a successor batch
     (original stays deployment-less); otherwise the original batch deploys
@@ -244,7 +141,7 @@ class FollowupMigration:
             "USERPROFILE": str(self.home),
             "CODEX_HOME": str(self.home / ".codex"),
             "AGENT_SKILLS_DIR": str(self.home / ".agent/skills"),
-            "PI_CODING_AGENT_DIR": str(self.home / ".omp/agent"),
+            "PI_CODING_AGENT_DIR": "",
             "PI_CONFIG_DIR": ".omp",
             "OMP_PROFILE": "default",
             "PI_PROFILE": "default",
@@ -299,38 +196,10 @@ class FollowupMigration:
                 env={**os.environ, **self.environment},
             )
 
-    def deployment_mocks(self, manifest_document, *, rebuild_graph=True):
-        """Smoke-only native boundary doubles (不证明真实 host 部署)."""
-        graph = (
-            _graph_fixture
-            if rebuild_graph
-            else AssertionError("completed graph must not be rebuilt")
-        )
-        stack = contextlib.ExitStack()
-        stack.enter_context(
-            mock.patch(
-                "sbtd_graft_deployment.verified_runtime", return_value=dict(_RUNTIME)
-            )
-        )
-        stack.enter_context(
-            mock.patch(
-                "sbtd_graft_deployment.build_project_graph", side_effect=graph
-            )
-        )
-        stack.enter_context(
-            mock.patch(
-                "sbtd_graft_deployment.run_project_smoke",
-                side_effect=_synthetic_smoke(manifest_document),
-            )
-        )
-        return stack
-
     def execute_deployment(
         self, manifest_path, apply_path, output_path, *, previous_path=None,
-        rebuild_graph=True,
     ):
         """Real load_deployment_context + execute_migration_deployment."""
-        document = json.loads(manifest_path.read_bytes())
         with mock.patch.dict(os.environ, self.environment):
             context = load_deployment_context(
                 manifest_path,
@@ -341,8 +210,7 @@ class FollowupMigration:
                 roots=self.roots,
                 hooks_authorized=False,
             )
-            with self.deployment_mocks(document, rebuild_graph=rebuild_graph):
-                return execute_migration_deployment(context)
+            return execute_migration_deployment(context)
 
     def build(self):
         with mock.patch.dict(os.environ, self.environment):
@@ -475,7 +343,7 @@ class FollowupMigration:
 
     def deploy_followup(
         self, manifest_path, apply_path, *, previous_path=None,
-        rebuild_graph=True, output_name="deployment.json",
+        output_name="deployment.json",
     ):
         output_path = self.followup_evidence / output_name
         result, code = self.execute_deployment(
@@ -483,7 +351,6 @@ class FollowupMigration:
             apply_path,
             output_path,
             previous_path=previous_path,
-            rebuild_graph=rebuild_graph,
         )
         return result, code, output_path
 
@@ -600,7 +467,7 @@ class FollowupNoTouchAgentsTests(unittest.TestCase):
                     for operation in successor_project["private_operations"]
                     if operation["phase"] == "deploy"
                 ],
-                ["build-graft"],
+                [],
             )
             self.assertEqual((fixture.root / "AGENTS.md").read_bytes(), template)
 
@@ -622,7 +489,7 @@ class FollowupNoTouchAgentsTests(unittest.TestCase):
                     for operation in followup_project["private_operations"]
                     if operation["phase"] == "deploy"
                 ],
-                ["build-graft"],
+                [],
             )
             self.assertEqual((fixture.root / "AGENTS.md").read_bytes(), template)
 
@@ -632,12 +499,13 @@ class FollowupBatchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             fixture = FollowupMigration(Path(directory).resolve())
             fixture.build()
-            # Actual predecessor transitions: legacy tree cleaned, codex
-            # deployment present, no OMP wiring yet.
+            # The Codex predecessor installed its rules, not the absent OMP
+            # domain. The followup must create the real OMP rules target.
             self.assertFalse((fixture.root / ".trellis").exists())
-            codex_config = fixture.home / ".codex/config.toml"
-            self.assertTrue(codex_config.is_file())
-            self.assertFalse((fixture.home / ".omp/agent/mcp.json").exists())
+            codex_rules = fixture.home / ".codex/AGENTS.md"
+            omp_rules = fixture.home / ".omp/agent/AGENTS.md"
+            self.assertEqual(codex_rules.read_bytes(), GLOBAL_AGENTS_TEMPLATE.read_bytes())
+            self.assertFalse(omp_rules.exists())
             retained = fixture.verification["payload"]["projects"][0][
                 "retained_assets"
             ]
@@ -647,7 +515,7 @@ class FollowupBatchTests(unittest.TestCase):
             }
             gitignore_bytes = (fixture.root / ".gitignore").read_bytes()
             proof = fixture.predecessor_proof()
-            codex_config_bytes = codex_config.read_bytes()
+            codex_rules_bytes = codex_rules.read_bytes()
             untouched = snapshot(fixture.base)
 
             followup = fixture.plan_followup()
@@ -719,27 +587,29 @@ class FollowupBatchTests(unittest.TestCase):
                 chain["receipt"]["apply_id"],
             )
             self.assertIsNone(chain["deployment"]["payload"]["previous_deployment_id"])
-            # Actual followup transition: OMP wiring appeared.
-            target = fixture.home / ".omp/agent/mcp.json"
-            servers = json.loads(target.read_text(encoding="utf-8"))["mcpServers"]
-            self.assertEqual(len(servers), 1)
-            server = next(iter(servers.values()))
-            self.assertEqual(server["command"], _RUNTIME["python"])
-            self.assertEqual(
-                server["args"][2],
-                str(
-                    fixture.home
-                    / ".agent/skills/sbtd-workflow-onboard/scripts/sbtd_graft_entry.py"
-                ),
-            )
-            self.assertNotIn("cwd", server)
-            self.assertNotIn("--root", server["args"])
+            shared_deploy = [
+                operation
+                for operation in followup["payload"]["shared_operations"]
+                if operation["phase"] == "deploy"
+            ]
+            self.assertTrue(shared_deploy)
+            for operation in shared_deploy:
+                self.assertNotIn(
+                    operation["change"]["kind"], {"build-graft", "configure-graft"}
+                )
+                self.assertEqual(
+                    snapshot(Path(operation["target"])),
+                    operation["change"]["source_ref"]["state"],
+                )
+            self.assertEqual(omp_rules.read_bytes(), codex_rules_bytes)
+            self.assertFalse((fixture.home / ".omp/agent/mcp.json").exists())
+            self.assertFalse((fixture.home / ".codex/config.toml").exists())
             self.assertFalse((fixture.home / ".codex/hooks.json").exists())
             self.assertEqual(chain["verification"]["payload"]["status"], "verified")
             self.assertEqual(chain["cleanup_receipt"]["payload"]["status"], "cleaned")
-            # Non-overwritten predecessor resources keep their exact bytes.
-            self.assertEqual(codex_config.read_bytes(), codex_config_bytes)
-            self.assertIn(
+            # Re-declared canonical Codex rules keep their exact bytes.
+            self.assertEqual(codex_rules.read_bytes(), codex_rules_bytes)
+            self.assertNotIn(
                 b"<!-- graft:start -->", (fixture.root / "AGENTS.md").read_bytes()
             )
             self.assertFalse((fixture.root / ".trellis").exists())
@@ -775,10 +645,9 @@ class FollowupBatchTests(unittest.TestCase):
             fixture = FollowupMigration(Path(directory).resolve())
             fixture.build()
             agents = fixture.root / "AGENTS.md"
-            agents.write_bytes(agents.read_bytes() + b"\nUser customization\n")
-            # Plan AFTER the host-side append: the sealed before-state binds
-            # the live managed-section outcome, so apply and deploy accept
-            # the drifted file and the render keeps fence-outside text.
+            customized = agents.read_bytes() + b"\nUser customization\n"
+            agents.write_bytes(customized)
+            # The followup installs shared resources, not unsigned project rules.
             followup = fixture.plan_followup()
             applied, code, manifest_path = fixture.apply_followup(followup)
             self.assertEqual(code, 0, applied)
@@ -788,9 +657,7 @@ class FollowupBatchTests(unittest.TestCase):
             )
             result, code, _path = fixture.deploy_followup(manifest_path, apply_path)
             self.assertEqual(code, 0, result)
-            self.assertIn(
-                "User customization", agents.read_text(encoding="utf-8")
-            )
+            self.assertEqual(agents.read_bytes(), customized)
 
     def test_sibling_followups_share_one_predecessor(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -875,12 +742,12 @@ class FollowupBatchTests(unittest.TestCase):
                 manifest_path,
                 apply_path,
                 previous_path=deployment_path,
-                rebuild_graph=False,
                 output_name="deployment-retry.json",
             )
             self.assertEqual(code, 0, retried)
             self.assertEqual(retried["status"], "succeeded")
             second = retried["deploymentEvidence"]["evidence"]["payload"]
+            self.assertEqual(second["shared_results"], first_deployment["payload"]["shared_results"])
             self.assertEqual(
                 second["previous_deployment_id"],
                 first_deployment["deployment_id"],
@@ -911,7 +778,11 @@ class FollowupBatchTests(unittest.TestCase):
                 again["migration"]["cleanup_receipt"]["payload"]["previous_receipt_id"],
                 first_cleanup["cleanup_id"],
             )
-            self.assertTrue((fixture.home / ".omp/agent/mcp.json").is_file())
+            self.assertEqual(
+                (fixture.home / ".omp/agent/AGENTS.md").read_bytes(),
+                GLOBAL_AGENTS_TEMPLATE.read_bytes(),
+            )
+            self.assertFalse((fixture.home / ".omp/agent/mcp.json").exists())
             assert_proof_intact(self, proof)
 
     def test_followup_recovery_restores_before_followup_state(self):
@@ -919,10 +790,22 @@ class FollowupBatchTests(unittest.TestCase):
             fixture = FollowupMigration(Path(directory).resolve())
             fixture.build()
             proof = fixture.predecessor_proof()
-            codex_config_bytes = (fixture.home / ".codex/config.toml").read_bytes()
+            codex_rules = fixture.home / ".codex/AGENTS.md"
+            codex_before = codex_rules.read_bytes()
+            codex_mode = stat.S_IMODE(codex_rules.stat().st_mode)
+            project_rules = fixture.root / "AGENTS.md"
+            project_before = project_rules.read_bytes()
+            target = fixture.home / ".omp/agent/AGENTS.md"
+            self.assertFalse(target.exists())
             chain = fixture.complete_followup()
-            target = fixture.home / ".omp/agent/mcp.json"
-            self.assertTrue(target.is_file())
+            operation = next(
+                operation
+                for operation in chain["manifest"]["payload"]["shared_operations"]
+                if operation["phase"] == "deploy" and operation["target"] == str(target)
+            )
+            absent = {"type": "absent", "checksum": None}
+            self.assertEqual(operation["before_requirement"], {"kind": "state", "state": absent})
+            self.assertEqual(target.read_bytes(), GLOBAL_AGENTS_TEMPLATE.read_bytes())
             with mock.patch.dict(os.environ, fixture.environment):
                 envelope, code = plan_recovery(
                     chain["manifest_path"],
@@ -933,6 +816,11 @@ class FollowupBatchTests(unittest.TestCase):
             self.assertEqual(code, 0, envelope)
             plan = envelope["recovery"]["plan"]
             self.assertEqual(plan["payload"]["target"], "pre-apply")
+            step = next(
+                item for item in plan["payload"]["steps"]
+                if item["resource_id"] == operation["resource_id"]
+            )
+            self.assertEqual((step["phase"], step["restore_to"]), ("deploy", absent))
             plan_path = fixture.followup_evidence / "recovery-plan.json"
             save_document(
                 plan_path, plan, private_root=fixture.followup_evidence
@@ -946,21 +834,16 @@ class FollowupBatchTests(unittest.TestCase):
             receipt = restored["recovery"]["receipt"]
             self.assertEqual(receipt["payload"]["status"], "restored")
             self.assertEqual(receipt["payload"]["pending_step_ids"], [])
-            # Recovery goes to before-followup: OMP wiring is gone again.
+            # Restore the originally absent rules file, not the parent directory.
             self.assertFalse(target.exists())
-            # The predecessor codex deployment is not rolled back.
-            self.assertEqual(
-                (fixture.home / ".codex/config.toml").read_bytes(),
-                codex_config_bytes,
-            )
-            agents = (fixture.root / "AGENTS.md").read_bytes()
-            self.assertIn(b"<!-- graft:start -->", agents)
-            self.assertNotIn(b"TRELLIS:START", agents)
+            self.assertTrue(target.parent.is_dir())
+            self.assertEqual(codex_rules.read_bytes(), codex_before)
+            self.assertEqual(stat.S_IMODE(codex_rules.stat().st_mode), codex_mode)
+            self.assertEqual(project_rules.read_bytes(), project_before)
             # The cleaned legacy tree stays cleaned; recovery is not a
             # rollback to the original legacy tree.
             self.assertFalse((fixture.root / ".trellis").exists())
-            # A completed recovery retries as already-complete even though
-            # the followup-created OMP directory is absent again.
+            # A completed recovery retries against the latest proven absence.
             receipt_path = fixture.followup_evidence / (
                 "recovery-" + receipt["receipt_id"] + ".json"
             )
@@ -1129,26 +1012,31 @@ class FollowupPredecessorGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             fixture = FollowupMigration(Path(directory).resolve())
             fixture.build()
-            config = fixture.home / ".codex/config.toml"
-            changed = config.read_bytes().replace(b'DNT = "1"', b'DNT = "0"', 1)
-            assert changed != config.read_bytes()
-            config.write_bytes(changed)
+            rules = fixture.home / ".codex/AGENTS.md"
+            changed = rules.read_bytes() + b"\n# Operator rule\n"
+            rules.write_bytes(changed)
             with self.assertRaises(ContractError) as error:
                 fixture.plan_followup()
             self.assertEqual(error.exception.code, "state-conflict")
+            self.assertEqual(rules.read_bytes(), changed)
 
         with tempfile.TemporaryDirectory() as directory:
             fixture = FollowupMigration(Path(directory).resolve())
             fixture.build()
-            agents = fixture.root / "AGENTS.md"
-            changed = agents.read_bytes().replace(
-                b"<!-- graft:start -->\n", b"<!-- graft:start -->\nedited\n", 1
+            # The original apply owns the migrated developer file. Unsigned
+            # project AGENTS.md is foreign and cannot serve as a drift witness.
+            original = json.loads(fixture.original_manifest_path.read_bytes())
+            operation = next(
+                op for op in original["payload"]["projects"][0]["private_operations"]
+                if op["phase"] == "apply" and op["change"]["kind"] == "migrate-developer"
             )
-            assert changed != agents.read_bytes()
-            agents.write_bytes(changed)
+            target = Path(operation["target"])
+            changed = target.read_bytes() + b"\nedited\n"
+            target.write_bytes(changed)
             with self.assertRaises(ContractError) as error:
                 fixture.plan_followup()
             self.assertEqual(error.exception.code, "state-conflict")
+            self.assertEqual(target.read_bytes(), changed)
 
         with tempfile.TemporaryDirectory() as directory:
             fixture = FollowupMigration(Path(directory).resolve())
@@ -1162,7 +1050,7 @@ class FollowupPredecessorGateTests(unittest.TestCase):
             with self.assertRaises(ContractError) as error:
                 fixture.apply_followup(followup)
             self.assertEqual(error.exception.code, "state-conflict")
-            self.assertFalse((fixture.home / ".omp/agent/mcp.json").exists())
+            self.assertFalse((fixture.home / ".omp/agent/AGENTS.md").exists())
 
     def test_followup_rejects_foreign_scope(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1296,17 +1184,33 @@ class FollowupPredecessorGateTests(unittest.TestCase):
     def test_followup_rejects_missing_predecessor_backup(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = FollowupMigration(Path(directory).resolve())
+            # An existing canonical resource yields a real deploy-stage backup.
+            target = fixture.home / ".codex/AGENTS.md"
+            target.parent.mkdir(mode=0o700)
+            original = GLOBAL_AGENTS_TEMPLATE.read_bytes()
+            target.write_bytes(original)
+            if os.name == "posix":
+                target.chmod(0o640)
+            original_mode = stat.S_IMODE(target.stat().st_mode)
             fixture.build()
-            backup = next(
-                result["backup_ref"]
-                for project in fixture.deployment["payload"]["projects"]
-                for result in project["private_results"]
-                if result["backup_ref"] is not None
+            operation = next(
+                item for item in fixture.manifest["payload"]["shared_operations"]
+                if item["phase"] == "deploy" and item["target"] == str(target)
             )
-            Path(backup["path"]).unlink()
+            row = next(
+                item for item in fixture.deployment["payload"]["shared_results"]
+                if item["resource_id"] == operation["resource_id"]
+            )
+            self.assertIsNotNone(row["backup_ref"])
+            backup = Path(row["backup_ref"]["path"])
+            self.assertEqual(backup.read_bytes(), original)
+            self.assertEqual(stat.S_IMODE(backup.stat().st_mode), original_mode)
+            backup.unlink()
+            before = snapshot(fixture.base)
             with self.assertRaises(ContractError) as error:
                 fixture.plan_followup()
             self.assertEqual(error.exception.code, "original-unavailable")
+            self.assertEqual(snapshot(fixture.base), before)
 
 
 class FollowupOperationTamperingTests(unittest.TestCase):
@@ -1382,26 +1286,23 @@ class FollowupOperationTamperingTests(unittest.TestCase):
             def flip_mode(payload):
                 payload["deployment"]["mode"] = "init-projects"
 
-            def inject_hooks(payload):
-                mcp = next(
-                    operation
-                    for operation in payload["shared_operations"]
-                    if operation["selector"] == "graft-omp-mcp"
-                )
-                mcp["selector"] = "graft-hooks"
-                mcp["operation_id"] = contracts.operation_id(
-                    "deploy", mcp["resource_id"], "graft-hooks"
-                )
-                for project in payload["projects"]:
-                    project["shared_operation_ids"] = sorted(
-                        mcp["operation_id"]
-                        if operation_id
-                        == contracts.operation_id(
-                            "deploy", mcp["resource_id"], "graft-omp-mcp"
-                        )
-                        else operation_id
-                        for operation_id in project["shared_operation_ids"]
-                    )
+            def legacy_project_wiring(payload):
+                from tests.onboard_contract_fixtures import legacy_graft_operation, legacy_graft_versions
+                from tests.test_sbtd_migration_rc3_graft import RC2_ONBOARD
+
+                payload["tool_versions"] = legacy_graft_versions(RC2_ONBOARD)
+                project = payload["projects"][0]
+                root = Path(project["root"])
+                project["private_operations"].extend((
+                    legacy_graft_operation(
+                        target=str(root / "graft"), owner_kind="directory", selector="whole-resource",
+                        kind="build-graft", dependents=[str(root)],
+                    ),
+                    legacy_graft_operation(
+                        target=str(root / "AGENTS.md"), owner_kind="markdown", selector="graft-agents",
+                        kind="configure-graft", dependents=[str(root)], before=snapshot(root / "AGENTS.md"),
+                    ),
+                ))
 
             def flip_requirement(payload):
                 operation = next(
@@ -1418,7 +1319,6 @@ class FollowupOperationTamperingTests(unittest.TestCase):
             cases = [
                 ("platform", flip_platform, "semantic-violation"),
                 ("mode", flip_mode, "semantic-violation"),
-                ("hooks", inject_hooks, "semantic-violation"),
                 ("phase-after requirement", flip_requirement, "semantic-violation"),
             ]
             for name, mutate, code in cases:
@@ -1429,6 +1329,21 @@ class FollowupOperationTamperingTests(unittest.TestCase):
                 ):
                     validate_legacy_inputs(variant(mutate), _reader)
                 self.assertEqual(error.exception.code, code)
+
+            historical = variant(legacy_project_wiring)
+            with self.assertRaises(ContractError) as missing_shared_mcp:
+                sbtd_deployment.validate_archived_graft_declarations(historical["payload"])
+            self.assertEqual(missing_shared_mcp.exception.code, "semantic-violation")
+            historical_path = fixture.followup_evidence / "rc2-followup.json"
+            save_document(historical_path, historical, private_root=fixture.followup_evidence)
+            before = snapshot(fixture.base)
+            with (
+                mock.patch.dict(os.environ, fixture.environment),
+                self.assertRaises(ContractError) as failure,
+            ):
+                apply_migration(historical_path, confirmed=True, no_routing_approvals=True)
+            self.assertEqual(failure.exception.code, "unsupported-in-rc.3")
+            self.assertEqual(snapshot(fixture.base), before)
 
         with tempfile.TemporaryDirectory() as directory:
             fixture = FollowupMigration(Path(directory).resolve())
@@ -1451,45 +1366,22 @@ class FollowupOperationTamperingTests(unittest.TestCase):
             with self.assertRaises(ContractError):
                 contracts.validate_document(document, "manifest")
 
-    def test_resealed_generated_prestate_cannot_adopt_user_changes(self):
+    def test_resealed_installation_prestate_cannot_adopt_user_changes(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = FollowupMigration(Path(directory).resolve())
             fixture.build()
             followup = fixture.plan_followup()
-            agents = fixture.root / "AGENTS.md"
-            original_agents = agents.read_bytes()
-            graph_extra = fixture.root / "graft" / "unowned.txt"
-            # Fence-outside drift is lawful under section ownership: the
-            # resealed before-state matches the live managed-section
-            # outcome, so the closure revalidation accepts it.
             payload = copy.deepcopy(followup["payload"])
             operation = next(
                 item
-                for item in payload["projects"][0]["private_operations"]
-                if item["change"]["kind"] == "configure-graft"
-            )
-            try:
-                agents.write_bytes(original_agents + b"\nUser customization\n")
-                operation["before_requirement"] = {
-                    "kind": "state",
-                    "state": snapshot(agents),
-                }
-                resealed = contracts.seal_document("manifest", payload)
-                with mock.patch.dict(os.environ, fixture.environment):
-                    validate_legacy_inputs(resealed, _reader)
-            finally:
-                agents.write_bytes(original_agents)
-            # A whole-resource graft directory still rejects adopted drift.
-            payload = copy.deepcopy(followup["payload"])
-            operation = next(
-                item
-                for item in payload["projects"][0]["private_operations"]
-                if item["change"]["kind"] == "build-graft"
+                for item in payload["shared_operations"]
+                if item["change"]["kind"] == "copy-directory"
             )
             target = Path(operation["target"])
+            extra = target / "unowned.txt"
+            extra.write_bytes(b"User installation data")
+            customized = snapshot(target)
             try:
-                graph_extra.write_bytes(b"User graph data")
-                customized = snapshot(target)
                 operation["before_requirement"] = {
                     "kind": "state",
                     "state": customized,
@@ -1500,7 +1392,7 @@ class FollowupOperationTamperingTests(unittest.TestCase):
                 self.assertEqual(error.exception.code, "ownership-conflict")
                 self.assertEqual(snapshot(target), customized)
             finally:
-                graph_extra.unlink(missing_ok=True)
+                extra.unlink(missing_ok=True)
 
     def test_dropped_deploy_operation_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1509,18 +1401,12 @@ class FollowupOperationTamperingTests(unittest.TestCase):
             followup = fixture.plan_followup()
             shared = followup["payload"]["shared_operations"]
             self.assertTrue(shared)
-            mcp = next(
-                operation
-                for operation in shared
-                if operation["selector"] == "graft-omp-mcp"
-            )
             template = next(
                 operation
                 for operation in shared
                 if operation["change"]["kind"] in {"copy-file", "copy-directory"}
             )
             cases = [
-                ("mcp resource", mcp, "semantic-violation"),
                 ("installation template", template, "semantic-violation"),
             ]
             for name, dropped, code in cases:
@@ -1573,7 +1459,7 @@ class FollowupOperationTamperingTests(unittest.TestCase):
                 fixture.apply_followup(resealed)
             self.assertEqual(error.exception.code, "semantic-violation")
             self.assertEqual(_tree_bytes(fixture.root), before)
-            self.assertFalse((fixture.home / ".omp/agent/mcp.json").exists())
+            self.assertFalse((fixture.home / ".omp/agent/AGENTS.md").exists())
 
 
 if __name__ == "__main__":

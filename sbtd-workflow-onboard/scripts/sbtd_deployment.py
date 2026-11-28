@@ -1,8 +1,9 @@
-"""Shared host deployment resources and fixed-policy native graph generation.
+"""Shared host deployment resources without Graft generation.
 
-The public installer owns confirmation and dispatch. This module owns only the
-selected Codex or OMP deployment resources; migration data/apply/cleanup are
-separate stages.
+The public installer owns confirmation and dispatch. This module owns Codex
+or OMP installation-template deployment, approved project AGENTS preservation,
+and the authenticated migration-init context. Sealed Graft operations are
+refused before any write.
 """
 
 from __future__ import annotations
@@ -12,18 +13,14 @@ import hashlib
 import json
 import os
 import stat
-import subprocess
-import sys
-import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, NoReturn
 
 import onboard_contracts as contracts
-from graft_runtime import GRAFT_PINNED_VERSION, _locate_package, check_graft
-from sbtd_migration import _LEGACY_TREE, _prepare_target_parents, _project_revision
+from sbtd_migration import _LEGACY_TREE, _prepare_target_parents
 from sbtd_migration_files import (
     _canonical,
     _lstat,
@@ -38,341 +35,299 @@ from sbtd_migration_files import (
 
 _PACKAGE = Path(__file__).resolve().parents[1]
 _ABSENT = {"type": "absent", "checksum": None}
-_SAFE_OPTS = {"global": False, "mcp": False, "hooks": False, "statusline": False}
+_LEGACY_KINDS = frozenset({"build-graft", "configure-graft"})
+_LEGACY_SELECTORS = frozenset(
+    {"graft-agents", "graft-mcp", "graft-hooks", "graft-omp-mcp"}
+)
+_UNSUPPORTED = (
+    "unsupported-in-rc.3",
+    "a sealed plan still contains Graft operations; regenerate the plan",
+)
+APPROVED_AGENTS = "approved-agents"
 
 
 def _fail(code: str, message: str, exit_code: int = 2) -> NoReturn:
     raise contracts.ContractError(code, message, exit_code=exit_code)
 
 
-def policy_reference() -> dict[str, Any]:
-    reference = {
-        "path": str(contracts.GRAFT_BUILD_POLICY_PATH),
-        "state": {"type": "file", "checksum": contracts.GRAFT_BUILD_POLICY_SHA256},
-    }
-    read_file(Path(reference["path"]), reference["state"])
-    return reference
+def graft_operation(operation: Mapping[str, Any]) -> bool:
+    """True for a sealed Graft kind or selector. Does not read or write."""
+    change = operation.get("change")
+    kind = change.get("kind") if isinstance(change, Mapping) else None
+    return kind in _LEGACY_KINDS or operation.get("selector") in _LEGACY_SELECTORS
 
 
-def _operation(
-    target: Path,
-    owner_kind: str,
-    selector: str,
-    kind: str,
-    dependents: Sequence[str],
-    earlier: Sequence[Mapping[str, Any]],
-) -> dict[str, Any]:
-    resource = contracts.resource_id(owner_kind, str(target))
-    prior = [operation for operation in earlier if operation["target"] == str(target)]
-    if prior and any(operation["owner_kind"] != owner_kind for operation in prior):
-        _fail(
-            "ownership-conflict", "deployment cannot change a physical resource owner"
-        )
-    requirement = (
-        {"kind": "phase-after", "phase": "apply", "resource_id": resource}
-        if prior
-        else {"kind": "state", "state": snapshot(target)}
-    )
-    policy = policy_reference()
-    return {
-        "phase": "deploy",
-        "resource_id": resource,
-        "operation_id": contracts.operation_id("deploy", resource, selector),
-        "owner_kind": owner_kind,
-        "target": str(target),
-        "selector": selector,
-        "change": {"kind": kind, "source_ref": policy},
-        "ownership": {"kind": "template-source", "reference": policy},
-        "before_requirement": requirement,
-        "dependent_projects": sorted(dependents),
-    }
+def legacy_graft_operations(payload: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    found: list[Mapping[str, Any]] = []
+    for project in payload.get("projects", ()):
+        for operation in project.get("private_operations", ()):
+            if graft_operation(operation):
+                found.append(operation)
+    for operation in payload.get("shared_operations", ()):
+        if graft_operation(operation):
+            found.append(operation)
+    return found
 
 
-def deployment_operations(
-    projects: Sequence[Mapping[str, Any]],
-    *,
-    codex_home: Path | None = None,
-    omp_home: Path | None = None,
-    platform: str = "codex",
-    hooks_authorized: bool = False,
-    shared_operations: Sequence[Mapping[str, Any]] = (),
-) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]]]:
-    """Read-only declarations; no package execution or authorization inference."""
+def _deployment_platform(declaration: Mapping[str, Any], *, shared: bool) -> str:
+    expected_mode = "init" if shared else "init-projects"
+    if declaration["mode"] != expected_mode:
+        _fail("scope-conflict", "the deployment mode does not match its operation set")
+    platform = declaration["platform"]
     if platform not in {"codex", "omp"}:
         _fail(
             "invalid-argument", "the deployment platform must be explicitly supported"
         )
-    private: dict[str, list[dict[str, Any]]] = {}
-    roots = sorted(project["root"] for project in projects)
-    for project in projects:
-        root = Path(project["root"])
-        prior = project["private_operations"]
-        operations: list[dict[str, Any]] = []
-        if project.get("agents_no_touch") is None:
-            operations.append(
-                _operation(
-                    root / "AGENTS.md",
-                    "markdown",
-                    "graft-agents",
-                    "configure-graft",
-                    [str(root)],
-                    prior,
-                )
-            )
-        # A sealed no-touch proof preserves the exact aligned AGENTS.md, so
-        # no fence is appended; the graph build is independent capability
-        # and stays declared either way.
-        operations.append(
-            _operation(
-                root / "graft",
-                "directory",
-                "whole-resource",
-                "build-graft",
-                [str(root)],
-                prior,
-            )
-        )
-        private[str(root)] = operations
-    shared = []
-    if platform == "codex" and codex_home is not None:
-        shared.append(
-            _operation(
-                codex_home / "config.toml",
-                "toml",
-                "graft-mcp",
-                "configure-graft",
-                roots,
-                shared_operations,
-            )
-        )
-        if hooks_authorized:
-            shared.append(
-                _operation(
-                    codex_home / "hooks.json",
-                    "json",
-                    "graft-hooks",
-                    "configure-graft",
-                    roots,
-                    shared_operations,
-                )
-            )
-    elif platform == "omp":
-        if hooks_authorized:
-            _fail("scope-conflict", "OMP deployment does not include Codex hooks")
-        if omp_home is not None:
-            shared.append(
-                _operation(
-                    omp_home / "mcp.json",
-                    "json",
-                    "graft-omp-mcp",
-                    "configure-graft",
-                    roots,
-                    shared_operations,
-                )
-            )
-    elif hooks_authorized:
-        _fail("scope-conflict", "project-only deployment cannot authorize global hooks")
-    return private, shared
-
-
-def _validate_selected_root_batch(roots: Sequence[Path]) -> None:
-    """Reject nested selected roots before any runtime probe or deployment write."""
-    ordered = sorted(roots)
-    for index, root in enumerate(ordered):
-        for other in ordered[index + 1 :]:
-            if root.samefile(other):
-                _fail(
-                    "scope-conflict",
-                    "selected Graft roots must not identify the same physical repository",
-                )
-            if root.is_relative_to(other) or other.is_relative_to(root):
-                _fail(
-                    "scope-conflict",
-                    "selected Graft roots must not overlap or contain another selected root",
-                )
-
-
-def verified_runtime() -> dict[str, str]:
-    """Resolve the existing verified installation; never install or upgrade."""
-    from sbtd_graft_entry import validate_runtime
-
-    found = check_graft()
-    node = found.get("node")
-    if (
-        found.get("status") != "available"
-        or not isinstance(node, dict)
-        or not node.get("compatible")
-    ):
+    if platform == "codex" and declaration["inputs"]:
         _fail(
-            "runtime-unavailable",
-            "the pinned native Graft installation must be available before deployment",
+            "scope-conflict",
+            "the sealed deployment does not match the Codex producer",
         )
-    executable = found.get("path")
-    located = _locate_package(str(executable)) if executable else None
-    if located is None or located[1] != GRAFT_PINNED_VERSION:
+    return platform
+
+
+def validate_archived_graft_declarations(payload: Mapping[str, Any]) -> None:
+    """Read-only structural check. Does not write and does not grant execution.
+
+    Project graphs and fences bind the frozen policy. Shared configuration
+    binds the recorded host scope and discovery paths, not the current host.
+    """
+    declaration = payload["deployment"]
+    if declaration is None:
         _fail(
-            "runtime-unavailable", "the selected Graft executable identity is unproven"
+            "semantic-violation",
+            "deployment operations require an explicit deployment declaration",
         )
-    node_path = Path(str(node["path"])).resolve(strict=True)
-    cli = located[0] / "dist/cli.js"
-    validate_runtime(node_path, cli)
-    return {
-        "node": str(node_path),
-        "cli": str(cli),
-        "python": str(Path(sys.executable).absolute()),
-    }
-
-
-def launch_bindings(
-    roots: Sequence[Path], runtime: Mapping[str, str], *, package_root: Path
-) -> list[dict[str, str]]:
-    binding = {
-        "node": runtime["node"],
-        "cli": runtime["cli"],
-        "python": runtime["python"],
-        "launcher": str(package_root / "scripts/sbtd_graft_entry.py"),
-    }
-    return [{**binding, "root": str(root)} for root in roots] or [binding]
-
-
-def _run_native(
-    root: Path, runtime: Mapping[str, str], arguments: Sequence[str]
-) -> subprocess.CompletedProcess[str]:
-    from sbtd_graft_entry import (
-        _seed_update_cache,
-        managed_environment,
-        validate_build_scope,
-    )
-
-    validate_build_scope(root)
-    with tempfile.TemporaryDirectory(prefix="sbtd-graft-native-") as directory:
-        home = Path(directory).resolve()
-        environment = managed_environment(root, home)
-        _seed_update_cache(home)
-        try:
-            return subprocess.run(
-                [runtime["node"], runtime["cli"], *arguments],
-                cwd=root,
-                env=environment,
-                text=True,
-                capture_output=True,
-                timeout=900,
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired):
+    shared = [
+        operation for operation in payload["shared_operations"]
+        if operation["phase"] == "deploy"
+    ]
+    platform = _deployment_platform(declaration, shared=bool(shared))
+    operations = legacy_graft_operations(payload)
+    if not operations:
+        _fail(
+            "semantic-violation",
+            "archived Graft validation requires the sealed Graft deploy set",
+        )
+    policy = contracts.archived_graft_policy_for(payload)
+    for operation in operations:
+        if operation.get("phase") != "deploy":
             _fail(
-                "native-operation-failed",
-                "the fixed Graft operation did not complete",
-                5,
+                "semantic-violation",
+                "Graft generation is restricted to deployment",
             )
-
-
-def build_project_graph(root: Path, runtime: Mapping[str, str]) -> dict[str, Any]:
-    """Explicit generation only; no live native init or auto-reconciliation."""
-    from sbtd_graft_entry import (
-        validate_build_scope,
-        validate_project,
-        validate_runtime,
-    )
-
-    policy_reference()
-    validate_runtime(Path(runtime["node"]), Path(runtime["cli"]))
-    _project_revision(root)
-    validate_build_scope(root)
-    graph = root / "graft"
-    if snapshot(graph)["type"] not in {"absent", "directory"}:
-        _fail("ownership-conflict", "the graph target is not an ordinary directory")
-    stamp_path = graph / ".cache/wiring-stamp.json"
-    _prepare_target_parents(stamp_path, root)
-    before = snapshot(stamp_path)
-    stamp = {
-        "version": GRAFT_PINNED_VERSION,
-        "hosts": ["agents"],
-        "opts": dict(_SAFE_OPTS),
-        "at": datetime.now(timezone.utc).isoformat(),
-    }
-    write_file(stamp_path, contracts.canonical_json_bytes(stamp), before, scope=root)
-    completed = _run_native(
-        root, runtime, ["build", ".", "--no-gitignore", "--no-ignore"]
-    )
-    if completed.returncode != 0:
-        _fail("native-operation-failed", "the fixed Graft graph build failed", 5)
-    validate_project(root)
-    return {
-        "state": snapshot(graph),
-        "command": [
-            runtime["node"],
-            runtime["cli"],
-            "build",
-            ".",
-            "--no-gitignore",
-            "--no-ignore",
-        ],
-        "exitCode": completed.returncode,
-    }
-
-
-def render_configuration(
-    operation: Mapping[str, Any],
-    before: bytes,
-    bindings: Sequence[Mapping[str, Any]],
-    *,
-    install_template: bool = False,
-    retire_legacy: bool = False,
-    approved_body: bytes | None = None,
-) -> bytes:
-    from sbtd_codex_wiring import (
-        codex_hooks_candidate,
-        codex_mcp_candidate,
-        project_agents_candidate,
-    )
-
-    selector = operation["selector"]
-    if selector == "graft-agents":
-        if approved_body is not None:
-            # The migration manifest chain proves this exact approved body;
-            # deployment adds or refreshes only the managed fence around it.
-            return project_agents_candidate(approved_body)
-        if install_template:
-            from onboard import PROJECT_AGENTS_TEMPLATE
-
-            # This operation carries explicit replacement authorization, so
-            # obsolete malformed bytes must not block adding the managed fence.
-            before = read_file(PROJECT_AGENTS_TEMPLATE)
-        return project_agents_candidate(before)
-    if selector == "graft-mcp":
-        return codex_mcp_candidate(before, bindings, retire_legacy=retire_legacy)
-    if selector == "graft-omp-mcp":
-        from onboard import user_home
-        from sbtd_omp_sources import discover_omp_sources
-        from sbtd_omp_wiring import analyze_omp_configuration, omp_mcp_candidate
-
-        target = Path(operation["target"])
-        roots = [Path(binding["root"]) for binding in bindings if "root" in binding]
-        discovered = discover_omp_sources(roots, home=user_home(), environ=os.environ)
-        if discovered["target"] != str(target):
-            _fail("scope-conflict", "the OMP resource leaves the active profile")
-        if (
-            not before
-            and target.exists()
-            and target.stat().st_size == 0
-        ):
-            # A present but empty active document is invalid JSON, exactly as
-            # the live analysis has always enforced; only genuine absence
-            # renders from an empty document.
-            _fail("invalid-json", "the active OMP MCP configuration is not strict JSON")
-        analysis = analyze_omp_configuration(
-            target,
-            bindings,
-            discovered["sources"],
-            disabled_extensions=discovered["disabled_extensions"],
-            retire_legacy=retire_legacy,
-            active_bytes=before,
+        if operation.get("change", {}).get("source_ref") != policy:
+            _fail(
+                "ownership-conflict",
+                "a generated deployment policy was altered",
+            )
+    for project in payload.get("projects", ()):
+        expected = {
+            (str(Path(project["root"]) / "graft"), "build-graft", "whole-resource"),
+        }
+        if project.get("agents_no_touch") is None:
+            expected.add(
+                (
+                    str(Path(project["root"]) / "AGENTS.md"),
+                    "configure-graft",
+                    "graft-agents",
+                )
+            )
+        actual = [
+            (
+                operation.get("target"),
+                (operation.get("change") or {}).get("kind"),
+                operation.get("selector"),
+            )
+            for operation in project.get("private_operations", ())
+            if operation.get("phase") == "deploy"
+        ]
+        if len(actual) != len(expected) or set(actual) != expected:
+            _fail(
+                "semantic-violation",
+                "the complete private deployment set is missing or altered",
+            )
+    if not shared:
+        if declaration["inputs"]:
+            _fail("scope-conflict", "project-only deployment does not discover host inputs")
+        return
+    roots = sorted(project["root"] for project in payload["projects"])
+    if any(operation["dependent_projects"] != roots for operation in shared):
+        _fail(
+            "scope-conflict", "shared deployment requires the complete selected batch"
         )
-        return omp_mcp_candidate(before, analysis)
-    if selector == "graft-hooks":
-        return codex_hooks_candidate(before, bindings, authorized=True)
-    _fail("unsupported-operation", "the deployment selector is not supported")
+    codex = platform == "codex"
+    mcp_selector = "graft-mcp" if codex else "graft-omp-mcp"
+    mcp, hooks = [], []
+    for operation in shared:
+        if not graft_operation(operation):
+            continue
+        selector = operation["selector"]
+        if operation["change"]["kind"] == "configure-graft":
+            if selector == mcp_selector:
+                mcp.append(operation["target"])
+                continue
+            if codex and selector == "graft-hooks":
+                hooks.append(operation["target"])
+                continue
+        _fail("scope-conflict", "shared Graft resources do not match the sealed platform")
+    if len(mcp) != 1:
+        _fail(
+            "semantic-violation",
+            f"shared {'Codex' if codex else 'OMP'} deployment requires one complete MCP resource",
+        )
+    if codex:
+        homes = [
+            Path(record["path"]) for record in payload["shared_roots"]
+            if record["kind"] == "codex-home"
+        ]
+        if len(homes) != 1 or mcp[0] != str(homes[0] / "config.toml"):
+            _fail("scope-conflict", "the MCP resource must bind one sealed Codex HOME")
+        if len(hooks) > 1 or (hooks and hooks[0] != str(homes[0] / "hooks.json")):
+            _fail("scope-conflict", "at most one hook resource may bind the sealed Codex HOME")
+    else:
+        # rc.2 always sealed both provider settings and the alternate MCP
+        # file beside mcp.json, even when those read-only inputs were absent.
+        inputs = {Path(reference["path"]) for reference in declaration["inputs"]}
+        agents = {
+            path.parent for path in inputs
+            if path.name == ".mcp.json"
+            and path.with_name("config.yml") in inputs
+            and path.with_name("config.yaml") in inputs
+        }
+        if len(agents) != 1:
+            _fail("scope-conflict", "the archived OMP inputs must seal one agent directory")
+        agent = agents.pop()
+        if mcp[0] != str(agent / "mcp.json") or not any(
+            record["kind"] == "omp-home" and agent.is_relative_to(Path(record["path"]))
+            for record in payload["shared_roots"]
+        ):
+            _fail("scope-conflict", "the MCP resource leaves the sealed OMP agent directory")
+
+    # Validate the recorded installation sources without reading an old package.
+    package = Path(policy["path"]).parent.parent
+    tuple(contracts.archived_installation_references(payload, package))
+
+
+def reject_legacy_execution(payload: Mapping[str, Any]) -> None:
+    """Refuse Graft deployment before any write. Does not grant write authority."""
+    if legacy_graft_operations(payload):
+        _fail(*_UNSUPPORTED)
+
+
+def approved_agents_selector(body: bytes) -> str:
+    """Selector seals the pause-stripped body digest. Not a vault path."""
+    return APPROVED_AGENTS + ":" + hashlib.sha256(body).hexdigest()
+
+
+def _is_approved_agents(operation: Mapping[str, Any]) -> bool:
+    selector = operation.get("selector")
+    return isinstance(selector, str) and selector.startswith(APPROVED_AGENTS + ":")
+
+
+def _declare_approved_agents(
+    payload: Mapping[str, Any],
+    private: dict[str, list[dict[str, Any]]],
+    *,
+    check_live: bool,
+) -> None:
+    """Seal the signed candidate and the projected body digest. No write."""
+    if payload.get("followup") is not None:
+        return
+    from sbtd_migration_plan import (
+        _routing_rows,
+        approved_agents_provenance,
+        project_approved_body,
+    )
+
+    origin, bodies = approved_agents_provenance({"payload": payload})
+    if not bodies:
+        return
+    projects = {project["root"]: project for project in payload["projects"]}
+    for _place, root, operation in _routing_rows(origin["payload"]):
+        if operation["ownership"].get("role") != "demo-project":
+            continue
+        target = operation["target"]
+        body = bodies.get(target)
+        if body is None:
+            continue
+        project = projects.get(str(root))
+        if project is None:
+            _fail(
+                "scope-conflict",
+                "an approved project AGENTS root is outside the batch",
+            )
+        if project.get("agents_no_touch") is not None:
+            _fail(
+                "scope-conflict",
+                "an untouched AGENTS file cannot take an approved deployment",
+            )
+        candidate = operation["change"]["source_ref"]
+        if project_approved_body(candidate) != body:
+            _fail(
+                "candidate-conflict",
+                "the approved projection does not match its signed candidate",
+            )
+        selector = approved_agents_selector(body)
+        resource = contracts.resource_id("markdown", target)
+        apply_here = [
+            item
+            for item in project["private_operations"]
+            if item["phase"] == "apply"
+            and item["target"] == target
+            and item["selector"] == "approved-routing-replacement"
+        ]
+        if apply_here:
+            if len(apply_here) != 1:
+                _fail(
+                    "semantic-violation",
+                    "approved project AGENTS has conflicting apply operations",
+                )
+            requirement = {
+                "kind": "phase-after",
+                "phase": "apply",
+                "resource_id": resource,
+            }
+        else:
+            requirement = {"kind": "state", "state": dict(candidate["state"])}
+            if check_live and snapshot(Path(target)) != candidate["state"]:
+                _fail(
+                    "state-conflict",
+                    "approved project AGENTS is not the paused candidate",
+                )
+        private[str(root)].append(
+            {
+                "phase": "deploy",
+                "resource_id": resource,
+                "operation_id": contracts.operation_id("deploy", resource, selector),
+                "owner_kind": "markdown",
+                "target": target,
+                "selector": selector,
+                "change": {"kind": "ensure-file-block", "source_ref": dict(candidate)},
+                "ownership": {
+                    "kind": "approved-candidate",
+                    "reference": dict(candidate),
+                    "approval_ref": copy.deepcopy(
+                        operation["ownership"]["approval_ref"]
+                    ),
+                    "role": "demo-project",
+                },
+                "before_requirement": requirement,
+                "dependent_projects": [str(root)],
+            }
+        )
+
+
+def _approved_agents_body(operation: Mapping[str, Any]) -> bytes:
+    from sbtd_migration_plan import project_approved_body
+
+    body = project_approved_body(operation["change"]["source_ref"])
+    if operation["selector"] != approved_agents_selector(body):
+        _fail(
+            "candidate-conflict",
+            "the sealed projection digest does not match the signed candidate",
+        )
+    return body
 
 
 def execute_resource(
@@ -382,14 +337,10 @@ def execute_resource(
     root: Path,
     private_root: Path,
     backup_path: Path,
-    bindings: Sequence[Mapping[str, Any]],
-    runtime: Mapping[str, str],
-    launcher_state: Mapping[str, Any],
-    install_template: bool = False,
-    retire_legacy: bool = False,
-    approved_body: bytes | None = None,
 ) -> dict[str, Any]:
     """One observed resource result; caller persists cumulative stage evidence."""
+    if graft_operation(operation):
+        _fail(*_UNSUPPORTED)
     result: dict[str, Any] = {
         "phase": "deploy",
         "resource_id": operation["resource_id"],
@@ -409,35 +360,12 @@ def execute_resource(
         if before != expected:
             _fail("state-conflict", "the deployment resource changed before execution")
         kind = operation["change"]["kind"]
-        if (
-            kind in {"build-graft", "configure-graft"}
-            and operation["change"]["source_ref"] != policy_reference()
-        ):
-            _fail(
-                "ownership-conflict",
-                "the deployment policy does not match this runtime",
-            )
-        candidate = None
-        before_bytes = b""
-        if operation["change"]["kind"] == "configure-graft":
-            before_bytes = (
-                b"" if before["type"] == "absent" else read_file(target, before)
-            )
-            candidate = render_configuration(
-                operation,
-                before_bytes,
-                bindings,
-                install_template=install_template,
-                retire_legacy=retire_legacy,
-                approved_body=approved_body,
-            )
-        if operation["selector"] in {"graft-mcp", "graft-hooks", "graft-omp-mcp"}:
-            installed_package = Path(bindings[0]["launcher"]).parents[1]
-            if snapshot(installed_package) != launcher_state:
-                _fail(
-                    "runtime-unavailable",
-                    "the canonical installed launcher is missing or has drifted",
-                )
+        body = None
+        if _is_approved_agents(operation):
+            body = _approved_agents_body(operation)
+            live = b"" if before["type"] == "absent" else read_file(target, before)
+        elif kind not in {"copy-file", "copy-directory"}:
+            _fail("unsupported-operation", "the deployment operation is not supported")
         root_info = _lstat(_canonical(root))
         if root_info is None:
             root.mkdir(parents=True, mode=0o700)
@@ -460,13 +388,11 @@ def execute_resource(
                 "the deployment resource changed while retaining its original",
             )
         started = True
-        if candidate is not None:
-            if candidate != before_bytes:
+        if body is not None:
+            if live != body:
                 _prepare_target_parents(target, root)
-                write_file(target, candidate, before, scope=root)
-        elif operation["change"]["kind"] == "build-graft":
-            build_project_graph(root, runtime)
-        elif kind in {"copy-file", "copy-directory"}:
+                write_file(target, body, before, scope=root)
+        else:
             _prepare_target_parents(target, root)
             install_reference(
                 operation["change"]["source_ref"],
@@ -475,8 +401,6 @@ def execute_resource(
                 scope=root,
                 backup_ref=result.get("backup_ref"),
             )
-        else:
-            _fail("unsupported-operation", "the deployment operation is not supported")
         result.update(status="succeeded", after=snapshot(target), error=None)
     except (contracts.ContractError, OSError, RuntimeError):
         result["status"] = "failed" if started else "blocked"
@@ -492,33 +416,16 @@ def execute_resource(
     return result
 
 
-def _omp_agents_template_target(
-    platform: str, omp_home: Path | None
-) -> Path | None:
-    """The OMP global rules target an OMP init deployment implicitly creates.
 
-    The installer catalog includes the OMP global AGENTS.md when the OMP root
-    already exists or an explicit selector (PI_CODING_AGENT_DIR or a named
-    profile) points at the agent directory; otherwise an OMP deployment itself
-    creates the default root with its MCP write. Naming the target explicitly
-    keeps the canonical set identical at plan time and at every later
-    re-derivation.
-    """
-    if platform != "omp" or omp_home is None:
-        return None
-    from onboard import detect_omp_root, omp_agents_target
 
-    target, explicit = omp_agents_target()
-    if explicit or detect_omp_root() is not None:
+
+def _omp_agents_template_target(platform: str) -> Path | None:
+    """An explicit OMP migration includes global rules even for a new root."""
+    if platform != "omp":
         return None
-    # No explicit selector and the default config root is absent: the
-    # deployment's MCP write creates that root, so the installer catalog
-    # skips the AGENTS.md and it must be named here. Guard that the
-    # discovered agent dir is the resolved default one.
-    try:
-        omp_home.resolve().relative_to(target.parent.resolve())
-    except (OSError, ValueError, RuntimeError):
-        return None
+    from onboard import omp_agents_target
+
+    target, _explicit = omp_agents_target()
     return target.resolve()
 
 
@@ -574,14 +481,14 @@ def attach_deployment(
         user_home,
     )
     from onboard import omp_agents_target as resolve_omp_agents_target
-    from sbtd_migration_plan import _ignore_operation
+    from sbtd_migration_plan import _ignore_operation, _requires_local_protection
 
     if platform not in {"codex", "omp"}:
         _fail(
             "invalid-argument", "the deployment platform must be explicitly supported"
         )
-    if platform != "codex" and hooks_authorized:
-        _fail("scope-conflict", "OMP deployment does not include Codex hooks")
+    if hooks_authorized:
+        _fail(*_UNSUPPORTED)
     roots = sorted(project["root"] for project in payload["projects"])
     if project_only and payload["shared_operations"]:
         _fail(
@@ -590,37 +497,33 @@ def attach_deployment(
         )
     codex_home = None if project_only else default_codex_home()
     discovery = None
-    omp_home = None
     if platform == "omp" and not project_only:
         from sbtd_omp_sources import discover_omp_sources
 
         discovery = discover_omp_sources(
             [Path(root) for root in roots], home=user_home(), environ=os.environ
         )
-        omp_home = Path(discovery["agent_dir"])
-    omp_agents_target = _omp_agents_template_target(platform, omp_home)
-    private, shared = deployment_operations(
-        payload["projects"],
-        codex_home=codex_home if platform == "codex" else None,
-        omp_home=omp_home,
-        platform=platform,
-        hooks_authorized=hooks_authorized,
-        shared_operations=payload["shared_operations"],
-    )
+    omp_agents_target = None if project_only else _omp_agents_template_target(platform)
+    reject_legacy_execution(payload)
+    private: dict[str, list[dict[str, Any]]] = {
+        project["root"]: [] for project in payload["projects"]
+    }
+    shared: list[dict[str, Any]] = []
+    _declare_approved_agents(payload, private, check_live=True)
     payload["deployment"] = {
         "mode": "init-projects" if project_only else "init",
         "platform": platform,
         "inputs": list(discovery["inputs"]) if discovery is not None else [],
     }
     for project in payload["projects"]:
-        if not any(
-            operation["owner_kind"] == "gitignore"
-            for operation in project["private_operations"]
+        operations = project["private_operations"]
+        operations.extend(private[project["root"]])
+        if _requires_local_protection(operations) and not any(
+            operation["owner_kind"] == "gitignore" for operation in operations
         ):
             protection = _ignore_operation(Path(project["root"]))
             if protection is not None:
-                project["private_operations"].insert(0, protection)
-        project["private_operations"].extend(private[project["root"]])
+                operations.insert(0, protection)
     if codex_home is not None:
         if not any(
             record["path"] == str(codex_home) for record in payload["shared_roots"]
@@ -653,17 +556,6 @@ def attach_deployment(
                     "dependent_projects": roots,
                 }
             )
-            if omp_home is not None and not any(
-                omp_home.is_relative_to(Path(record["path"]))
-                for record in payload["shared_roots"]
-            ):
-                payload["shared_roots"].append(
-                    {
-                        "kind": "omp-home",
-                        "path": str(omp_home),
-                        "dependent_projects": roots,
-                    }
-                )
         obsolete_skills_roots = [
             record
             for record in payload["shared_roots"]
@@ -801,6 +693,12 @@ def attach_deployment(
             for operation in payload["shared_operations"]
             if project["root"] in operation["dependent_projects"]
         )
+    has_deploy = any(
+        operation["phase"] == "deploy"
+        for operation in contracts._manifest_operations(payload)
+    )
+    if not has_deploy and not contracts._is_zero_write_project_successor(payload):
+        payload["deployment"] = None
 
 
 def _declared_operations(
@@ -925,11 +823,10 @@ def _cleanup_safe_input_drift(
       footprint gate. Global skill retirement writes exactly its validated
       operation target via ``remove_reference`` after preserving the
       verified original. No OMP input byte selects or steers either path.
-    - Scope and ownership: every declared operation target (which also
-      covers every retained asset, including the MCP write target), the
-      exact selected project roots, the private backup vault and every
-      ownership/source reference an operation binds are sealed in the
-      payload and re-validated by the caller; a drifted input must not
+    - Scope and ownership: every declared operation target (including every
+      retained asset), the exact selected project roots, the private backup
+      vault and every ownership/source reference are sealed in the payload
+      and re-validated by the caller; a drifted input must not
       overlap any of them in either direction, so it cannot be a cleanup
       target, a retained asset, a backup or recovery input, or an
       ownership anchor. The input path set stays closed: new or vanished
@@ -951,10 +848,9 @@ def _cleanup_safe_input_drift(
       operations and the bound verification candidates, backups and stage
       receipts — never from deployment-discovery inputs; receipt-proven
       input changes keep their historical chained acceptance here.
-    - Live binding checks stay live: the active profile, target and agent
-      directory are still re-derived from the current environment and the
-      MCP resource must still match them; only byte equality of the proven
-      irrelevant inputs is not re-run.
+    - Live binding checks stay live: discovery is re-derived from the current
+      environment, and the canonical installation targets must still match
+      the sealed writes. Only byte equality of irrelevant inputs is waived.
 
     Acceptance is limited to inputs whose sealed and live states are both
     ordinary files or genuine absence; a forged non-file sealed state or
@@ -1059,12 +955,74 @@ def _cleanup_safe_input_drift(
     return ignored
 
 
+def _check_approved_agents_declarations(payload: Mapping[str, Any]) -> None:
+    expected: dict[str, list[dict[str, Any]]] = {
+        project["root"]: [] for project in payload["projects"]
+    }
+    _declare_approved_agents(payload, expected, check_live=False)
+    for project in payload["projects"]:
+        actual = [
+            operation
+            for operation in project["private_operations"]
+            if operation["phase"] == "deploy"
+        ]
+        if actual != expected[project["root"]]:
+            _fail(
+                "semantic-violation",
+                "the approved project AGENTS deployment set was changed",
+            )
+
+
+def _check_installation_prestate(
+    payload: Mapping[str, Any],
+    operation: Mapping[str, Any],
+    successor_embedded: Mapping[str, Any],
+    followup_owned: Mapping[str, Any],
+) -> None:
+    target, resource = operation["target"], operation["resource_id"]
+    paused = [
+        earlier
+        for earlier in payload["shared_operations"]
+        if earlier["phase"] == "apply"
+        and earlier["target"] == target
+        and earlier["selector"] == "pause-legacy-routing"
+    ]
+    requirement = operation["before_requirement"]
+    if paused or successor_embedded.get(resource) is not None:
+        if len(paused) > 1 or requirement != {
+            "kind": "phase-after",
+            "phase": "apply",
+            "resource_id": resource,
+        }:
+            _fail(
+                "ownership-conflict",
+                "global routing must follow its exact paused predecessor",
+            )
+    elif followup_owned.get(resource) is not None:
+        # A followup batch can replace only the proven predecessor outcome.
+        if requirement != {"kind": "state", "state": followup_owned[resource]}:
+            _fail(
+                "ownership-conflict",
+                "a followup replacement must start from the exact "
+                "predecessor deployment outcome",
+            )
+    elif requirement["kind"] != "state" or requirement["state"] not in (
+        _ABSENT,
+        operation["change"]["source_ref"]["state"],
+    ):
+        _fail(
+            "ownership-conflict",
+            "an installation target has unrecognized customized content",
+        )
+
+
 def validate_deployment_declarations(
     payload: Mapping[str, Any],
     *,
     followup_deployed: Mapping[str, Any] | None = None,
     stage_results: Mapping[str, Mapping[str, Any]] | None = None,
     cleanup_only: bool = False,
+    readonly_legacy: bool = False,
 ) -> list[dict[str, Any]] | None:
     """Re-derive the closed deploy write set without trusting a resealed list.
 
@@ -1076,7 +1034,7 @@ def validate_deployment_declarations(
     then returned, sorted by path; every other caller keeps the historical
     proven-change rule and a None return.
     """
-    from onboard import default_codex_home
+
 
     ignored: list[dict[str, Any]] = []
     roots = sorted(project["root"] for project in payload["projects"])
@@ -1107,132 +1065,53 @@ def validate_deployment_declarations(
         if operation["phase"] == "deploy"
     ]
     declaration = payload["deployment"]
-    if not all_deploy:
-        if declaration is not None:
+    if declaration is None:
+        if all_deploy:
             _fail(
                 "semantic-violation",
-                "a deployment declaration requires declared deployment operations",
+                "deployment operations require an explicit deployment declaration",
             )
         return ignored if cleanup_only else None
-    if declaration is None:
+    if not all_deploy and not contracts._is_zero_write_project_successor(payload):
         _fail(
             "semantic-violation",
-            "deployment operations require an explicit deployment declaration",
+            "a deployment declaration requires declared deployment operations",
         )
-    expected_mode = "init" if shared_deploy else "init-projects"
-    if declaration["mode"] != expected_mode:
-        _fail("scope-conflict", "the deployment mode does not match its operation set")
-    platform = declaration["platform"]
-    if platform not in {"codex", "omp"}:
-        _fail(
-            "invalid-argument", "the deployment platform must be explicitly supported"
-        )
-    if platform == "codex" and declaration["inputs"]:
-        _fail(
-            "scope-conflict",
-            "the sealed deployment does not match the Codex producer",
-        )
-    for project in payload["projects"]:
-        expected = {
-            (str(Path(project["root"]) / "graft"), "build-graft", "whole-resource"),
-        }
-        if project.get("agents_no_touch") is None:
-            expected.add(
-                (
-                    str(Path(project["root"]) / "AGENTS.md"),
-                    "configure-graft",
-                    "graft-agents",
-                )
-            )
-        actual = {
-            (operation["target"], operation["change"]["kind"], operation["selector"])
-            for operation in project["private_operations"]
-            if operation["phase"] == "deploy"
-        }
-        if actual != expected:
-            _fail(
-                "semantic-violation",
-                "the complete private deployment set is missing or altered",
-            )
-    for operation in all_deploy:
-        if (
-            operation["change"]["kind"] in {"build-graft", "configure-graft"}
-            and operation["change"]["source_ref"] != policy_reference()
-        ):
-            _fail("ownership-conflict", "a generated deployment policy was altered")
-    shared = [
-        operation
-        for operation in payload["shared_operations"]
-        if operation["phase"] == "deploy"
-    ]
+    legacy = legacy_graft_operations(payload)
+    if legacy and readonly_legacy:
+        validate_archived_graft_declarations(payload)
+        for operation in shared_deploy:
+            if not graft_operation(operation):
+                _check_installation_prestate(payload, operation, successor_embedded, followup_owned)
+        return ignored if cleanup_only else None
+    platform = _deployment_platform(declaration, shared=bool(shared_deploy))
+    if legacy:
+        reject_legacy_execution(payload)
+    # Empty successor deployments must still prove no signed project writes
+    # were dropped. They do not grant authority over unsigned project rules.
+    _check_approved_agents_declarations(payload)
+    shared = shared_deploy
     if not shared:
         if payload["shared_operations"]:
             _fail(
                 "scope-conflict",
                 "shared legacy operations require their declared deployment",
             )
+        if not all_deploy:
+            from sbtd_migration_plan import _check_agents_no_touch_untouched
+
+            for project in payload["projects"]:
+                _check_agents_no_touch_untouched(project)
         return ignored if cleanup_only else None
     if any(operation["dependent_projects"] != roots for operation in shared):
         _fail(
             "scope-conflict", "shared deployment requires the complete selected batch"
         )
-    if platform == "codex":
-        if any(operation["selector"] == "graft-omp-mcp" for operation in all_deploy):
-            _fail("scope-conflict", "Codex deployment cannot declare OMP resources")
-        mcp = [
-            operation for operation in shared if operation["selector"] == "graft-mcp"
-        ]
-        if len(mcp) != 1:
-            _fail(
-                "semantic-violation",
-                "shared Codex deployment requires one complete MCP resource",
-            )
-        active_home = default_codex_home()
-        codex_roots = [
-            record
-            for record in payload["shared_roots"]
-            if record["kind"] == "codex-home"
-        ]
-        if len(codex_roots) != 1 or codex_roots[0]["path"] != str(active_home):
-            _fail(
-                "scope-conflict", "deployment must bind the current active Codex HOME"
-            )
-        expected_mcp = active_home / "config.toml"
-        if mcp[0]["target"] != str(expected_mcp):
-            _fail(
-                "scope-conflict",
-                "the MCP resource leaves the current active Codex HOME",
-            )
-        hooks = [
-            operation for operation in shared if operation["selector"] == "graft-hooks"
-        ]
-        if len(hooks) > 1 or any(
-            operation["target"] != str(active_home / "hooks.json")
-            for operation in hooks
-        ):
-            _fail(
-                "scope-conflict",
-                "the hook resource leaves the current active Codex HOME",
-            )
-    else:
+    discovered = None
+    if platform == "omp":
         from onboard import user_home
         from sbtd_omp_sources import discover_omp_sources
 
-        if any(
-            operation["selector"] in {"graft-mcp", "graft-hooks"}
-            for operation in shared
-        ):
-            _fail("scope-conflict", "OMP deployment cannot declare Codex resources")
-        mcp = [
-            operation
-            for operation in shared
-            if operation["selector"] == "graft-omp-mcp"
-        ]
-        if len(mcp) != 1:
-            _fail(
-                "semantic-violation",
-                "shared OMP deployment requires one complete MCP resource",
-            )
         discovered = discover_omp_sources(
             [Path(root) for root in roots], home=user_home(), environ=os.environ
         )
@@ -1251,23 +1130,14 @@ def validate_deployment_declarations(
                     discovered["inputs"],
                     stage_results,
                 )
-        if mcp[0]["target"] != discovered["target"]:
-            _fail("scope-conflict", "the MCP resource leaves the active OMP profile")
-    omp_agents_target = _omp_agents_template_target(
-        platform,
-        Path(discovered["agent_dir"]) if platform == "omp" else None,
-    )
+    omp_agents_target = _omp_agents_template_target(platform)
     templates = {
         str(operation.target): operation
         for operation in _installation_templates(
             roots, omp_agents_target=omp_agents_target
         )
     }
-    copied = {
-        operation["target"]: operation
-        for operation in shared
-        if operation["change"]["kind"] != "configure-graft"
-    }
+    copied = {operation["target"]: operation for operation in shared}
     if set(copied) != set(templates):
         _fail(
             "semantic-violation",
@@ -1292,51 +1162,7 @@ def validate_deployment_declarations(
                 "ownership-conflict",
                 "an installation deployment source is not canonical",
             )
-        paused = [
-            earlier
-            for earlier in payload["shared_operations"]
-            if earlier["phase"] == "apply"
-            and earlier["target"] == target
-            and earlier["selector"] == "pause-legacy-routing"
-        ]
-        requirement = operation["before_requirement"]
-        expected = {
-            "kind": "phase-after",
-            "phase": "apply",
-            "resource_id": operation["resource_id"],
-        }
-        if paused:
-            if len(paused) != 1 or requirement != expected:
-                _fail(
-                    "ownership-conflict",
-                    "global routing must follow its exact paused predecessor",
-                )
-        elif successor_embedded.get(operation["resource_id"]) is not None:
-            if requirement != expected:
-                _fail(
-                    "ownership-conflict",
-                    "global routing must follow its exact paused predecessor",
-                )
-        elif followup_owned.get(operation["resource_id"]) is not None:
-            # A followup batch replaces a predecessor-owned target only from
-            # that exact proven deployment outcome, sealed as concrete state.
-            if requirement != {
-                "kind": "state",
-                "state": followup_owned[operation["resource_id"]],
-            }:
-                _fail(
-                    "ownership-conflict",
-                    "a followup replacement must start from the exact "
-                    "predecessor deployment outcome",
-                )
-        elif requirement["kind"] != "state" or requirement["state"] not in (
-            _ABSENT,
-            source["state"],
-        ):
-            _fail(
-                "ownership-conflict",
-                "an installation target has unrecognized customized content",
-            )
+        _check_installation_prestate(payload, operation, successor_embedded, followup_owned)
     return ignored if cleanup_only else None
 
 
@@ -1351,6 +1177,8 @@ class DeploymentContext:
     expected_before: dict[str, Mapping[str, Any]]
     manifest_raw: bytes
     apply_raw: bytes
+    context_paths: tuple[Path, Path]
+    smoke_dirs: dict[str, Path]
 
 
 def _require_output_clear_of_missing(
@@ -1373,6 +1201,71 @@ def _require_output_clear_of_missing(
         )
 
 
+def _deployment_protected_paths(
+    manifest: Mapping[str, Any],
+    applied: Mapping[str, Any],
+    previous: Mapping[str, Any] | None = None,
+) -> set[Path]:
+    from sbtd_migration import _result_index, _source_backup_paths
+
+    payload = manifest["payload"]
+    protected = {
+        Path(reference["path"])
+        for reference in contracts._manifest_input_references(payload)
+    }
+    protected.update(Path(project["root"]) for project in payload["projects"])
+    routing = payload["routing_approvals"]
+    if routing is not None:
+        protected.add(Path(routing["path"]))
+    if previous is not None and (reconciliation := previous["payload"].get("reconciliation")):
+        protected.update(
+            Path(reconciliation[key]["path"])
+            for key in ("manifest_ref", "apply_receipt_ref", "missing_deployment_evidence")
+        )
+    protected.update(_source_backup_paths(manifest).values())
+    stage_root = Path(payload["backup_root"]) / manifest["manifest_id"]
+    for operation in contracts._manifest_operations(payload):
+        protected.add(Path(operation["target"]))
+        protected.add(stage_root / operation["phase"] / operation["resource_id"])
+    results = [*_result_index(applied).values(), *_result_index(previous).values()]
+    successor = payload.get("successor")
+    if successor is not None:
+        protected.add(Path(successor["manifest_ref"]["path"]))
+        protected.add(Path(successor["apply_receipt_ref"]["path"]))
+        results.extend(successor["apply_results"])
+    for result in results:
+        if result["backup_ref"] is not None:
+            protected.add(Path(result["backup_ref"]["path"]))
+    return protected
+
+
+def _require_disjoint_evidence_path(path: Path, reserved: Iterable[Path]) -> None:
+    if any(contracts._publication_paths_overlap(str(path), str(other)) for other in reserved):
+        _fail("private-scope", "a deployment evidence path overlaps a declared or reserved object")
+
+
+def _check_smoke_directories(paths: Iterable[Path]) -> None:
+    for path in paths:
+        if _lstat(_canonical(path)) is not None:
+            require_private_directory(path)
+
+
+def _preflight_smoke_evidence_paths(
+    private_root: Path, roots: Iterable[str], *, reserved: Iterable[Path]
+) -> dict[str, Path]:
+    """Check the complete smoke write scope without creating directories."""
+    parent = private_root / "deployment-smoke"
+    paths = {
+        root: parent / hashlib.sha256(root.encode("utf-8")).hexdigest()
+        for root in roots
+    }
+    reserved_paths = tuple(reserved)
+    for path in (parent, *paths.values()):
+        _require_disjoint_evidence_path(path, reserved_paths)
+    _check_smoke_directories((parent, *paths.values()))
+    return paths
+
+
 def load_deployment_context(
     manifest_path: Path,
     apply_path: Path,
@@ -1391,6 +1284,7 @@ def load_deployment_context(
         _result_index,
         _validate_context,
     )
+    from sbtd_deployment_smoke import _require_canonical_input
 
     if mode not in {"init", "init-projects"}:
         _fail(
@@ -1430,15 +1324,6 @@ def load_deployment_context(
             "private-scope",
             "deployment evidence requires a new path inside the manifest directory",
         )
-    require_private_directory(output_path.parent)
-    if snapshot(output_path) != _ABSENT:
-        _fail("state-conflict", "the deployment evidence target already exists")
-    for protected_path, is_directory in _protected_followup_ancestry(manifest):
-        if contracts._publication_paths_overlap(str(output_path), str(protected_path)):
-            _fail(
-                "private-scope",
-                "deployment evidence must not overlap a protected predecessor object",
-            )
     if previous is not None:
         _require_output_clear_of_missing(output_path, previous["payload"])
     declared_roots = {project["root"] for project in manifest["payload"]["projects"]}
@@ -1459,7 +1344,7 @@ def load_deployment_context(
         for operation in manifest["payload"]["shared_operations"]
         if operation["phase"] == "deploy"
     ]
-    if not operations:
+    if not operations and not contracts._is_zero_write_project_successor(manifest["payload"]):
         _fail(
             "missing-deployment-plan",
             "this manifest contains no declared deployment operations",
@@ -1472,28 +1357,43 @@ def load_deployment_context(
     declaration = manifest["payload"]["deployment"]
     if declaration is None or declaration["mode"] != mode:
         _fail("scope-conflict", "the init entry must match the sealed deployment scope")
-    full_deployment = any(
-        operation["selector"] in {"graft-mcp", "graft-omp-mcp"}
-        for operation in operations
-    )
-    if full_deployment != (mode == "init"):
-        _fail("scope-conflict", "the init entry must match the sealed deployment scope")
-    planned_hooks = any(
+    reject_legacy_execution(manifest["payload"])
+    if hooks_authorized or any(
         operation["selector"] == "graft-hooks" for operation in operations
+    ):
+        _fail(*_UNSUPPORTED)
+    _require_canonical_input("manifest", manifest, manifest_raw)
+    _require_canonical_input("apply_receipt", applied, apply_raw)
+    managed = _deployment_protected_paths(manifest, applied, previous)
+    protected = _protected_followup_ancestry(manifest)
+    evidence_inputs = {manifest_path, apply_path}
+    if previous_path is not None:
+        evidence_inputs.add(previous_path)
+    stage_outputs = (
+        {Path(ref["path"]) for ref in contracts._immutable_stage_references(previous["payload"])}
+        if previous is not None
+        else set()
     )
-    if declaration["platform"] != "codex" and hooks_authorized:
-        _fail("scope-conflict", "OMP deployment does not include Codex hooks")
-    if planned_hooks != hooks_authorized:
-        _fail(
-            "authorization-conflict",
-            "hook authorization must exactly match the displayed deployment plan",
-        )
-    _validate_context(manifest_path, manifest, previous=applied, deployment=previous)
-    _check_source_backups(manifest)
-    from sbtd_graft_entry import validate_build_scope
-
-    for root in roots:
-        validate_build_scope(root)
+    reserved = managed | evidence_inputs | {path for path, _ in protected}
+    _require_disjoint_evidence_path(
+        output_path,
+        reserved | stage_outputs,
+    )
+    smoke_dirs = _preflight_smoke_evidence_paths(
+        private,
+        declared_roots,
+        reserved=reserved | {output_path},
+    )
+    require_private_directory(output_path.parent)
+    if snapshot(output_path) != _ABSENT:
+        _fail("state-conflict", "the deployment evidence target already exists")
+    try:
+        _validate_context(manifest_path, manifest, previous=applied, deployment=previous)
+        _check_source_backups(manifest)
+    except contracts.ContractError as error:
+        if error.code != "approved-routing-drift":
+            raise
+        _fail("state-conflict", error.message)
     applied_results, prior_results = _result_index(applied), _result_index(previous)
     resolution = contracts.resolution_stage_results(
         manifest["payload"], {"apply": applied_results}
@@ -1537,6 +1437,8 @@ def load_deployment_context(
         expected_before,
         manifest_raw,
         apply_raw,
+        (manifest_path, apply_path),
+        smoke_dirs,
     )
 
 
@@ -1578,6 +1480,14 @@ def _assemble_deployment_evidence(
     effective_reconciliation = (
         reconciliation if reconciliation is not None else prior_reconciliation
     )
+    prior_reports = (
+        {
+            project["root"]: project["report_refs"]
+            for project in context.previous["payload"]["projects"]
+        }
+        if prior_reconciliation is not None
+        else {}
+    )
     manifest = context.manifest
     projects: list[dict[str, Any]] = []
     shared_operations = [
@@ -1586,13 +1496,17 @@ def _assemble_deployment_evidence(
         if operation["phase"] == "deploy"
     ]
     finished = datetime.now(timezone.utc).isoformat()
-    window = {
+    window: dict[str, Any] = {
+        "manifest_id": manifest["manifest_id"],
+        "apply_id": context.applied["apply_id"],
         "started_at": context.started_at,
         "finished_at": finished,
         "previous_deployment_id": context.previous["deployment_id"]
         if context.previous
         else None,
     }
+    if effective_reconciliation is not None:
+        window["reconciliation"] = copy.deepcopy(dict(effective_reconciliation))
     for declared in manifest["payload"]["projects"]:
         root = declared["root"]
         private_operations = [
@@ -1623,8 +1537,20 @@ def _assemble_deployment_evidence(
             "source_ref": declared["source_ref"],
             "head": declared["head"],
             "status": status,
-            "reason": "deployment or smoke is incomplete",
-            "nextStep": "Preserve private evidence and resolve the recorded failure before retrying.",
+            "reason": (
+                "deployment resource execution failed"
+                if "failed" in statuses
+                else "project smoke failed"
+                if root in failed_smokes
+                else "deployment is incomplete"
+                if not complete
+                else "no project validation report is bound to this deployment"
+            ),
+            "nextStep": (
+                "Preserve private evidence and resolve the recorded failure before retrying."
+                if not complete or "failed" in statuses or root in failed_smokes
+                else "Bind a genuine validation report before treating this deployment as accepted."
+            ),
             "private_results": [
                 dict(results[rid]) for rid in sorted(private_ids) if rid in results
             ],
@@ -1644,6 +1570,12 @@ def _assemble_deployment_evidence(
                     epoch_started=context.applied["payload"]["finished_at"]
                     if context.previous
                     else None,
+                    context_paths=context.context_paths,
+                    verified_manifest=(
+                        manifest
+                        if project["report_refs"] == prior_reports.get(root)
+                        else None
+                    ),
                 )
             except contracts.ContractError:
                 project.update(
@@ -1655,8 +1587,6 @@ def _assemble_deployment_evidence(
         projects.append(project)
     shared_ids = {operation["resource_id"] for operation in shared_operations}
     payload = {
-        "manifest_id": manifest["manifest_id"],
-        "apply_id": context.applied["apply_id"],
         **window,
         "projects": projects,
         "shared_results": [
@@ -1669,8 +1599,6 @@ def _assemble_deployment_evidence(
             None,
         ),
     }
-    if effective_reconciliation is not None:
-        payload["reconciliation"] = copy.deepcopy(dict(effective_reconciliation))
     evidence = contracts.seal_document("deployment_evidence", payload)
     contracts.validate_cumulative(context.previous, evidence, "deployment_evidence")
     if effective_reconciliation is not None:
@@ -1742,126 +1670,135 @@ def save_deployment_evidence(
     return result
 
 
-def run_project_smoke(
-    root: Path, runtime: Mapping[str, str], evidence_dir: Path
+
+
+def collect_project_smoke(
+    root: Path,
+    evidence_dir: Path,
+    *,
+    context_paths: tuple[Path, Path],
 ) -> list[dict[str, Any]]:
-    """Real fixed local CLI check; report status never comes from a plan."""
-    from sbtd_graft_entry import validate_project, validate_runtime
+    """Fresh local check. Empty refs are failure, not success."""
+    from sbtd_deployment_smoke import run_project_smoke
 
-    validate_runtime(Path(runtime["node"]), Path(runtime["cli"]))
-    validate_project(root)
-    started = datetime.now(timezone.utc)
-    completed = _run_native(root, runtime, ["check", ".", "--json"])
-    finished = datetime.now(timezone.utc)
-    source_ref, head = _project_revision(root)
-    native_ref = (
-        source_ref
-        if source_ref is not None
-        else ("HEAD" if head is not None else "non-git")
-    )
-    worktree = "dirty" if head is not None else "unknown"
-    revision = "dirty" if head is not None else "unknown"
-    stem = (
-        "api-report-graft-smoke-"
-        + hashlib.sha256(str(root).encode()).hexdigest()[:16]
-        + "-"
-        + started.strftime("%Y_%m_%d-%H_%M_%S-%f")
-    )
-    report_path = evidence_dir / (stem + ".json")
-    summary_path = evidence_dir / (stem + ".md")
-    envelope_path = evidence_dir / (stem + ".evidence.json")
-    raw = {
-        "repositoryKey": hashlib.sha256(str(root).encode()).hexdigest(),
-        "projectRoot": str(root),
-        "sourceRef": native_ref,
-        "sourceCommit": head,
-        "worktreeState": worktree,
-        "sourceRevision": revision,
-        "evidenceSource": "developer-local",
-        "trigger": "manual",
-        "environmentAlignment": "verified",
-        "evidencePublication": "local-only",
-        "e2eMode": "smoke-only",
-        "mockStrategy": "none",
-        "startedAt": started.isoformat(),
-        "finishedAt": finished.isoformat(),
-        "command": [runtime["node"], runtime["cli"], "check", ".", "--json"],
-        "stdout": completed.stdout,
-        "stderr": completed.stderr,
-        "exitCode": completed.returncode,
-        "processExitCode": completed.returncode,
-        "timedOut": False,
-    }
-    require_private_directory(evidence_dir)
-    raw_ref = save_document(report_path, raw, private_root=evidence_dir)
-    summary = (
-        "# Graft 结构图部署 smoke\n\n"
-        "- 实际执行固定本地 Graft check，读取所选项目；不调用LLM/cloud。\n"
-        f"- 运行退出码：{completed.returncode}；模式smoke-only；非full-stack或模型行为证明。\n"
-        "- 原始命令、时间、项目/ref/OID、stdout/stderr见同stem私有JSON。\n"
-        "- 无HTTP endpoint；URI覆盖not-needed。此记录不替代真实host事件验证。\n"
-    )
-    write_file(summary_path, summary.encode(), _ABSENT, scope=evidence_dir)
-    envelope = {
-        "schemaVersion": 1,
-        "runId": stem,
-        "createdAt": finished.isoformat(),
-        "evidenceSource": "developer-local",
-        "trigger": "manual",
-        "repository": {
-            "repositoryKey": raw["repositoryKey"],
-            "sourceRef": native_ref,
-            "sourceCommit": head,
-            "worktreeState": worktree,
-        },
-        "sourceRevision": revision,
-        "environmentAlignment": "verified",
-        "e2eMode": "smoke-only",
-        "mockStrategy": "none",
-        "featureSources": [],
-        "reports": [
-            {
-                "testType": "api",
-                "path": str(report_path),
-                "summaryMd": str(summary_path),
-                "sha256": raw_ref["state"]["checksum"],
-                "status": "passed" if completed.returncode == 0 else "failed",
-                "mode": "smoke-only",
-            }
-        ],
-        "evidencePublication": "local-only",
-        "secretsRedacted": True,
-    }
-    envelope_ref = save_document(envelope_path, envelope, private_root=evidence_dir)
-    return [
-        raw_ref,
-        envelope_ref,
-        {"path": str(summary_path), "state": snapshot(summary_path)},
-    ]
+    refs = run_project_smoke(root, evidence_dir, context_paths=context_paths)
+    if not isinstance(refs, list) or len(refs) != 2:
+        _fail(
+            "report-acceptance",
+            "project smoke did not return its JSON report and summary",
+            3,
+        )
+    checked: list[dict[str, Any]] = []
+    for ref in refs:
+        if not isinstance(ref, Mapping) or "path" not in ref or "state" not in ref:
+            _fail("report-acceptance", "a smoke report reference is incomplete", 3)
+        path = Path(ref["path"])
+        if path == evidence_dir or not path.is_relative_to(evidence_dir):
+            _fail("private-scope", "a smoke report left its evidence directory")
+        if snapshot(path) != ref["state"]:
+            _fail("state-conflict", "a smoke report does not match its reference")
+        checked.append({"path": str(path), "state": dict(ref["state"])})
+    report, summary = (Path(item["path"]) for item in checked)
+    if report.suffix != ".json" or report.stem != summary.stem or summary.suffix == ".json":
+        _fail(
+            "report-acceptance",
+            "project smoke did not return its JSON report and same-stem summary",
+            3,
+        )
+    return checked
 
+
+def _completed_roots(
+    projects: Sequence[Mapping[str, Any]],
+    operations: Sequence[Mapping[str, Any]],
+    results: Mapping[str, Mapping[str, Any]],
+) -> list[str]:
+    completed: list[str] = []
+    for project in projects:
+        root = project["root"]
+        required = [
+            operation["resource_id"]
+            for operation in operations
+            if operation["phase"] == "deploy"
+            and (
+                root in operation["dependent_projects"]
+                or any(
+                    item["resource_id"] == operation["resource_id"]
+                    for item in project.get("private_operations", ())
+                    if item.get("phase") == "deploy"
+                )
+            )
+        ]
+        if all(
+            results.get(resource_id, {}).get("status") == "succeeded"
+            for resource_id in required
+        ):
+            completed.append(root)
+    return completed
+
+
+def _drifted_roots(
+    operations: Sequence[Mapping[str, Any]],
+    results: Mapping[str, Mapping[str, Any]],
+) -> set[str]:
+    failed: set[str] = set()
+    for operation in operations:
+        if operation.get("phase") != "deploy":
+            continue
+        result = results.get(operation["resource_id"])
+        if result is None or result.get("status") != "succeeded":
+            continue
+        try:
+            unchanged = snapshot(Path(operation["target"])) == result["after"]
+        except (contracts.ContractError, OSError, RuntimeError, ValueError):
+            unchanged = False
+        if not unchanged:
+            failed.update(operation["dependent_projects"])
+    return failed
+
+
+def run_completed_smokes(
+    projects: Sequence[Mapping[str, Any]],
+    operations: Sequence[Mapping[str, Any]],
+    results: Mapping[str, Mapping[str, Any]],
+    *,
+    evidence_dirs: Mapping[str, Path],
+    context_paths: tuple[Path, Path],
+    previous_reports: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
+) -> tuple[dict[str, list[dict[str, Any]]], set[str]]:
+    """Fresh smoke for completed roots only. Successful fresh refs replace prior refs.
+
+    Previous artifacts remain immutable and reserved by cumulative evidence validation.
+    """
+    reports: dict[str, list[dict[str, Any]]] = {
+        root: [dict(ref) for ref in refs]
+        for root, refs in (previous_reports or {}).items()
+    }
+    failed: set[str] = set()
+    for root in _completed_roots(projects, operations, results):
+        evidence_dir = evidence_dirs[root]
+        try:
+            require_private_directory(evidence_dir.parent, create=True)
+            require_private_directory(evidence_dir, create=True)
+            fresh = collect_project_smoke(
+                Path(root), evidence_dir, context_paths=context_paths
+            )
+        except (contracts.ContractError, OSError, RuntimeError, ValueError, ImportError):
+            failed.add(root)
+            continue
+        reports[root] = fresh
+    failed.update(_drifted_roots(operations, results))
+    return reports, failed
 
 def execute_migration_deployment(
     context: DeploymentContext,
 ) -> tuple[dict[str, Any], int]:
     """Execute only the sealed deploy closure and save truthful cumulative results."""
-    from onboard import resolve_global_skills_dir
-    from sbtd_migration import _result_index
+    from sbtd_migration import _check_reference, _result_index, runtime_versions
 
     manifest = context.manifest
-    runtime = verified_runtime()
+    reject_legacy_execution(manifest["payload"])
     projects = manifest["payload"]["projects"]
-    roots = [Path(project["root"]) for project in projects]
-    full_installation = any(
-        operation["selector"] in {"graft-mcp", "graft-omp-mcp"}
-        for operation in manifest["payload"]["shared_operations"]
-    )
-    launcher_package = (
-        resolve_global_skills_dir()[0] / "sbtd-workflow-onboard"
-        if full_installation
-        else _PACKAGE
-    )
-    bindings = launch_bindings(roots, runtime, package_root=launcher_package)
-    launcher_state = snapshot(_PACKAGE)
     operations = [
         operation
         for project in projects
@@ -1872,13 +1809,41 @@ def execute_migration_deployment(
         for operation in manifest["payload"]["shared_operations"]
         if operation["phase"] == "deploy"
     ]
-    # Active host configuration must never precede its installed launcher.
-    operations.sort(
-        key=lambda operation: (
-            operation["selector"] in {"graft-mcp", "graft-hooks", "graft-omp-mcp"}
-        )
-    )
+    if any(graft_operation(operation) for operation in operations):
+        _fail(*_UNSUPPORTED)
     prior = _result_index(context.previous)
+    previous_payload = context.previous["payload"] if context.previous else {}
+    reconciliation = previous_payload.get("reconciliation")
+    carry_observer_reports = (
+        reconciliation is not None
+        and reconciliation["runtime_versions"]["onboard"] != runtime_versions()["onboard"]
+    )
+    if carry_observer_reports and any(
+        prior.get(operation["resource_id"], {}).get("status") != "succeeded"
+        for operation in operations
+    ):
+        _fail(
+            "provenance-conflict",
+            "a different observer cannot retry unfinished reconciled deployment writes",
+        )
+    if (
+        read_file(context.context_paths[0]) != context.manifest_raw
+        or read_file(context.context_paths[1]) != context.apply_raw
+    ):
+        _fail("state-conflict", "the bound deployment inputs changed before execution")
+    _require_disjoint_evidence_path(context.output_path, context.smoke_dirs.values())
+    _check_smoke_directories((
+        context.manifest_path.parent / "deployment-smoke", *context.smoke_dirs.values()
+    ))
+    require_private_directory(context.output_path.parent)
+    if snapshot(context.output_path) != _ABSENT:
+        _fail("state-conflict", "the deployment evidence target already exists")
+    # Recheck every authenticated candidate and its projection before the
+    # first resource can create directories, retain originals, or write.
+    for operation in operations:
+        if _is_approved_agents(operation):
+            _check_reference(operation["ownership"]["approval_ref"])
+            _approved_agents_body(operation)
     results = {resource: dict(value) for resource, value in prior.items()}
     scopes = {
         operation["resource_id"]: Path(project["root"])
@@ -1900,34 +1865,6 @@ def execute_migration_deployment(
                 "a shared deployment target has no unique approved root",
             )
         scopes[operation["resource_id"]] = candidates[0]
-    # A followup batch merges the managed fence into the live bytes its
-    # outcome gate just proved, keeping fence-outside user text; earlier
-    # batch kinds keep the explicit template-replacement authorization.
-    install_template = manifest["payload"].get("followup") is None
-    from sbtd_migration_plan import approved_agents_provenance
-
-    # Signature-approved project routing keeps its exact approved body: the
-    # re-proved manifest chain (origin signature, sealed target and
-    # candidate states), never the live bytes or a name prefix, authorizes
-    # preservation. Targets without provenance keep the explicit template
-    # replacement or followup merge behavior. The same per-target base feeds
-    # the preflight render and the executing render below.
-    _origin, approved_bodies = approved_agents_provenance(manifest)
-    # Render every config against the currently expected bytes before the first
-    # mutation; malformed/foreign ownership cannot fail after another write.
-    for operation in operations:
-        if operation["change"]["kind"] != "configure-graft":
-            continue
-        state = snapshot(Path(operation["target"]))
-        render_configuration(
-            operation,
-            b""
-            if state["type"] == "absent"
-            else read_file(Path(operation["target"]), state),
-            bindings,
-            install_template=install_template,
-            approved_body=approved_bodies.get(operation["target"]),
-        )
     vault = Path(manifest["payload"]["backup_root"])
     stopped = False
     for operation in operations:
@@ -1946,43 +1883,29 @@ def execute_migration_deployment(
             root=scope,
             private_root=vault,
             backup_path=backup_path,
-            bindings=bindings,
-            runtime=runtime,
-            install_template=install_template,
-            launcher_state=launcher_state,
-            approved_body=approved_bodies.get(operation["target"]),
         )
         if old is not None and old["backup_ref"] is not None:
             result["backup_ref"] = old["backup_ref"]
         results[resource] = result
         stopped = result["status"] != "succeeded"
-    reports: dict[str, Sequence[Mapping[str, Any]]] = {
+    previous_reports = {
         project["root"]: list(project["report_refs"])
-        for project in (
-            context.previous["payload"]["projects"] if context.previous else ()
-        )
+        for project in previous_payload.get("projects", ())
     }
-    failed_smokes: set[str] = set()
-    if not stopped:
-        for root in roots:
-            try:
-                reports[str(root)] = run_project_smoke(
-                    root, runtime, context.manifest_path.parent
-                )
-            except (contracts.ContractError, OSError, RuntimeError, ValueError):
-                failed_smokes.add(str(root))
-        # Native check is expected to be read-only. Any unexpected resource
-        # mutation invalidates completion instead of rewriting the receipt proof.
-        for operation in operations:
-            result = results.get(operation["resource_id"])
-            if result is None or result["status"] != "succeeded":
-                continue
-            try:
-                unchanged = snapshot(Path(operation["target"])) == result["after"]
-            except (contracts.ContractError, OSError, RuntimeError, ValueError):
-                unchanged = False
-            if not unchanged:
-                failed_smokes.update(operation["dependent_projects"])
+    if carry_observer_reports:
+        # The immutable reconciliation already records its observer. Recheck
+        # current outcomes without replacing its reports with another producer.
+        reports = previous_reports
+        failed_smokes = _drifted_roots(operations, results)
+    else:
+        reports, failed_smokes = run_completed_smokes(
+            projects,
+            operations,
+            results,
+            evidence_dirs=context.smoke_dirs,
+            previous_reports=previous_reports,
+            context_paths=context.context_paths,
+        )
     try:
         production = save_deployment_evidence(
             context, results, reports, failed_smokes=failed_smokes
@@ -2109,383 +2032,3 @@ def run_migration_init(mode: str, args: Any) -> int:
             "Detailed artifacts remain private; use --json only with authorized private storage."
         )
     return code
-
-
-def _legacy_binding_input(
-    value: str, roots: Sequence[Path]
-) -> tuple[dict[str, dict[str, str]], dict[str, Any]]:
-    """Read an explicit private old-runtime contract, never infer its approval."""
-    path = _canonical(Path(value).expanduser().absolute())
-    require_private_directory(path.parent)
-    state = snapshot(path)
-    document = contracts._decode_strict(read_file(path, state))
-    if (
-        not isinstance(document, dict)
-        or set(document) != {"schema_version", "bindings"}
-        or type(document["schema_version"]) is not int
-        or document["schema_version"] != 1
-        or not isinstance(document["bindings"], list)
-        or not document["bindings"]
-    ):
-        _fail("invalid-argument", "legacy bindings require a version 1 private binding contract")
-    selected = {str(root) for root in roots}
-    approved: dict[str, dict[str, str]] = {}
-    for binding in document["bindings"]:
-        if (
-            not isinstance(binding, dict)
-            or set(binding) != {"root", "python", "node", "cli", "launcher"}
-            or any(not isinstance(item, str) or not os.path.isabs(item) for item in binding.values())
-            or binding["root"] not in selected
-            or binding["root"] in approved
-        ):
-            _fail("scope-conflict", "legacy bindings must uniquely name selected roots and absolute runtime paths")
-        approved[binding["root"]] = {
-            key: item for key, item in binding.items() if key != "root"
-        }
-    return approved, {"path": str(path), "state": state}
-
-
-def legacy_bindings_unchanged(plan: Mapping[str, Any]) -> bool:
-    """Recheck approval at each mutation boundary, not just when planning."""
-    reference = plan.get("legacyBindingsInput")
-    if reference is None:
-        return True
-    try:
-        return snapshot(Path(reference["path"])) == reference["state"]
-    except (contracts.ContractError, OSError, RuntimeError):
-        return False
-
-
-def plan_normal_wiring(
-    mode: str, args: Any, *, installation_targets: Sequence[Path] = ()
-) -> dict[str, Any]:
-    """Read-only installation feasibility for the selected host/template scope."""
-    from onboard import (
-        default_codex_home,
-        external_skill_target_is_valid,
-        resolve_project_roots,
-        scoped_skills_root,
-        user_home,
-    )
-    from sbtd_graft_entry import validate_build_scope
-
-    roots = resolve_project_roots(args)
-    authorized = bool(getattr(args, "graft_hooks", False))
-    retire_legacy = bool(getattr(args, "graft_retire_legacy", False))
-    legacy_input = getattr(args, "graft_legacy_bindings", None)
-    no_mcp = bool(getattr(args, "no_mcp", False))
-    if no_mcp and (authorized or retire_legacy or legacy_input):
-        return {
-            "status": "blocked",
-            "reason": "--no-mcp cannot authorize global hooks or legacy MCP retirement",
-        }
-    if legacy_input and not retire_legacy:
-        return {
-            "status": "blocked",
-            "reason": "legacy bindings require explicit --graft-retire-legacy authorization",
-        }
-    selected = getattr(args, "platform", None)
-    platform = "omp" if selected in {"omp", "oh-my-pi"} else selected
-    if platform not in {"codex", "omp"}:
-        if authorized or retire_legacy:
-            return {
-                "status": "blocked",
-                "reason": "Graft configuration changes require an explicitly selected supported host",
-            }
-        return {"status": "skipped", "reason": "Graft host wiring was not selected"}
-    if no_mcp and not roots:
-        return {"status": "skipped", "reason": "MCP configuration was explicitly disabled"}
-    if authorized and not roots:
-        return {
-            "status": "blocked",
-            "reason": "hook authorization requires an explicitly selected Codex project batch",
-        }
-    if retire_legacy and not roots:
-        return {
-            "status": "blocked",
-            "reason": "legacy retirement requires the exact formerly bound project roots",
-        }
-    if mode == "init-projects" and (authorized or retire_legacy):
-        return {
-            "status": "blocked",
-            "reason": "project-only setup cannot change global hooks or retire global MCP entries",
-        }
-    if platform != "codex" and authorized:
-        return {
-            "status": "blocked",
-            "reason": "OMP wiring does not include Codex hooks",
-        }
-    # Selecting a platform selects the installer, not a global Graft connection.
-    wire_host = not no_mcp and (mode == "reset" or authorized or retire_legacy)
-    if not wire_host and not roots:
-        return {"status": "skipped", "reason": "Global Graft wiring was not requested"}
-    try:
-        _validate_selected_root_batch(roots)
-        try:
-            runtime = verified_runtime()
-        except contracts.ContractError as error:
-            if error.code != "runtime-unavailable" or authorized or retire_legacy:
-                raise
-            return {
-                "status": "not-available",
-                "reason": str(error),
-                "nextStep": "Continue with source/LSP; install the pinned Graft only after separate confirmation.",
-                "hooks": "not-installed",
-            }
-        records = []
-        for root in roots:
-            _project_revision(root)
-            validate_build_scope(root)
-            if snapshot(root / "graft")["type"] not in {"absent", "directory"}:
-                _fail(
-                    "ownership-conflict",
-                    "the selected graph path has another owner type",
-                )
-            records.append(
-                {"root": str(root), "platforms": [platform], "private_operations": []}
-            )
-        codex_home = None
-        omp_home = None
-        discovered = None
-        if wire_host:
-            if platform == "codex":
-                codex_home = default_codex_home()
-            else:
-                from sbtd_omp_sources import discover_omp_sources
-
-                discovered = discover_omp_sources(
-                    roots, home=user_home(), environ=os.environ
-                )
-                omp_home = Path(discovered["agent_dir"])
-        private, shared = deployment_operations(
-            records,
-            codex_home=codex_home,
-            omp_home=omp_home,
-            platform=platform,
-            hooks_authorized=authorized,
-        )
-        host_home = codex_home if codex_home is not None else omp_home
-        launcher_package = (
-            scoped_skills_root(args) / "sbtd-workflow-onboard"
-            if host_home is not None
-            else _PACKAGE
-        )
-        launcher_state = snapshot(_PACKAGE)
-        if (
-            host_home is not None
-            and mode != "reset"
-            and external_skill_target_is_valid(
-                launcher_package.parent, launcher_package.name
-            )
-            and snapshot(launcher_package) != launcher_state
-        ):
-            _fail(
-                "runtime-unavailable",
-                "the retained installed Onboard differs; explicitly reset it before installing new wiring",
-            )
-        bindings: list[dict[str, Any]] = list(
-            launch_bindings(roots, runtime, package_root=launcher_package)
-        )
-        legacy_reference = None
-        if legacy_input:
-            legacy_bindings, legacy_reference = _legacy_binding_input(legacy_input, roots)
-            approval_path = Path(legacy_reference["path"])
-            # Full init/reset also replaces global Skills before wiring begins.
-            # Reject the complete selected skills root, including external targets.
-            targets = [scoped_skills_root(args), *installation_targets]
-            for target in targets:
-                target = _canonical(target)
-                if approval_path == target or target in approval_path.parents:
-                    _fail("scope-conflict", "legacy bindings must be outside every installation write target")
-            for binding in bindings:
-                if binding.get("root") in legacy_bindings:
-                    binding["legacy"] = legacy_bindings[binding["root"]]
-        for operation in [
-            item for group in private.values() for item in group
-        ] + shared:
-            if legacy_reference is not None:
-                approval_path = Path(legacy_reference["path"])
-                target = Path(operation["target"])
-                if approval_path == target or target in approval_path.parents:
-                    _fail("scope-conflict", "legacy bindings must be outside deployment write targets")
-            if operation["change"]["kind"] != "configure-graft":
-                continue
-            state = snapshot(Path(operation["target"]))
-            render_configuration(
-                operation,
-                b""
-                if state["type"] == "absent"
-                else read_file(Path(operation["target"]), state),
-                bindings,
-                install_template=not bool(getattr(args, "skip_project_agents", False)),
-                retire_legacy=retire_legacy,
-                # Normal wiring has no migration manifest chain, so no target
-                # can carry signature-approved AGENTS provenance.
-                approved_body=None,
-            )
-        moment = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
-        backup_scopes = roots + ([host_home] if host_home is not None else [])
-        return {
-            "status": "planned",
-            "reason": "",
-            "roots": [str(root) for root in roots],
-            "codexHome": str(codex_home) if codex_home is not None else None,
-            "ompHome": str(omp_home) if omp_home is not None else None,
-            "deploymentPlatform": platform,
-            "ompInputs": list(discovered["inputs"]) if discovered is not None else [],
-            "hooksAuthorized": authorized,
-            "retireLegacy": retire_legacy,
-            "legacyBindingsInput": legacy_reference,
-            "runtime": runtime,
-            "privateOperations": private,
-            "sharedOperations": shared,
-            "bindings": bindings,
-            "launcherPackage": str(launcher_package),
-            "launcherPackageState": launcher_state,
-            "backupRoots": {
-                str(scope): str(scope / ".sbtd" / "installation-originals" / moment)
-                for scope in backup_scopes
-            },
-        }
-    except contracts.ContractError as error:
-        return {"status": "blocked", "reason": str(error)}
-    except (OSError, RuntimeError, ValueError, ImportError):
-        return {
-            "status": "blocked",
-            "reason": "the selected host wiring could not be safely planned",
-        }
-
-
-def execute_normal_wiring(
-    plan: Mapping[str, Any], *, template_written: bool
-) -> tuple[dict[str, Any], int]:
-    """Run only the previously planned wiring after existing template writes."""
-    from onboard import PROJECT_AGENTS_TEMPLATE
-
-    if plan["status"] in {"skipped", "not-available"}:
-        return dict(plan), 0
-    if plan["status"] != "planned":
-        return dict(plan), 2
-    try:
-        launcher_current = snapshot(Path(plan["launcherPackage"]))
-    except (contracts.ContractError, OSError, RuntimeError):
-        launcher_current = None
-    if launcher_current != plan["launcherPackageState"]:
-        return {
-            "status": "blocked",
-            "reason": "the canonical installed launcher was not verified",
-            "operationResults": [],
-        }, 2
-    operations = [
-        operation for group in plan["privateOperations"].values() for operation in group
-    ] + list(plan["sharedOperations"])
-    roots = [Path(root) for root in plan["roots"]]
-    results: dict[str, dict[str, Any]] = {}
-    scope_by_resource = {
-        operation["resource_id"]: Path(root)
-        for root, group in plan["privateOperations"].items()
-        for operation in group
-    }
-    host_home = plan.get("codexHome") or plan.get("ompHome")
-    if host_home is not None:
-        scope_by_resource.update(
-            {
-                operation["resource_id"]: Path(host_home)
-                for operation in plan["sharedOperations"]
-            }
-        )
-    if not legacy_bindings_unchanged(plan):
-        return {
-            "status": "blocked",
-            "reason": "the approved legacy bindings changed since the displayed plan",
-            "operationResults": [],
-        }, 2
-    for reference in plan.get("ompInputs", []):
-        if snapshot(Path(reference["path"])) != reference["state"]:
-            return {
-                "status": "blocked",
-                "reason": "an OMP configuration source changed since its displayed plan",
-                "operationResults": [],
-            }, 2
-    for operation in operations:
-        scope = scope_by_resource[operation["resource_id"]]
-        expected = operation["before_requirement"]["state"]
-        if operation["selector"] == "graft-agents" and template_written:
-            expected = snapshot(PROJECT_AGENTS_TEMPLATE)
-        if snapshot(Path(operation["target"])) != expected:
-            return {
-                "status": "blocked",
-                "reason": "a wiring resource changed since its displayed plan",
-                "operationResults": [],
-            }, 2
-    for operation in operations:
-        if not legacy_bindings_unchanged(plan):
-            return {
-                "status": "blocked",
-                "reason": "the approved legacy bindings changed before resource execution",
-                "operationResults": list(results.values()),
-            }, 2
-        resource = operation["resource_id"]
-        scope = scope_by_resource[resource]
-        private = Path(plan["backupRoots"][str(scope)])
-        expected = operation["before_requirement"]["state"]
-        if operation["selector"] == "graft-agents" and template_written:
-            expected = snapshot(PROJECT_AGENTS_TEMPLATE)
-        result = execute_resource(
-            operation,
-            expected=expected,
-            root=scope,
-            private_root=private,
-            backup_path=private / resource,
-            bindings=plan["bindings"],
-            runtime=plan["runtime"],
-            launcher_state=plan["launcherPackageState"],
-            retire_legacy=bool(plan.get("retireLegacy", False)),
-            approved_body=None,
-        )
-        results[resource] = result
-        if result["status"] != "succeeded":
-            break
-    projects = []
-    for root in roots:
-        required = [
-            operation
-            for operation in operations
-            if str(root) in operation["dependent_projects"]
-        ]
-        complete = all(
-            results.get(operation["resource_id"], {}).get("status") == "succeeded"
-            for operation in required
-        )
-        projects.append(
-            {
-                "projectRoot": str(root),
-                "status": "success" if complete else "failed",
-                "reason": ""
-                if complete
-                else "not every declared wiring resource completed",
-                "nextStep": ""
-                if complete
-                else "Preserve installation originals and inspect the failed wiring.",
-            }
-        )
-    status = (
-        "success"
-        if len(results) == len(operations)
-        and all(result["status"] == "succeeded" for result in results.values())
-        and all(project["status"] == "success" for project in projects)
-        else "failed"
-    )
-    return {
-        "status": status,
-        "projects": projects,
-        "operationResults": list(results.values()),
-        "hooks": "configured-needs-host-trust"
-        if plan["hooksAuthorized"]
-        else "not-installed",
-        "validationScope": (
-            "selected-files-and-native-graph; host-event-acceptance-separate"
-            if roots
-            else "shared-host-definition-only; project-query-not-verified"
-        ),
-    }, 0 if status == "success" else 5
